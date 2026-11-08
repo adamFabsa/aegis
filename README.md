@@ -7,7 +7,9 @@ Wildfire preparedness and evacuation simulation for property managers (HackUTD 2
   engine), [`seed/`](seed/README.md), and [`preview/`](preview/README.md) (the engine in a browser, no server needed).
 - **Part C — SpacetimeDB backend:** state, transactional game actions, the scheduled tick, auth, seed
   administration and generated client bindings ([`docs/backend.md`](docs/backend.md)).
-- Part B (website) and Part D (Gemini worker, hosting) are not in this repository yet.
+- **Part D — Gemini worker:** [`worker/`](#gemini-worker) — a Node client of the same database that triages
+  free-text resident replies and writes each building's plain-English risk note.
+- Part B (website) and Part D's hosting are not in this repository yet.
 
 **What is real and what is simulated.** The neighborhood, residents and dollar values are **fictional (simulated)**.
 The fire is calibrated to the real 2025 Eaton Fire (NASA FIRMS front speed 1.92 km/h, Burbank wind replay), and
@@ -76,8 +78,60 @@ that same port for seed/smoke scripts. No Maincloud database was affected.
 
 Evacuation time uses A's staff × van bottleneck model (the brief's linear formula could not give both pitch numbers): Building 12 needs **3h00m → 1h35m** with a second van, against a fire that reaches it in about 1h44m.
 
+## Gemini worker
+
+[`worker/`](worker/) is a Node 22+ TypeScript process that connects to the SpacetimeDB database as an ordinary client
+(the same generated bindings, copied to `worker/src/module_bindings`) and writes back through two worker-only reducers.
+
+- **Reply triage.** Subscribes to `person`. When a pinged resident's `replyText` is new, Gemini classifies it with
+  structured JSON output (enum schema) as `safe` / `cant_move` / `needs_medical` / `unclear`, and the worker calls
+  `set_reply_class`. `unclear` is not sent: the resident stays pinged and the normal 10-minute escalation applies.
+  Each (check-in, text) pair is classified once — results persist in `worker/.worker-state.json`, and work is
+  serialized per person so a stale answer is dropped if the resident types again mid-request.
+- **Risk notes.** Subscribes to `building` and `fix`. A building whose `explanation` is empty — or still the seed's
+  template note (seed/reset restore it) — gets a two-sentence "why at risk / what to fix" note via `set_explanation`.
+  Gemini only sees **word facts** computed in code (risk band, the model's top drivers, construction, whether
+  evacuation is slower than the fire, fixes ranked by the model's `riskDrop`). Any note containing a digit that is not
+  part of a code-supplied fix name (e.g. "Clear brush to 30 ft") is rejected and retried, so **every number on screen
+  still comes from code**. Notes are cached by their facts, so a reset doesn't re-call Gemini.
+- **Identity.** The first connection's token is saved to `worker/.worker-token` (gitignored) so the identity is stable;
+  it is printed on startup. The module administrator authorizes it once with `register_worker`.
+- **Resilience.** Reconnects with exponential backoff (1 s → 30 s), re-sweeps all rows every 30 s and after each
+  reconnect, retries Gemini 429/5xx using the server's suggested delay, paces calls client-side (`GEMINI_RPM`), and
+  always serves resident replies before building notes. If the main model's **daily** free-tier quota runs out
+  (20 requests/day/model), it switches to `GEMINI_FALLBACK_MODEL` (default `gemini-3.5-flash-lite`) until it resets.
+  For the live demo, enable billing on the Gemini project so the quota isn't a factor.
+
+```bash
+cd worker
+npm install
+cp .env.example .env          # set GEMINI_API_KEY; SPACETIME_SERVER / SPACETIME_DATABASE default to Maincloud / lantern
+npm start                     # prints "connected — worker identity <hex>" and saves .worker-token
+npm run register              # once, as the publishing account (spacetime login, or SPACETIME_TOKEN in .env)
+npm run dev                   # same as start, restarts on file changes
+npm run check                 # type-check
+npm run selftest              # live Gemini only (no database): sample replies + a note per seed building
+npm run e2e                   # full loop against a DISPOSABLE database (resets the sim); needs SPACETIME_TOKEN = its admin
+npm run bindings              # regenerate worker/src/module_bindings from ../spacetimedb (needs the spacetime CLI)
+```
+
+`GEMINI_MODEL` defaults to `gemini-3.6-flash`. Until `npm run register` runs, the worker logs a `"worker only"` hint
+and keeps its results to retry. `.env`, `.worker-token` and `.worker-state.json` are gitignored — never commit them.
+
 ## Frameworks and libraries
 
-All code here was written for this build. Dependencies: SpacetimeDB 2.14.1 (server runtime, realtime SDK and generated bindings), TypeScript (types/compiler), tsx (TypeScript script runner), and `@types/node` (Node types). Tests use Node's built-in test/assert modules. SpacetimeDB's CLI builds/bundles and generates the client bindings. Data pipeline (Python): pandas, NumPy, scikit-learn, psycopg 3; Tiger Data (managed TimescaleDB) for the FIRMS hypertable. Preview fonts: Inter and Space Grotesk (Google Fonts). Data: NASA FIRMS, Iowa Environmental Mesonet (ASOS), CAL FIRE DINS. The repository does not contain B's React/Vite app or D's Gemini worker yet.
+All code here was written for this build. Dependencies: SpacetimeDB 2.14.1 (server runtime, realtime SDK and generated bindings), TypeScript (types/compiler), tsx (TypeScript script runner), and `@types/node` (Node types). Tests use Node's built-in test/assert modules. SpacetimeDB's CLI builds/bundles and generates the client bindings. Data pipeline (Python): pandas, NumPy, scikit-learn, psycopg 3; Tiger Data (managed TimescaleDB) for the FIRMS hypertable. Preview fonts: Inter and Space Grotesk (Google Fonts). Data: NASA FIRMS, Iowa Environmental Mesonet (ASOS), CAL FIRE DINS. The repository does not contain B's React/Vite app yet.
+
+Full list:
+
+| Kind | Name | Used for |
+|---|---|---|
+| Database / runtime | SpacetimeDB 2.14.1 (Maincloud, CLI, `spacetimedb` npm SDK) | module, scheduled simulation, realtime clients, generated bindings |
+| Language / tooling | TypeScript 5, tsx, `@types/node`, Node.js 22+ (built-in `node:test`, `--env-file`) | module, scripts, tests, worker |
+| AI | Google Gemini API via `@google/genai` (Gemini Flash, structured JSON output) | worker: reply triage, risk notes |
+| Data (Python) | pandas, NumPy, scikit-learn, psycopg 3 | pipeline, risk model |
+| Database | Tiger Data (managed PostgreSQL + TimescaleDB) | FIRMS hypertable, DINS table |
+| Data sources / APIs | NASA FIRMS, Iowa Environmental Mesonet ASOS, CAL FIRE DINS | fire calibration, wind replay, risk model |
+| Fonts | Inter, Space Grotesk (Google Fonts) | preview |
 
 API choices were checked against the [official scheduler documentation](https://spacetimedb.com/docs/tables/schedule-tables/) and [CLI configuration documentation](https://spacetimedb.com/docs/cli-reference/spacetime-json/), then verified with the pinned SDK and a real local database.

@@ -1,0 +1,6 @@
+node_modules/
+dist/
+# secrets and local state — never commit
+.env
+.worker-token
+.worker-state.json
