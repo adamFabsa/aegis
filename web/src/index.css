@@ -575,3 +575,64 @@ h2, p { margin: 0; }
 @media (prefers-reduced-motion: reduce) { .ai-card, .ai-headline, .ai-note, .phone-view, .ai-spark { animation: none; } }
 .tb-sub .sf-inline { height: 11px; width: auto; vertical-align: -1px; margin-left: 2px; background: #fff; border-radius: 4px; padding: 2px 4px; box-sizing: content-box; }
 .ai-tag { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-style: italic; font-size: 13px; color: #FFB4AE; text-align: center; padding: 4px 0; animation: ai-fade 600ms ease 400ms both; }
+
+/* ------------------------------------------------------------------ building card on the map (ui/BuildingCard) */
+.bcard-pos {
+  position: fixed; left: 0; top: 0; z-index: 2; width: 288px; will-change: transform;
+  transition: opacity 0.14s ease; --arrow: 50%; user-select: none; -webkit-user-select: none;
+}
+.bcard-pos.off { opacity: 0; pointer-events: none; }
+.bcard {
+  position: relative; display: flex; flex-direction: column; gap: 11px; padding: 11px 14px 13px;
+  background: rgba(13, 18, 29, 0.94); border: 1px solid var(--border-2); border-radius: 16px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  transform-origin: var(--arrow) calc(100% + 9px); animation: bcard-in 0.18s cubic-bezier(.2, .8, .3, 1) both;
+}
+.bcard-pos.below .bcard { transform-origin: var(--arrow) -9px; }
+@keyframes bcard-in { from { opacity: 0; transform: scale(0.92) translateY(6px); } to { opacity: 1; transform: none; } }
+/* the pointer: a rotated square sharing the card's border */
+.bcard::after {
+  content: ''; position: absolute; left: var(--arrow); bottom: -7px; width: 12px; height: 12px; margin-left: -6px;
+  background: rgb(13, 18, 29); border: 1px solid var(--border-2); border-top: 0; border-left: 0; transform: rotate(45deg);
+}
+.bcard-pos.below .bcard::after { bottom: auto; top: -7px; transform: rotate(225deg); }
+.bcard-head { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; column-gap: 6px; row-gap: 1px; margin-bottom: -2px; }
+.bcard-name { font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bcard-sub { grid-column: 1 / -1; font-size: 12px; font-weight: 600; color: var(--muted); }
+.bcard-pill { padding: 3px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bcard-x { display: grid; place-items: center; width: 26px; height: 26px; margin-right: -6px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
+.bcard-x:hover { background: #1A2234; color: var(--text); }
+.bcard-stats { display: flex; }
+.bcard-stats > div { flex: 1; min-width: 0; padding: 0 10px; border-left: 1px solid var(--border); display: flex; flex-direction: column; }
+.bcard-stats > div:first-child { padding-left: 0; border-left: 0; }
+.bcard-stats dd { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 20px; line-height: 1.15; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bcard-stats dd small { font-family: Inter, sans-serif; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.bcard-stats dt { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.bcard-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.bcard-check b { margin-left: auto; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bcard-dots { display: flex; gap: 3px; flex: none; }
+.bcard-dots i { width: 8px; height: 8px; border-radius: 2px; background: #2A3346; }
+.bcard-dots i.met { background: var(--green); }
+.bcard-dots i.missing { background: transparent; box-shadow: inset 0 0 0 1.5px var(--red); }
+.bcard-ai { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px 12px; border-radius: 12px; background: rgba(242, 169, 59, 0.07); border: 1px solid rgba(242, 169, 59, 0.22); }
+.bcard-ai .btn { margin-top: 8px; width: 100%; }
+.bcard-kicker { font-size: 11px; font-weight: 700; color: var(--amber); letter-spacing: 0.3px; margin-bottom: 1px; }
+.bcard-fix { font-size: 14.5px; font-weight: 700; line-height: 1.3; }
+.bcard-why { font-size: 12px; line-height: 1.4; color: var(--muted); }
+.bcard .btn.small.primary-small { background: var(--amber); border-color: var(--amber); color: #0B0F17; }
+.bcard .btn.small.primary-small:hover { background: #FFBC55; border-color: #FFBC55; }
+.bcard .btn.small.engine { background: #1B2A44; border-color: #2F4A7A; color: #CFE0FF; }
+.bcard .btn.small.engine:hover { background: #24375A; border-color: #4C6FA8; color: #E3EEFF; }
+.bcard-done { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.bcard-flash { font-size: 12.5px; font-weight: 700; color: var(--green); animation: feed-in 0.3s ease; }
+.bcard-out { display: flex; flex-direction: column; gap: 6px; }
+.bcard-out .progress-row { font-size: 12.5px; }
+.bcard-out .meter { height: 6px; }
+.bcard-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 600; }
+.bcard-lines .warn { color: var(--amber); }
+.bcard-lines .unit { color: #9DC0FF; }
+.bcard-actions { display: flex; gap: 8px; }
+.bcard-actions .btn { flex: 1; min-width: 0; }
+.bcard-error { font-size: 12.5px; font-weight: 600; color: var(--red); }
+@media (prefers-reduced-motion: reduce) { .bcard { animation-duration: 0.01s; } }
