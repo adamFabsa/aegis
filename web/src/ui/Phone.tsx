@@ -243,6 +243,11 @@ function AdvisorView(props: PhoneProps) {
           </dl>
         )}
       </div>
+      {advice.plan && props.onRecommend && (
+        <button type="button" className="btn primary wide ai-plan" disabled={busy.has('plan')} onClick={() => void act({ kind: 'plan', label: '' }, 'plan')}>
+          Approve all {advice.plan.count} · {fmtUsd(advice.plan.cost)}
+        </button>
+      )}
       {advice.note && (
         <blockquote className="ai-note">
           <span className="ai-note-by">{props.workerOnline ? `Aegis AI on ${advice.note.building}` : `Why ${advice.note.building} is at risk`}</span>
@@ -273,11 +278,6 @@ function AdvisorView(props: PhoneProps) {
           </li>
         ))}
       </ol>
-      {advice.plan && props.onRecommend && (
-        <button type="button" className="btn primary wide ai-plan" disabled={busy.has('plan')} onClick={() => void act({ kind: 'plan', label: '' }, 'plan')}>
-          Approve all {advice.plan.count} · {fmtUsd(advice.plan.cost)}
-        </button>
-      )}
       {sim.phase === 'ended' && <p className="ai-tag">Like a good neighbor, Aegis was there, before the fire.</p>}
       <p className="ai-foot">Risk from a model trained on 132,522 CAL FIRE damage inspections · fire calibrated to the 2025 Eaton Fire{props.workerOnline ? ' · notes and replies read by the AI worker' : ''}</p>
     </div>

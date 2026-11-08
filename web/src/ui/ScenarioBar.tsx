@@ -81,16 +81,19 @@ export function ScenarioBar({ world, pick, onNew, compact = false, style, band =
     );
   }
 
+  // the strip between the left panel and the phone is narrow on 1280–1366 px laptops: short labels
+  const tight = typeof window !== 'undefined' && window.innerWidth - band.left - band.right < 660;
   return (
     <>
-      <div className="scenario-bar map-chrome" role="group" aria-label="Scenario" style={style}>
+      <div className={`scenario-bar map-chrome${tight ? ' tight' : ''}`} role="group" aria-label="Scenario" style={style}>
         <span className="sc-label">
           <small className={error ? 'err' : undefined}>{sub}</small>
           <b>{scenario.label}</b>
         </span>
-        <button type="button" className={`sc-btn${pending === 'new' ? ' busy' : ''}`} onClick={roll} disabled={!!pending}><Dice />{busyLabel ?? 'New scenario'}</button>
-        {scenario.number !== 0 && <button type="button" className={`sc-btn${pending === 'demo' ? ' busy' : ''}`} onClick={demo} disabled={!!pending}><MapIcon />{pending === 'demo' ? 'Loading…' : 'Demo map'}</button>}
-        {canPick && <button type="button" className={`sc-btn pick${pick.picking ? ' on' : ''}`} onClick={togglePick} disabled={!!pending} aria-pressed={pick.picking}><Crosshair />Pick fire start</button>}
+        <button type="button" className={`sc-btn${pending === 'new' ? ' busy' : ''}`} onClick={roll} disabled={!!pending}><Dice />{busyLabel ?? (tight ? 'New' : 'New scenario')}</button>
+        {scenario.number !== 0 && <button type="button" className={`sc-btn${pending === 'demo' ? ' busy' : ''}`} onClick={demo} disabled={!!pending}><MapIcon />{pending === 'demo' ? 'Loading…' : tight ? 'Demo' : 'Demo map'}</button>}
+        {/* on tight screens the left panel's "Pick fire start" (next to Start the fire) is the one to use */}
+        {canPick && !tight && <button type="button" className={`sc-btn pick${pick.picking ? ' on' : ''}`} onClick={togglePick} disabled={!!pending} aria-pressed={pick.picking} aria-label="Pick fire start"><Crosshair />Pick fire start</button>}
       </div>
       {banner}
     </>

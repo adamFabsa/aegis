@@ -809,3 +809,13 @@ h2, p { margin: 0; }
 .log li .ev-line { align-items: flex-start; }
 .log li .ev-faces { margin-top: -2px; }
 .tie-note { font-size: 13px; line-height: 1.45; color: #D7E3FA; background: rgba(138, 180, 248, 0.08); border-left: 3px solid #8AB4F8; border-radius: 0 10px 10px 0; padding: 8px 10px; margin: 10px 0 4px; }
+
+/* ------------------------------------------------------------------ prep controls always reachable */
+.foot-split { display: flex; gap: 8px; }
+.foot-split .btn.grow { flex: 1; }
+.btn.pick-fire { flex: none; gap: 6px; padding: 12px 14px; font-size: 14px; }
+.btn.pick-fire.on { background: rgba(242, 169, 59, 0.16); border-color: var(--amber); color: var(--amber); }
+.scenario-bar.tight { gap: 6px; padding-left: 10px; padding-right: 6px; }
+.scenario-bar.tight .sc-btn { padding-left: 9px; padding-right: 9px; }
+.scenario-bar.tight .sc-label b { font-size: 12.5px; }
+.ai-head + .ai-plan, .ai-plan { margin-top: 2px; }

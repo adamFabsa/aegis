@@ -39,6 +39,9 @@ interface DockProps {
   checklistFor?: (buildingId: number) => Measure[];
   onEvacuate: (id: number) => void;
   onStartFire: () => void;
+  /** prep: toggle "click the map where the fire starts" (live module only) */
+  onPickFire?: () => void;
+  picking?: boolean;
   onRestart: () => void;
   units: Unit[];
   cells: FireCell[];
@@ -196,7 +199,15 @@ function prepList(p: DockProps): View {
     foot: (
       <>
         {p.onRecommend && <button type="button" className="btn secondary wide" disabled={!plan.length} onClick={p.onRecommend}>{planLabel}</button>}
-        <button type="button" className="btn fire wide" onClick={onStartFire}>Start the fire <Arrow /></button>
+        <div className="foot-split">
+          {p.onPickFire && (
+            <button type="button" className={`btn secondary pick-fire${p.picking ? ' on' : ''}`} onClick={p.onPickFire} aria-pressed={!!p.picking}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /><circle cx="12" cy="12" r="1.6" fill="currentColor" /></svg>
+              {p.picking ? 'Click the map' : 'Pick fire start'}
+            </button>
+          )}
+          <button type="button" className="btn fire grow" onClick={onStartFire}>Start the fire <Arrow /></button>
+        </div>
       </>
     ),
   };

@@ -208,6 +208,8 @@ export default function App() {
           ref={dockRef}
           sim={sim} buildings={buildings} approved={approved} events={events} selected={selected}
           onSelect={setSelectedId}
+          onPickFire={world.setIgnition ? () => (pick.picking ? pick.cancel() : pick.start()) : undefined}
+          picking={pick.picking}
           onApprove={world.approveFix}
           fixesFor={world.fixesFor}
           prepared={world.prepared}
