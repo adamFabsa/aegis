@@ -543,10 +543,10 @@ export const end_and_compare = db.reducer((ctx) => {
   requireFire(ctx);
   const p = params(ctx);
   const world = load(ctx);
-  S.fastForward(world, p, p.fireSeed);
+  const followed = S.fastForward(world, p, p.fireSeed, { followCoach: true });
   saveAll(ctx, world);
   writeResults(ctx, world);
-  log(ctx, 'Fast-forwarded to the end of the fire', world.sim.tick);
+  log(ctx, followed ? `Fast-forwarded to the end of the fire, following Lantern's advice (${followed} more building${followed === 1 ? '' : 's'} evacuated)` : 'Fast-forwarded to the end of the fire', world.sim.tick);
 });
 
 export const tick = db.reducer({ onSchedule: simTick }, { arg: simTick.rowType }, (ctx, _args) => {

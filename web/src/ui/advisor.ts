@@ -298,10 +298,14 @@ function endedAdvice(input: AdvisorInput): Advice {
   const fewerClaims = r.without.claims - r.with.claims;
   return {
     phase: 'ended',
-    headline: savedPeople > 0 ? `${savedPeople} more people safe` : 'Same fire, better outcome',
-    detail: avoided > 0
-      ? `Compared with the same fire without Lantern: ${fmtUsd(Math.round(avoided))} less damage${fewerClaims > 0 ? ` and ${fewerClaims} fewer insurance claim${fewerClaims === 1 ? '' : 's'}` : ''}.`
-      : 'Compared with the same fire without Lantern. Damage was the same: the buildings were not prepared before the fire.',
+    headline: savedPeople > 0 ? `${savedPeople} more ${savedPeople === 1 ? 'person' : 'people'} safe`
+      : savedPeople < 0 ? `${-savedPeople} fewer safe than without Lantern`
+        : avoided > 0 ? `Everyone accounted for, ${fmtUsd(Math.round(avoided))} less damage` : 'Same outcome as without Lantern',
+    detail: savedPeople < 0 || avoided < 0
+      ? 'Same fire, but it took a different path once fixes changed which buildings caught, and some evacuations started late. Start them when the coach says.'
+      : avoided > 0
+        ? `Compared with the same fire without Lantern: ${fmtUsd(Math.round(avoided))} less damage${fewerClaims > 0 ? ` and ${fewerClaims} fewer insurance claim${fewerClaims === 1 ? '' : 's'}` : ''}.`
+        : 'Compared with the same fire without Lantern. Damage was the same: the buildings were not prepared before the fire.',
     stats: [
       { label: 'safe', value: `${r.with.peopleSafe}/${r.with.peopleTotal}`, tone: 'ok' },
       { label: 'without Lantern', value: `${r.without.peopleSafe}/${r.without.peopleTotal}`, tone: 'bad' },
@@ -311,7 +315,9 @@ function endedAdvice(input: AdvisorInput): Advice {
       avoided > 0
         ? { id: 'why-prep', tone: 'good', title: 'Prevention paid first', why: 'Fixes made before the fire lowered ignition risk and documented Safer from Wildfires measures, so the claim never happens.' }
         : { id: 'why-prep', tone: 'soon', title: 'Next time: prepare first', why: 'Approve Lantern’s plan before the fire (Run again) to cut ignition risk and the claims that follow.' },
-      { id: 'why-people', tone: 'good', title: 'No one was overlooked', why: 'Every resident was asked if they were safe; silent ones and the ones who could not walk were sent to staff, most urgent first.' },
+      savedPeople >= 0
+        ? { id: 'why-people', tone: 'good', title: 'No one was overlooked', why: 'Every resident was asked if they were safe; silent ones and the ones who could not walk were sent to staff, most urgent first.' }
+        : { id: 'why-people', tone: 'now', title: 'Evacuate on the coach’s first call', why: 'People were left behind where the evacuation started after the coach first asked for it. Run again and press Evacuate as soon as it appears.' },
     ],
   };
 }

@@ -290,6 +290,19 @@ export function tickStreams(src: RngSource, tick: number): Streams {
  * Fire randomness for one absolute fire step (step s covers sim-minute s·stepMinutes). Keyed to the step,
  * not the tick, so the same seed gives the same fire whatever minutesPerTick the presenter picks.
  */
+/** A uniform number in [0, 1) for (subject, use), fixed for one fire step. */
+export type Draw = (subject: number, use: number) => number;
+export function fireStepDraw(seed: number, step: number): Draw {
+  let base = (Math.imul(seed | 0, 0x27d4eb2f) ^ Math.imul(step + 1, 0x165667b1) ^ 0x5bd1e995) >>> 0;
+  base = Math.imul(base ^ (base >>> 16), 0x7feb352d) >>> 0;
+  return (subject, use) => {
+    let h = (base ^ Math.imul(subject + 1, 0x9e3779b1) ^ Math.imul(use + 1, 0x85ebca77)) >>> 0;
+    h = Math.imul(h ^ (h >>> 16), 0x7feb352d) >>> 0;
+    h = Math.imul(h ^ (h >>> 15), 0x846ca68b) >>> 0;
+    h = (h ^ (h >>> 16)) >>> 0;
+    return h / 4294967296;
+  };
+}
 export function fireStepStream(seed: number, step: number): Rng {
   let h = (Math.imul(seed | 0, 0x27d4eb2f) ^ Math.imul(step + 1, 0x165667b1) ^ 0x3c6ef372) >>> 0;
   h = Math.imul(h ^ (h >>> 16), 0x7feb352d) >>> 0;
@@ -443,8 +456,13 @@ export interface SubstepResult {
 }
 
 /** Advance the fire by one step (stepMinutes of sim time). */
-export function fireSubstep(eng: Engine, g: FireGrid, rng: Rng, wind: WindSample): SubstepResult {
+export function fireSubstep(eng: Engine, g: FireGrid, rng: Rng, wind: WindSample, draw?: Draw): SubstepResult {
   const p = eng.p;
+  // Keyed draws (the live fire and the baseline): every (cell, use) gets its own fixed number per step, so the
+  // two runs stay the same fire everywhere except where an action actually changed something. Without a key
+  // (Monte Carlo forecasts), draws come from the sequential stream so each forecast run differs.
+  const r: Draw = draw ?? (() => rng());
+  const n = p.cols * p.rows;
   const cols = p.cols;
   const rows = p.rows;
   const { fuel, owner } = eng;
@@ -490,12 +508,12 @@ export function fireSubstep(eng: Engine, g: FireGrid, rng: Rng, wind: WindSample
       if (state[j] !== 0) continue;
       const fj = fuel[j];
       if (fj <= 0) continue;
-      if (rng() < fj * wf[k]) ignite.push(j);
+      if (r(i, k) < fj * wf[k]) ignite.push(j);
     }
     const fi = fuel[i];
-    if (spotScale > 0 && fi >= p.spotMinFuel && rng() < spotScale * fi) {
-      const d = p.spotMinCells + Math.floor(rng() * spotSpan);
-      const a = (wind.dirDeg + (rng() * 2 - 1) * p.spotJitterDeg) * DEG;
+    if (spotScale > 0 && fi >= p.spotMinFuel && r(i, 8) < spotScale * fi) {
+      const d = p.spotMinCells + Math.floor(r(i, 9) * spotSpan);
+      const a = (wind.dirDeg + (r(i, 10) * 2 - 1) * p.spotJitterDeg) * DEG;
       const tx = Math.round(cx + d * Math.sin(a));
       const ty = Math.round(cy - d * Math.cos(a));
       if (tx >= 0 && ty >= 0 && tx < cols && ty < rows) {
@@ -503,7 +521,7 @@ export function fireSubstep(eng: Engine, g: FireGrid, rng: Rng, wind: WindSample
         const o = owner[t];
         if (o >= 0) {
           if (o !== own && bstate[o] === BSTATE_OK) exposedFlag[o] = 1;
-        } else if (state[t] === 0 && fuel[t] > 0 && rng() < fuel[t]) {
+        } else if (state[t] === 0 && fuel[t] > 0 && r(i, 11) < fuel[t]) {
           ignite.push(t);
         }
       }
@@ -533,7 +551,7 @@ export function fireSubstep(eng: Engine, g: FireGrid, rng: Rng, wind: WindSample
     if (!exposedFlag[b] || bstate[b] !== BSTATE_OK) continue;
     exposed.push(b);
     // one draw per exposed building either way, so protection never shifts the random streams
-    if (rng() < igniteProb(eng.risk[b], p) * (eng.protect ? eng.protect[b] : 1)) {
+    if (r(n + b, 12) < igniteProb(eng.risk[b], p) * (eng.protect ? eng.protect[b] : 1)) {
       bstate[b] = BSTATE_BURNING;
       ignited.push(b);
       for (const c of eng.foot[b]) {
@@ -750,6 +768,17 @@ export interface StepOptions {
 }
 
 /**
+ * The coach's evacuation advice (web/src/ui/advisor.ts): evacuate a building that is burning, or whose fire
+ * arrives within 150 min or less than 20 min after its evacuation would finish. Ids of buildings to start now.
+ */
+export function coachEvacuations(world: World): number[] {
+  return world.buildings
+    .filter((b) => b.kind !== 'shelter' && !b.evacStarted && b.residents > 0 && b.status !== 'lost' && b.status !== 'clear')
+    .filter((b) => b.status === 'burning' || (b.fireEtaMin >= 0 && (b.fireEtaMin - b.evacNeededMin < 20 || b.fireEtaMin < 150)))
+    .map((b) => b.id);
+}
+
+/**
  * Advance the live simulation by one tick. Mutates `world` in place and returns what changed.
  * No-op unless sim.phase === 'fire' && sim.running.
  */
@@ -783,7 +812,8 @@ export function stepSimulation(world: World, p: FireParams, rngSrc: RngSource, o
   for (let s = first; s <= last; s++) {
     // Fire randomness is keyed to the absolute fire step, so the fire is the same at any speed.
     const fireRng = typeof rngSrc === 'number' ? fireStepStream(rngSrc, s) : R.fire;
-    const res = fireSubstep(eng, g, fireRng, windAt(p, s * p.stepMinutes, { dirDeg: sim.windDirDeg, mph: sim.windMph }));
+    const draw = typeof rngSrc === 'number' ? fireStepDraw(rngSrc, s) : undefined;
+    const res = fireSubstep(eng, g, fireRng, windAt(p, s * p.stepMinutes, { dirDeg: sim.windDirDeg, mph: sim.windMph }), draw);
     for (const b of res.ignited) ignitedB.add(b);
     for (const b of res.lost) lostB.add(b);
   }
@@ -1364,12 +1394,16 @@ export function computeResults(world: World, p: FireParams, scenario: string): R
 }
 
 /** Run the current world to the end instantly (e.g. an "End & compare" button). Mutates world. */
-export function fastForward(world: World, p: FireParams, rngSrc: RngSource, opts: StepOptions = {}): void {
-  const o: StepOptions = { ...opts }; // same ETA settings as the live tick, so outcomes match a live run
+export function fastForward(world: World, p: FireParams, rngSrc: RngSource, opts: StepOptions & { followCoach?: boolean } = {}): number {
+  const o: StepOptions = { mode: opts.mode, etaRuns: opts.etaRuns }; // same ETA settings as the live tick, so outcomes match a live run
+  let started = 0;
   for (let i = 0; i < 100000 && world.sim.phase === 'fire'; i++) {
+    // "Skip to the end" plays the rest of the fire as if the operator follows Lantern's evacuation advice.
+    if (opts.followCoach) for (const id of coachEvacuations(world)) if (!startEvacuation(world, id, p).error) started++;
     world.sim.running = true;
     stepSimulation(world, p, rngSrc, o);
   }
+  return started; // evacuations Lantern's advice started along the way
 }
 
 /**
