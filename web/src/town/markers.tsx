@@ -4,7 +4,7 @@ import { useEffect, useRef, type CSSProperties } from 'react';
 import type { Building, Pack, Sim } from './types';
 import { PeopleDefs, RouteVehicle } from './vehicles';
 import { TRAFFIC, personStyle, vehLook, vehOffset, type Heading } from './vehicleData';
-import { depthOf, project } from './iso';
+import { VIEW_W, depthOf, project } from './iso';
 import { SPRITE, evacRoute, spriteScale } from './scene';
 import { STATUS_COLORS } from './palettes';
 
@@ -96,6 +96,61 @@ export function Markers({ buildings, phase, scale, selectedId }: { buildings: Bu
           </g>
         );
       })}
+    </g>
+  );
+}
+
+// ------------------------------------------------------------------ fire start
+// A map-space circle lies on the iso ground as an ellipse 1.73x wider than tall.
+const ISO_RY = 0.577;
+
+/**
+ * Where the fire will start (before the fire): an ember pulsing on the ground under a flame waypoint.
+ * Screen-constant size like the building markers; glides to a new spot when the fire start moves and
+ * fades out (`visible` false) once the fire is burning there.
+ */
+export function IgnitionMarker({ x, y, scale, picked, visible }: { x: number; y: number; scale: number; picked: boolean; visible: boolean }) {
+  const [sx, sy] = project(x, y);
+  // the fire start is usually out at the board's edge (the hills): the callout leans in toward the town,
+  // further near the board's corners (under the zoom column at the default framing), so its badge and
+  // label stay on screen beside the map controls
+  const lean = sx > VIEW_W / 2 ? -1 : 1;
+  const bx = lean * (46 + Math.min(30, Math.max(0, Math.abs(sx - VIEW_W / 2) - 530) * 0.2));
+  // the stem runs from the ember to the badge's rim
+  const d = Math.hypot(bx, 46);
+  const [ex, ey] = [bx - (14 * bx) / d, -46 + (14 * 46) / d];
+  return (
+    <g className="ignition fx-in" fontFamily="Inter, system-ui, sans-serif" aria-label="The fire starts here"
+      style={{ pointerEvents: 'none', transform: `translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px)`, opacity: visible ? 1 : 0, transition: 'transform 0.9s cubic-bezier(.2,.8,.2,1), opacity 1.2s ease' }}>
+      <defs>
+        <radialGradient id="igBed"><stop offset="0" stopColor="#FFB347" stopOpacity="0.85" /><stop offset="0.45" stopColor="#FF5A1F" stopOpacity="0.4" /><stop offset="1" stopColor="#FF5A1F" stopOpacity="0" /></radialGradient>
+        <linearGradient id="igFlame" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stopColor="#FFE08A" /><stop offset="0.45" stopColor="#FF9A2E" /><stop offset="1" stopColor="#E2470F" /></linearGradient>
+      </defs>
+      <g transform={`scale(${scale})`}>
+        {/* the ember bed and two rings spreading out over the ground */}
+        <ellipse rx="22" ry={22 * ISO_RY} fill="url(#igBed)">
+          <animate attributeName="opacity" values="0.75;1;0.75" dur="1.3s" repeatCount="indefinite" />
+        </ellipse>
+        {[0, 1].map((i) => (
+          <ellipse key={i} rx="10" ry={10 * ISO_RY} fill="none" stroke="#FF8A3D" strokeWidth="2">
+            <animate attributeName="rx" values="8;40" dur="2.2s" begin={`${-i * 1.1}s`} repeatCount="indefinite" />
+            <animate attributeName="ry" values={`${8 * ISO_RY};${40 * ISO_RY}`} dur="2.2s" begin={`${-i * 1.1}s`} repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.95;0" dur="2.2s" begin={`${-i * 1.1}s`} repeatCount="indefinite" />
+          </ellipse>
+        ))}
+        <ellipse rx="3.4" ry={3.4 * ISO_RY} fill="#FFE3A3" />
+        {/* waypoint: stem + flame badge + halo lettering */}
+        <line x1="0" y1="0" x2={ex.toFixed(1)} y2={ey.toFixed(1)} stroke="#FF8A3D" strokeWidth="1.4" opacity="0.8" />
+        <g transform={`translate(${bx} -46)`}>
+          <circle r="14" fill="rgba(10,13,20,0.94)" stroke="#FF6A1F" strokeWidth="2" />
+          <g className="ignition-flame">
+            <path d="M0 -10.5 C2.6 -6 7.5 -3.5 7.5 2.4 C7.5 7 4.2 10 0 10 C-4.2 10 -7.5 7 -7.5 2.4 C-7.5 -1.4 -5 -3.2 -4 -6.6 C-2.4 -4.4 -1.4 -3 -1 -0.8 C0.4 -3.6 1 -7 0 -10.5 Z" fill="url(#igFlame)" />
+            <path d="M0 1.2 C1.8 3 3.2 4.6 3.2 6.6 C3.2 8.4 1.8 9.6 0 9.6 C-1.8 9.6 -3.2 8.4 -3.2 6.6 C-3.2 4.8 -1.6 3.6 0 1.2 Z" fill="#FFF1C4" />
+          </g>
+        </g>
+        <text x={bx + 20 * lean} y="-48" textAnchor={lean < 0 ? 'end' : 'start'} fontSize="12.5" fontWeight="700" fill="#F5F7FB" {...HALO}>Fire starts here</text>
+        <text x={bx + 20 * lean} y="-34" textAnchor={lean < 0 ? 'end' : 'start'} fontSize="11" fontWeight="600" fill="#FF9A5A" {...HALO}>{picked ? 'Your pick' : 'Ignition point'}</text>
+      </g>
     </g>
   );
 }

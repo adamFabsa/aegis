@@ -104,8 +104,9 @@ function rng(seed: number) {
   return () => (s = (s * 16807) % 2147483647) / 2147483647;
 }
 
-export function generatePlants(buildings: Pick<Building, 'x' | 'y' | 'w' | 'h'>[]): Plant[] {
-  const rnd = rng(7);
+/** `seed`: 7 is the demo map's scatter; each scenario passes its own number so the trees and brush move. */
+export function generatePlants(buildings: Pick<Building, 'x' | 'y' | 'w' | 'h'>[], seed = 7): Plant[] {
+  const rnd = rng(Math.max(1, Math.floor(seed)) % 2147483647);
   const out: Plant[] = [];
   let tries = 0;
   while (out.filter((p) => p.type === 'shrub').length < 46 && tries++ < 600) {

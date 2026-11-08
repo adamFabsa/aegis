@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { MapView } from './town/MapView';
 import { useMockWorld } from './town/mockWorld';
 import { useLiveWorld } from './town/liveWorld';
@@ -11,6 +11,8 @@ import type { BuildingKind, Pack } from './town/types';
 import { TopBar, type Look } from './ui/TopBar';
 import { Dock } from './ui/Dock';
 import { Phone } from './ui/Phone';
+import { ScenarioBar } from './ui/ScenarioBar';
+import { useScenarioPick } from './ui/scenarioPick';
 import { sound } from './audio/sound';
 
 // Live SpacetimeDB world by default; ?mock=1 runs B's offline stand-in (no server needed).
@@ -94,6 +96,10 @@ export default function App() {
   // Phones and reduced-motion users get the lighter effects path (no noise textures, blur or blend modes).
   const [lite] = useState(() => window.innerWidth < 760 || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
   const selected = buildings.find((b) => b.id === selectedId) ?? null;
+  // random scenarios: where the fire starts, the trees' scatter, and picking a new fire start on the map
+  const pick = useScenarioPick(world);
+  const scenario = world.scenario;
+  const ignition = useMemo(() => (scenario ? { x: scenario.ignitionX, y: scenario.ignitionY, picked: scenario.picked } : null), [scenario]);
 
   // ---- sound: fire loudness follows burning buildings + fire cells; events trigger alert tones
   const [muted, setMuted] = useState(sound.muted);
@@ -172,10 +178,19 @@ export default function App() {
         onPhone={vw >= 1180 && !phoneOpen ? () => setPhoneOpen(true) : undefined}
         // the live module ticks once per second; the mock runs its own clock
         tickSeconds={MOCK ? undefined : 1}
+        plantSeed={scenario?.number || 7} ignition={ignition} onPickGround={pick.onPick}
       />
-      {world.live && (
-        <LiveChip tick={sim.tick} phase={sim.phase} devices={world.live.devices} worker={world.live.workerOnline}
-          style={phoneLayout ? { right: 8, top: 'calc(180px + env(safe-area-inset-top))' } : { left: insets.left + 4, bottom: 16 }} />
+      {phoneLayout ? (
+        <>
+          {world.live && <LiveChip tick={sim.tick} phase={sim.phase} devices={world.live.devices} worker={world.live.workerOnline} style={{ right: 8, top: 'calc(180px + env(safe-area-inset-top))' }} />}
+          <ScenarioBar world={world} pick={pick} onNew={() => setSelectedId(null)} compact style={{ right: 8, top: 'calc(216px + env(safe-area-inset-top))' }} />
+        </>
+      ) : (
+        // live chip and scenario bar side by side along the bottom of the map
+        <div className="chrome-row" style={{ left: insets.left + 4, bottom: 16 }}>
+          {world.live && <LiveChip tick={sim.tick} phase={sim.phase} devices={world.live.devices} worker={world.live.workerOnline} style={{}} />}
+          <ScenarioBar world={world} pick={pick} onNew={() => setSelectedId(null)} band={{ left: insets.left, right: showFrame ? 336 : 0 }} />
+        </div>
       )}
       {showFrame && <Phone {...phoneProps} framed onClose={() => setPhoneOpen(false)} />}
         <Dock
