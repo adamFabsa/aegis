@@ -20,7 +20,7 @@ An AI wildfire coach for property managers and the insurers behind them.</p>
 
 ## 🔥 Why
 
-In January 2025 the Eaton Fire tore through Altadena. Nearly 20 people died, most in the area where evacuation alerts arrived hours after the fire. Of the 12,605 buildings CAL FIRE inspected afterward, half were destroyed. The problem wasn't the forecast. It was knowing, building by building, **what to fix before the fire, and who needs help first when it comes.**
+In January 2025 the Eaton Fire tore through Altadena. Nearly 20 people died, most in the area where evacuation alerts arrived hours after the fire. CAL FIRE inspected 18,428 structures afterward and found 9,419 destroyed, about half. The problem wasn't the forecast. It was knowing, building by building, **what to fix before the fire, and who needs help first when it comes.**
 
 ## 🛡️ What it does
 
@@ -30,7 +30,7 @@ Aegis runs a live, shared simulation of a neighborhood hit by an Eaton-like fire
 |---|---|
 | 🧰 **Before the fire** | A model trained on real CAL FIRE damage inspections scores every building and turns it into an expected insurance claim. The AI coach ranks fixes (residents who need help first, then claims avoided per dollar), and one tap approves the plan. Each fix is documented against California's *Safer from Wildfires* checklist. |
 | 🚨 **During the fire** | Every resident gets a check-in. Claude reads free-text replies in any language ("my oxygen is almost empty" → urgent task). The coach says what to do now: send staff, evacuate this building before the fire arrives, send an engine ahead of it. Every building shows live alerts, and staff get a task board. |
-| 📈 **After the fire** | The same fire, replayed without Aegis. On the demo map: **260/260 safe vs 250/260, 1 fewer building lost, ~$24M less damage.** Over 40 fires: 8.4 more people safe, $17.3M less damage on average. |
+| 📈 **After the fire** | The same fire, replayed without Aegis. On the demo map: **260/260 safe vs 250/260, 1 fewer building lost, ~$24M less damage.** Over 40 fires: 6.2 more people safe, $15.0M less damage on average. |
 | 🎲 **Not scripted** | **New scenario** generates new wind, fire start, construction and residents in a fraction of a second; the model re-scores every building and the coach re-plans. You can also click anywhere on the map to start the fire. |
 
 ![Aegis during the fire](docs/images/2-during-the-fire.png)
@@ -45,7 +45,7 @@ Aegis runs a live, shared simulation of a neighborhood hit by an Eaton-like fire
 - **Risk model.** Logistic regression on **35,062** structures from **41** fires in CAL FIRE's damage inspection data (DINS, 132,522 records), with fire × neighborhood fixed effects. **0.944 AUC** on held-out homes (0.665 on unseen fires with construction alone), recalibrated to Eaton's 49.7% destruction rate. It explains *why*: roof, vents, eaves, siding, windows, age.
 - **Expected claim** = building value × P(fire reaches it) × P(destroyed | reached).
 - **Fire.** A cellular-automaton fire with ember spotting, calibrated to the Eaton Fire's real front speed (1.92 km/h from NASA FIRMS satellite detections) with the recorded Burbank wind, over 1,000 simulated fires. Monte Carlo forecasts give each building's arrival time and reach chance.
-- **A fair comparison.** "With" and "without Aegis" burn the *same* fire: every spread link and building has one random threshold for the whole fire, so a fix, a lower risk or an engine on scene can only delay or prevent a burn. Across 40 random worlds, Aegis's plan is never worse on damage, buildings lost or people.
+- **A fair comparison.** "With" and "without Aegis" burn the *same* fire: every spread link and building has one random threshold for the whole fire, so a fix, a lower risk or an engine on scene can only delay or prevent a burn. Across 40 random worlds, Aegis's plan never lost more buildings or people. Damage was lower in 18, the same in 21 and higher in 1.
 - **AI where rules break down.** Claude (Anthropic API, structured outputs) triages residents' free text and writes plain-language building instructions. It never produces numbers; every time and dollar figure comes from the model and the simulation.
 
 ## ⚡ Architecture
@@ -62,6 +62,8 @@ Aegis runs a live, shared simulation of a neighborhood hit by an Eaton-like fire
 - **Tiger Data** (TimescaleDB) holds the NASA FIRMS detections as a hypertable; a `time_bucket` query measures Eaton's real spread speed for calibration.
 
 ## 🧱 Built with
+
+![Aegis tech stack: real-world data, data science, realtime backend, AI and experience](docs/images/tech-stack.png)
 
 TypeScript · React 19 · Vite · SpacetimeDB (Maincloud) · Node.js · Claude (Anthropic API) · Python · pandas · scikit-learn · Tiger Data / TimescaleDB · Blender · Vercel · NASA FIRMS · CAL FIRE DINS · IEM ASOS
 
