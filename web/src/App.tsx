@@ -7,6 +7,7 @@ import { vehUrl } from './town/vehicleData';
 import type { BuildingKind, Pack } from './town/types';
 import { TopBar, type Look } from './ui/TopBar';
 import { Dock } from './ui/Dock';
+import { Phone } from './ui/Phone';
 import { sound } from './audio/sound';
 
 export default function App() {
@@ -98,16 +99,42 @@ export default function App() {
     else if (e.tone === 'good') sound.alert('good');
   }, [events]);
   const toggleMute = () => { sound.unlock(); sound.setMuted(!muted); setMuted(!muted); };
+
+  // layout: phones get the phone as a panel tab; wide screens get a drawn phone beside the map
+  const [vw, setVw] = useState(() => window.innerWidth);
+  useEffect(() => { const on = () => setVw(window.innerWidth); window.addEventListener('resize', on); return () => window.removeEventListener('resize', on); }, []);
+  const [phoneOpen, setPhoneOpen] = useState(true);
+  const phoneLayout = vw <= 760;
+  const showFrame = vw >= 1180 && sim.phase !== 'prep' && phoneOpen;
+  const phoneProps = {
+    sim, buildings, persons: world.persons, tasks: world.tasks,
+    onReply: world.replyCheckin, onClaim: world.claimTask, onDone: world.completeTask,
+  };
+  const view = new URLSearchParams(window.location.search).get('view');
   const startFire = () => { setSelectedId(null); world.setPhase('fire'); };
   const prepare = () => { setSelectedId(null); world.setPhase('prep'); };
+
+  // ?view=phone: the phone on its own, full screen (judges' own phones; live sync arrives with Spacetime)
+  if (view === 'phone') {
+    const q = new URLSearchParams(window.location.search);
+    return (
+      <div className="phone-page">
+        <Phone {...phoneProps} initialRole={q.get('role') === 'staff' ? 'staff' : 'resident'} initialPerson={q.get('id') ? Number(q.get('id')) : undefined} initialStaff={q.get('name') ?? undefined} />
+        {sim.phase === 'prep' && <button type="button" className="btn fire wide" onClick={startFire}>Start the fire</button>}
+      </div>
+    );
+  }
 
   return (
     <div className="app" style={{ background: PALETTES[pack].bg }} onPointerDownCapture={() => sound.unlock()} onKeyDownCapture={() => sound.unlock()}>
       <MapView
         sim={sim} buildings={buildings} fireCells={cells} pack={pack}
         selectedId={selectedId} onSelect={setSelectedId}
-        topInset={insets.top} bottomInset={insets.bottom} leftInset={insets.left} lite={lite} units={units}
+        topInset={insets.top} bottomInset={insets.bottom} leftInset={insets.left} rightInset={showFrame ? 336 : 0} lite={lite} units={units}
+        onPhone={vw >= 1180 && sim.phase !== 'prep' && !phoneOpen ? () => setPhoneOpen(true) : undefined}
       />
+      <WindChip deg={sim.windDirDeg} mph={sim.windMph} style={phoneLayout ? { right: 8, top: 'calc(58px + env(safe-area-inset-top))' } : { left: insets.left + 4, bottom: 16 }} />
+      {showFrame && <Phone {...phoneProps} framed onClose={() => setPhoneOpen(false)} />}
         <Dock
           ref={dockRef}
           sim={sim} buildings={buildings} approved={approved} events={events} selected={selected}
@@ -121,16 +148,41 @@ export default function App() {
           onRelease={world.releaseUnit}
           pack={pack}
           topLimit={insets.top}
+          persons={world.persons}
+          tasks={world.tasks}
+          results={world.results}
+          phone={phoneLayout ? <Phone {...phoneProps} /> : undefined}
           bar={
             <TopBar
               sim={sim} look={look} onLook={setLook}
               onPrepare={prepare} onStartFire={startFire}
               onTogglePause={world.togglePause}
+              speed={world.speed} onSpeed={world.setSpeed}
               muted={muted} onToggleMute={toggleMute}
               onReset={() => { world.reset(); setSelectedId(null); }}
             />
           }
         />
+    </div>
+  );
+}
+
+const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+/** Map heading (map north = -y) to the on-screen angle of the isometric view. */
+function screenAngle(deg: number): number {
+  const r = (deg * Math.PI) / 180;
+  const wx = Math.sin(r);
+  const wy = -Math.cos(r);
+  return (Math.atan2(0.5 * (wx + wy), 0.866 * (wx - wy)) * 180) / Math.PI;
+}
+/** Wind direction and speed, as the arrow the fire follows. */
+function WindChip({ deg, mph, style }: { deg: number; mph: number; style: React.CSSProperties }) {
+  return (
+    <div className="wind map-chrome" style={style} aria-label={`Wind toward ${COMPASS[Math.round(deg / 45) % 8]} at ${mph} mph`}>
+      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" style={{ transform: `rotate(${screenAngle(deg)}deg)` }}>
+        <path d="M3 12h15M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span><b>{COMPASS[Math.round(deg / 45) % 8]} {mph} mph</b><small>wind</small></span>
     </div>
   );
 }

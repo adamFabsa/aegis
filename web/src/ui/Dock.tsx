@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useRef, useState, type ReactNode } from 'react';
-import type { Building, FireCell, Pack, Sim } from '../town/types';
-import { FIXES, REFERENCE_ETA_MIN, type FixKey, type LogEvent, type Unit } from '../town/mockWorld';
+import type { Building, FireCell, Pack, Person, ScenarioResult, Sim, Task } from '../town/types';
+import { FIXES, REFERENCE_ETA_MIN, unaccounted, type FixKey, type LogEvent, type Unit } from '../town/mockWorld';
 import { STATUS_COLORS } from '../town/palettes';
 import { statusTag } from '../town/status';
 import { spriteUrl, spriteVariant } from '../town/scene';
@@ -26,10 +26,16 @@ interface DockProps {
   topLimit: number;
   /** App bar (logo, steps, clock, sound, settings) shown at the top of the panel. */
   bar?: ReactNode;
+  persons: Person[];
+  tasks: Task[];
+  results?: { with: ScenarioResult; without: ScenarioResult };
+  /** phones: the resident/staff phone lives in a tab of the panel */
+  phone?: ReactNode;
 }
 
+
 interface View { head: ReactNode; body: ReactNode; foot?: ReactNode }
-type Tab = 'people' | 'units';
+type Tab = 'people' | 'units' | 'phone';
 
 // ------------------------------------------------------------------ small pieces
 function TruckIcon({ size = 16 }: { size?: number }) {
@@ -116,7 +122,7 @@ function prepList(p: DockProps): View {
     head: (
       <>
         <p className="eyebrow step">Step 1 of 3</p>
-        <h2>Prepare the neighborhood</h2>
+        <h2 className="list-title">Prepare the neighborhood</h2>
         <Stats items={[
           { label: 'budget left', value: fmtUsd(sim.budgetLeft) },
           { label: 'prepared', value: <>{prepared}<small>/{list.length}</small></>, tone: prepared === list.length ? 'ok' : '' },
@@ -170,6 +176,12 @@ function prepDetail(p: DockProps, b: Building): View {
     body: (
       <>
         <Thumb b={b} pack={pack} hero />
+        {b.explanation && (
+          <div className="note">
+            <h3 className="section">Why it is at risk</h3>
+            <p>{b.explanation}</p>
+          </div>
+        )}
         <h3 className="section">Fixes</h3>
         <ul className="list" aria-label="Fixes">
           {FIXES.map((f) => {
@@ -278,26 +290,27 @@ function Log({ events }: { events: LogEvent[] }) {
 
 function fireHead(p: DockProps, tab: Tab, setTab: (t: Tab) => void): ReactNode {
   const list = p.buildings.filter((b) => b.kind !== 'shelter');
-  const total = list.reduce((s, b) => s + b.residents, 0);
-  const out = list.reduce((s, b) => s + b.peopleOut, 0);
+  const total = p.persons.length;
+  const safe = p.persons.filter((x) => x.status === 'out').length;
+  const missing = unaccounted(p.persons, p.buildings).length;
   const atRisk = list.filter((b) => b.status === 'behind' || b.status === 'burning').length;
-  const lost = list.filter((b) => b.status === 'lost').length;
   const free = p.units.filter((u) => u.status === 'ready').length;
   return (
     <>
       <p className="eyebrow step">Step 2 of 3 · wind SW {p.sim.windMph} mph</p>
-      <h2>Fire response</h2>
+      <h2 className="list-title">Fire response</h2>
       <Stats items={[
-        { label: 'out', value: <>{out}<small>/{total}</small></>, tone: out === total ? 'ok' : '' },
-        { label: 'at risk', value: atRisk, tone: atRisk ? 'bad' : '' },
-        { label: 'lost', value: lost, tone: lost ? 'bad' : '' },
+        { label: 'people safe', value: <>{safe}<small>/{total}</small></>, tone: safe === total ? 'ok' : '' },
+        { label: 'unaccounted', value: missing, tone: missing ? 'bad' : '' },
+        { label: 'buildings at risk', value: atRisk, tone: atRisk ? 'bad' : '' },
         { label: 'units free', value: <>{free}<small>/{p.units.length}</small></> },
       ]} />
       <div className="tabs" role="tablist" aria-label="Fire view">
         <button type="button" role="tab" aria-selected={tab === 'people'} className={tab === 'people' ? 'on' : ''} onClick={() => setTab('people')}>Residents</button>
         <button type="button" role="tab" aria-selected={tab === 'units'} className={tab === 'units' ? 'on' : ''} onClick={() => setTab('units')}>
-          Incident command
+          <span className="long">Incident command</span><span className="short">Command</span>
         </button>
+        {p.phone && <button type="button" role="tab" aria-selected={tab === 'phone'} className={tab === 'phone' ? 'on' : ''} onClick={() => setTab('phone')}>Phone</button>}
       </div>
       <Ticker events={p.events} />
     </>
@@ -421,6 +434,17 @@ function fireDetail(p: DockProps, b: Building): View {
             <div className="meter"><div style={{ width: `${(100 * b.peopleOut) / Math.max(1, b.residents)}%` }} /></div>
           </div>
         )}
+        {(() => {
+          const missing = unaccounted(p.persons, p.buildings).filter((x) => x.buildingId === b.id);
+          const waiting = p.persons.filter((x) => x.buildingId === b.id && (x.status === 'cant_move' || x.status === 'claimed'));
+          if (!missing.length && !waiting.length) return null;
+          return (
+            <div className="names">
+              {missing.length > 0 && <><h3 className="section">Unaccounted · {missing.length}</h3><p>{missing.slice(0, 12).map((x) => `${x.name} (fl ${x.floor})`).join(', ')}{missing.length > 12 ? ` and ${missing.length - 12} more` : ''}</p></>}
+              {waiting.length > 0 && <><h3 className="section">Waiting for staff · {waiting.length}</h3><p>{waiting.map((x) => `${x.name}${x.note ? `, ${x.note}` : ''}`).join(' · ')}</p></>}
+            </div>
+          );
+        })()}
         {b.status === 'lost' && <p className="hint">The building collapsed. {b.residents - b.peopleOut > 0 ? `${b.residents - b.peopleOut} residents were still inside.` : 'Everyone was already out.'}</p>}
         {b.status === 'clear' && <p className="hint">Everyone is out and accounted for.</p>}
         {b.kind === 'shelter' && <p className="hint">Destination for every evacuation. {b.residents} beds.</p>}
@@ -443,24 +467,34 @@ function fireDetail(p: DockProps, b: Building): View {
 function results(p: DockProps): View {
   const { sim, buildings, onRestart, onSelect, pack } = p;
   const list = buildings.filter((b) => b.kind !== 'shelter');
-  const total = list.reduce((s, b) => s + b.residents, 0);
-  const out = list.reduce((s, b) => s + b.peopleOut, 0);
-  const lost = list.filter((b) => b.status === 'lost');
-  const damage = lost.reduce((s, b) => s + b.valueUsd, 0);
+  const w = p.results?.with;
+  const wo = p.results?.without;
+  const rows: { label: string; a: string; b: string; better: boolean }[] = w && wo ? [
+    { label: 'People safe', a: `${w.peopleSafe}/${w.peopleTotal}`, b: `${wo.peopleSafe}/${wo.peopleTotal}`, better: w.peopleSafe > wo.peopleSafe },
+    { label: 'Buildings lost', a: `${w.buildingsLost}`, b: `${wo.buildingsLost}`, better: w.buildingsLost < wo.buildingsLost },
+    { label: 'Damage', a: fmtUsd(w.damageUsd), b: fmtUsd(wo.damageUsd), better: w.damageUsd < wo.damageUsd },
+    { label: 'Insurance claims', a: `${w.claims}`, b: `${wo.claims}`, better: w.claims < wo.claims },
+  ] : [];
   return {
     head: (
       <>
         <p className="eyebrow">The fire is out · {Math.floor(sim.simMinutes / 60)}h {sim.simMinutes % 60}m after ignition</p>
         <h2>The best claim is the one that never happens</h2>
-        <Stats items={[
-          { label: 'residents out', value: <>{out}<small>/{total}</small></>, tone: out === total ? 'ok' : '' },
-          { label: 'buildings lost', value: lost.length, tone: lost.length ? 'bad' : 'ok' },
-          { label: 'damage', value: fmtUsd(damage) },
-        ]} />
       </>
     ),
     body: (
       <>
+        {rows.length > 0 && (
+          <table className="compare">
+            <thead><tr><th /><th>With Lantern</th><th>Without</th></tr></thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.label}><th scope="row">{r.label}</th><td className={r.better ? 'ok' : ''}>{r.a}</td><td>{r.b}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <p className="hint">Without Lantern: the same fire with no fixes, no fire units, and evacuation only once the fire is 10 minutes away. Simulated neighborhood; fire calibrated to the real Eaton Fire.</p>
         <h3 className="section">Every building</h3>
         <ul className="list">
           {list.sort((a, b) => urgency(b) - urgency(a)).map((b) => (
@@ -470,11 +504,10 @@ function results(p: DockProps): View {
                 <span className="item-name">{b.name}</span>
                 <span className="item-detail">{b.peopleOut} of {b.residents} out</span>
               </span>
-              <span className={`state ${b.status === 'lost' ? 'muted' : 'ok'}`}>{b.status === 'lost' ? 'Collapsed' : 'Standing'}</span>
+              <span className={`state ${b.status === 'lost' ? 'muted' : 'ok'}`}>{b.status === 'lost' ? 'Collapsed' : b.touched ? 'Damaged' : 'Standing'}</span>
             </li>
           ))}
         </ul>
-        <p className="hint">With Lantern. The without-Lantern comparison arrives with the Spacetime baseline run. All numbers are simulated.</p>
       </>
     ),
     foot: <button type="button" className="btn primary wide" onClick={onRestart}>Run again</button>,
@@ -523,7 +556,7 @@ export const Dock = forwardRef<HTMLElement, DockProps>(function Dock(props, ref)
   if (sim.phase === 'ended' && !selected) view = results(props);
   else if (sim.phase === 'prep') view = selected && selected.kind !== 'shelter' ? prepDetail(props, selected) : prepList(props);
   else if (selected) view = fireDetail(props, selected);
-  else view = { head: fireHead(props, tab, setTab), body: tab === 'people' ? fireList(props) : incident(props) };
+  else view = { head: fireHead(props, tab, setTab), body: tab === 'people' ? fireList(props) : tab === 'units' ? incident(props) : props.phone };
 
   const onDown = (e: React.PointerEvent) => {
     if (!phone) return;

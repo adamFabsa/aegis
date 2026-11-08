@@ -6,7 +6,7 @@ import { VIEW_H, VIEW_W, project } from './iso';
 import { SPRITE, spriteScale } from './scene';
 
 interface Cam { x: number; y: number; k: number } // viewBox top-left (svg units) + zoom (px per unit)
-interface Ins { top: number; bottom: number; left: number }
+interface Ins { top: number; bottom: number; left: number; right: number }
 
 interface MapViewProps {
   sim: Sim;
@@ -19,6 +19,9 @@ interface MapViewProps {
   topInset?: number;
   bottomInset?: number;
   leftInset?: number;
+  rightInset?: number;
+  /** wide screens: reopen the phone beside the map */
+  onPhone?: () => void;
   lite?: boolean;
   units?: Unit[];
 }
@@ -30,7 +33,7 @@ const BOUNDS = { x0: 60, x1: 1380, y0: 140, y1: 950 };
 
 /** The free rectangle the town is framed in, between the floating chrome. */
 function band(w: number, h: number, I: Ins) {
-  const vw = Math.max(120, w - I.left);
+  const vw = Math.max(120, w - I.left - I.right);
   const vh = Math.max(80, h - I.top - I.bottom);
   return { vw, vh, mx: I.left + vw / 2, my: I.top + vh / 2 };
 }
@@ -68,7 +71,7 @@ function clampCam(c: Cam, w: number, h: number, I: Ins): Cam {
   return { k, x: cx - mx / k, y: cy - my / k };
 }
 
-export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect, topInset = 0, bottomInset = 0, leftInset = 0, lite = false, units }: MapViewProps) {
+export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect, topInset = 0, bottomInset = 0, leftInset = 0, rightInset = 0, onPhone, lite = false, units }: MapViewProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [userCam, setUserCam] = useState<Cam | null>(null);
@@ -84,7 +87,7 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
   }, []);
 
   const { w, h } = size;
-  const I = useMemo(() => ({ top: topInset, bottom: bottomInset, left: leftInset }), [topInset, bottomInset, leftInset]);
+  const I = useMemo(() => ({ top: topInset, bottom: bottomInset, left: leftInset, right: rightInset }), [topInset, bottomInset, leftInset, rightInset]);
   const cam = w && h ? clampCam(userCam ?? initialCam(w, h, I), w, h, I) : null;
   const camRef = useRef(cam);
   useLayoutEffect(() => {
@@ -234,7 +237,12 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
       }}
     >
       {town}
-      <div className="map-chrome zoom" role="group" aria-label="Map zoom">
+      <div className="map-chrome zoom" role="group" aria-label="Map zoom" style={rightInset ? { right: rightInset } : undefined}>
+        {onPhone && (
+          <button type="button" aria-label="Show phone" onClick={onPhone}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5" /><path d="M11 18.5h2" /></svg>
+          </button>
+        )}
         <button type="button" aria-label="Zoom in" onClick={() => zoomButton(1.35)}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
         </button>

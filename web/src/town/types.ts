@@ -44,6 +44,8 @@ export interface Building {
   damage?: number;
   /** 0..1 through the burn (smoke, growing fire, gutted, collapse). */
   burnProgress?: number;
+  /** Client-side: the building caught fire at some point (counts toward damage even if saved). */
+  touched?: boolean;
 }
 
 export interface FireCell {
@@ -54,3 +56,38 @@ export interface FireCell {
   state: number; // 0 unburned, 1 burning, 2 burned
   burnTicks: number;
 }
+
+/** Mirrors the spec's person table (plus `plan`, which only the mock uses to fake replies). */
+export type PersonStatus = 'inside' | 'pinged' | 'safe' | 'cant_move' | 'claimed' | 'out' | 'left_behind';
+export interface Person {
+  id: number;
+  name: string;
+  buildingId: number;
+  floor: number;
+  needsHelp: boolean;
+  note: string;
+  status: PersonStatus;
+  pingedAtTick: number;
+  replyText: string;
+  /** mock only: how this resident answers the ping if nobody uses the phone, and when */
+  plan?: 'safe' | 'cant' | 'silent';
+  replyAt?: number;
+  escalated?: boolean;
+}
+
+/** Mirrors the spec's task table. */
+export interface Task {
+  id: number;
+  kind: 'help_person';
+  buildingId: number;
+  personId: number;
+  priority: number;
+  claimedBy: string;
+  done: boolean;
+  createdTick: number;
+  /** mock only: claimed by simulated staff, completed automatically at the staff/van rate */
+  auto?: boolean;
+}
+
+/** Mirrors the spec's result table. */
+export interface ScenarioResult { peopleSafe: number; peopleTotal: number; buildingsLost: number; damageUsd: number; claims: number }

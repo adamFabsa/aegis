@@ -12,6 +12,8 @@ interface TopBarProps {
   onStartFire: () => void;
   onTogglePause: () => void;
   onReset: () => void;
+  speed: 1 | 2 | 4;
+  onSpeed: (s: 1 | 2 | 4) => void;
   muted: boolean;
   onToggleMute: () => void;
 }
@@ -34,7 +36,7 @@ function LanternMark() {
   );
 }
 
-export function TopBar({ sim, look, onLook, onPrepare, onStartFire, onTogglePause, onReset, muted, onToggleMute }: TopBarProps) {
+export function TopBar({ sim, look, onLook, onPrepare, onStartFire, onTogglePause, onReset, speed, onSpeed, muted, onToggleMute }: TopBarProps) {
   const [menu, setMenu] = useState(false);
   const [menuPos, setMenuPos] = useState<CSSProperties>({});
   const menuBtn = useRef<HTMLButtonElement>(null);
@@ -60,6 +62,7 @@ export function TopBar({ sim, look, onLook, onPrepare, onStartFire, onTogglePaus
         <LanternMark />
         <span>Lantern</span>
       </div>
+      <p className="tb-sub">Eaton Fire replay · simulated neighborhood</p>
 
       <ol className="stepper" aria-label="Simulation steps">
         {steps.map((s, i) => (
@@ -97,6 +100,9 @@ export function TopBar({ sim, look, onLook, onPrepare, onStartFire, onTogglePaus
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 5v14l12-7z" /></svg>
                 )}
               </button>
+            )}
+            {sim.phase === 'fire' && (
+              <button type="button" className="pill-btn speed" aria-label={`Speed ${speed} times, change`} onClick={() => onSpeed(speed === 1 ? 2 : speed === 2 ? 4 : 1)}>{speed}×</button>
             )}
           </>
         )}
