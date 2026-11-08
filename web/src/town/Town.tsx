@@ -3,7 +3,7 @@ import type { Building, FireCell, Pack, Sim } from './types';
 import { CELL, GROUND_MATRIX, MAP_H, MAP_W, OX, OY, VIEW_H, VIEW_W, pointsAttr, project, projectVec, windVector } from './iso';
 import {
   HILLS_EDGE, HILLS_PATH, LAMPS, LOTS, PARK, PROP_BOX, ROAD_LINES, ROADS, SIDEWALKS, SPRITE, SPRITE_BOX, propUrl,
-  evacRoute, generatePlants, previousVariant, spriteScale, spriteUrl, spriteVariant,
+  evacRoute, generatePlants, previousVariant, ridgePaths, spriteScale, spriteUrl, spriteVariant,
 } from './scene';
 import { PALETTES, STATUS_COLORS, type GroundPalette } from './palettes';
 import { FireUnits, Markers, StreetLife } from './markers';
@@ -35,6 +35,7 @@ const CROSSWALKS =
   'M351 433 h7 M351 439 h7 M351 445 h7 M351 451 h7 M351 457 h7 M394 433 h7 M394 439 h7 M394 445 h7 M394 451 h7 M394 457 h7';
 
 const FLAMES = ['flA', 'flB', 'flC'];
+const RIDGES = ridgePaths();
 
 function Defs({ P }: { P: GroundPalette }) {
   return (
@@ -165,6 +166,19 @@ function Defs({ P }: { P: GroundPalette }) {
 const StaticGround = memo(function StaticGround({ P, lite }: { P: GroundPalette; lite: boolean }) {
   return (
     <>
+      {/* the San Gabriel Mountains behind the town, fading into haze */}
+      <g aria-hidden="true">
+        <defs>
+          {P.mtn.map((c, i) => (
+            <linearGradient key={i} id={`mtn${i}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor={c} stopOpacity={0.6 + i * 0.18} />
+              <stop offset="0.55" stopColor={c} stopOpacity={0.35 + i * 0.12} />
+              <stop offset="1" stopColor={c} stopOpacity="0" />
+            </linearGradient>
+          ))}
+        </defs>
+        {RIDGES.map((d, i) => <path key={i} d={d} fill={`url(#mtn${i})`} />)}
+      </g>
       <polygon points="575,160 1430,660 884,975 10,470" fill="#000" opacity={lite ? 0.22 : 0.35} filter={lite ? undefined : 'url(#blur20)'} />
       <g transform={`translate(${OX} ${OY})`}>
         <g transform={`matrix(0.866 0.5 0 1 ${-0.866 * MAP_H} ${0.5 * MAP_H})`}>
@@ -246,28 +260,49 @@ function BuildingSprite({ b, pack, selected, onSelect, lite }: { b: Building; pa
   return (
     <g>
       {/* the previous damage stage fades out underneath while the new one fades in */}
-      {prev && <image key={`prev-${prev}`} className="sprite-out" href={spriteUrl(b.kind, prev)} {...box} preserveAspectRatio="none" style={{ pointerEvents: 'none' }} />}
-      <image key={`cur-${variant}`} className={prev ? 'sprite-in' : undefined} href={spriteUrl(b.kind, variant)} {...box} preserveAspectRatio="none" style={{ pointerEvents: 'none' }} />
-      {b.status === 'burning' && (
-        <g style={{ pointerEvents: 'none' }}>
-          <ellipse cx={rx} cy={ry} rx={(0.433 * (b.w + b.h) + 24) * (heavy ? 1.35 : 1)} ry={(0.25 * (b.w + b.h) + 30) * (heavy ? 1.35 : 1)} fill="url(#roofGlow)" style={lite ? undefined : { mixBlendMode: 'screen' }}>
-            <animate attributeName="opacity" values="0.8;1;0.85;1;0.8" dur="1.3s" repeatCount="indefinite" />
-          </ellipse>
-          {roofPts.map(([px, py], i) => (
-            <use key={i} href={`#${FLAMES[i % 3]}`} transform={`translate(${px} ${py}) scale(${(i % 4 === 0 ? 1.5 : 1.1) * (heavy ? 1.6 : 1)})`} />
-          ))}
-          {heavy && facePts.map(([px, py], i) => (
-            <use key={`w${i}`} href={`#${FLAMES[(i + 1) % 3]}`} transform={`translate(${px} ${py}) scale(${0.8 + (i % 3) * 0.2})`} />
-          ))}
-          {[0, 1, 2, ...(heavy ? [3, 4] : [])].map((i) => (
-            <circle key={i} cx={roofPts[(i * 2) % 8][0]} cy={ry - 12} r="10" fill="url(#smokeDark)">
-              <animate attributeName="r" values={heavy ? '12;56' : '8;38'} dur="5s" begin={`${-i * 1.2}s`} repeatCount="indefinite" />
-              <animate attributeName="opacity" values="0;0.8;0" dur="5s" begin={`${-i * 1.2}s`} repeatCount="indefinite" />
-              <animateMotion path="M0 0 C -30 -40 -80 -70 -150 -95" dur="5s" begin={`${-i * 1.2}s`} repeatCount="indefinite" />
-            </circle>
-          ))}
-        </g>
-      )}
+      {prev && <image key={`prev-${prev}`} className={variant === 'lost' ? 'sprite-collapse' : 'sprite-out'} href={spriteUrl(b.kind, prev)} {...box} preserveAspectRatio="none" style={{ pointerEvents: 'none' }} />}
+      <image key={`cur-${variant}`} className={prev ? (variant === 'lost' ? 'sprite-in-late' : 'sprite-in') : undefined} href={spriteUrl(b.kind, variant)} {...box} preserveAspectRatio="none" style={{ pointerEvents: 'none' }} />
+      {b.status === 'burning' && (() => {
+        // fire builds over time: first smoke from the windows, then flames that spread across the roof
+        const p = Math.min(1, b.burnProgress ?? 0);
+        const grow = Math.min(1, p / 0.55);
+        const nRoof = Math.max(1, Math.round(1 + grow * 7));
+        const flameScale = (0.45 + grow * 0.9) * (heavy ? 1.5 : 1);
+        return (
+          <g style={{ pointerEvents: 'none' }}>
+            <ellipse cx={rx} cy={ry} rx={(0.433 * (b.w + b.h) + 24) * (heavy ? 1.35 : 1)} ry={(0.25 * (b.w + b.h) + 30) * (heavy ? 1.35 : 1)} fill="url(#roofGlow)"
+              style={{ opacity: 0.25 + grow * 0.75, transition: 'opacity 1.5s ease', ...(lite ? {} : { mixBlendMode: 'screen' as const }) }} />
+            {/* early smoke leaking from the facade */}
+            {facePts.slice(0, 4).map(([px, py], i) => (
+              <circle key={`ws${i}`} cx={px} cy={py} r="6" fill="url(#smokeDark)" style={{ opacity: Math.max(0.15, 1 - grow * 0.6) }}>
+                <animate attributeName="r" values="4;22" dur="3.4s" begin={`${-i * 0.8}s`} repeatCount="indefinite" />
+                <animateMotion path="M0 0 C -12 -30 -40 -55 -80 -70" dur="3.4s" begin={`${-i * 0.8}s`} repeatCount="indefinite" />
+              </circle>
+            ))}
+            {roofPts.slice(0, nRoof).map(([px, py], i) => (
+              <g key={i} transform={`translate(${px} ${py})`}>
+                <g className="flame-grow" style={{ animationDelay: `${i * 140}ms` }}>
+                  <g style={{ transform: `scale(${flameScale * (i % 4 === 0 ? 1.35 : 1)})`, transition: 'transform 1.6s ease' }}>
+                    <use href={`#${FLAMES[i % 3]}`} />
+                  </g>
+                </g>
+              </g>
+            ))}
+            {heavy && facePts.map(([px, py], i) => (
+              <g key={`w${i}`} transform={`translate(${px} ${py})`}>
+                <g className="flame-grow" style={{ animationDelay: `${i * 220}ms` }}><use href={`#${FLAMES[(i + 1) % 3]}`} transform={`scale(${0.8 + (i % 3) * 0.2})`} /></g>
+              </g>
+            ))}
+            {[0, 1, 2, ...(heavy ? [3, 4] : [])].map((i) => (
+              <circle key={i} cx={roofPts[(i * 2) % 8][0]} cy={ry - 12} r="10" fill="url(#smokeDark)">
+                <animate attributeName="r" values={heavy ? '12;56' : '8;38'} dur="5s" begin={`${-i * 1.2}s`} repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0;0.8;0" dur="5s" begin={`${-i * 1.2}s`} repeatCount="indefinite" />
+                <animateMotion path="M0 0 C -30 -40 -80 -70 -150 -95" dur="5s" begin={`${-i * 1.2}s`} repeatCount="indefinite" />
+              </circle>
+            ))}
+          </g>
+        );
+      })()}
       {b.status === 'lost' && (
         <g style={{ pointerEvents: 'none' }}>
           {/* the collapse itself: a dust cloud rolls out and sparks jump, once */}
@@ -299,6 +334,11 @@ function BuildingSprite({ b, pack, selected, onSelect, lite }: { b: Building; pa
   );
 }
 
+const BURN_TICKS = 3;
+const COOL_TICKS = 7;
+/** Stable 0..1 jitter per cell so neighbours ignite a few hundred ms apart instead of in lockstep. */
+const jitter = (id: number) => ((id * 2654435761) % 1000) / 1000;
+
 export const Town = memo(function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, svgRef, tagScale = 1, lite = false, units = [] }: TownProps) {
   const P = PALETTES[pack];
   // plants only depend on building footprints, which never change during a run
@@ -315,7 +355,11 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
     return m;
   }, [fireCells]);
   const burning = fireCells.filter((c) => c.state === 1);
-  const burned = fireCells.filter((c) => c.state === 2);
+  const burnedAll = fireCells.filter((c) => c.state === 2);
+  // burnTicks keeps counting after a cell goes out, so it cools from embers to ash over a few ticks
+  const cooling = burnedAll.filter((c) => c.burnTicks < BURN_TICKS + COOL_TICKS);
+  const burned = burnedAll.filter((c) => c.burnTicks >= BURN_TICKS + COOL_TICKS);
+  const dying = burnedAll.filter((c) => c.burnTicks < BURN_TICKS + 2);
   const fireOn = burning.length > 0;
   const cellPath = (cells: FireCell[]) => cells.map((c) => `M${c.x * CELL} ${c.y * CELL}h${CELL}v${CELL}h${-CELL}z`).join('');
 
@@ -338,7 +382,7 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
     const [px, py] = project(p.x, p.y);
     const type = st === 2 ? 'snag' : p.type;
     // deterministic size jitter so the rows of trees do not look stamped
-    const sc = (type === 'shrub' ? 0.8 : 0.9) + ((i * 37) % 10) / 40;
+    const sc = (type === 'shrub' ? 0.8 : type === 'palm' ? 1.12 : 0.92) + ((i * 37) % 10) / 40;
     items.push({
       depth: p.x + p.y,
       key: `p${i}`,
@@ -370,8 +414,33 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
     if (inBuilding(mx, my)) continue;
     const [fx, fy] = project(mx, my);
     const h = (c.x * 7 + c.y * 13) % 3;
-    items.push({ depth: mx + my, key: `f${c.id}`, node: <use href={`#${FLAMES[h]}`} x={fx} y={fy} /> });
+    const delay = `${Math.round(jitter(c.id) * 650)}ms`;
+    items.push({
+      depth: mx + my,
+      key: `f${c.id}`,
+      node: (
+        <g transform={`translate(${fx} ${fy})`}>
+          <g className="flame-grow" style={{ animationDelay: delay }}><use href={`#${FLAMES[h]}`} /></g>
+        </g>
+      ),
+    });
     flameCount++;
+  }
+  for (const c of dying) {
+    if (c.fuel < 0.3 || lite) continue;
+    const mx = c.x * CELL + CELL / 2;
+    const my = c.y * CELL + CELL / 2;
+    if (inBuilding(mx, my)) continue;
+    const [fx, fy] = project(mx, my);
+    items.push({
+      depth: mx + my,
+      key: `d${c.id}`,
+      node: (
+        <g transform={`translate(${fx} ${fy})`}>
+          <g className="flame-die"><use href={`#${FLAMES[(c.x + c.y) % 3]}`} /></g>
+        </g>
+      ),
+    });
   }
   items.sort((a, b) => a.depth - b.depth);
 
@@ -393,10 +462,24 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
       {/* ground-level dynamic layer: fire cells, rings, routes */}
       <g transform={GROUND_MATRIX}>
         {fireOn && <circle cx={fcx} cy={fcy} r="300" fill="url(#groundGlow)" opacity={P.glowOp} />}
+        {/* settled ash */}
         <path d={cellPath(burned)} fill="url(#ash)" filter={lite ? undefined : 'url(#blur2)'} opacity="0.92" />
-        <path d={cellPath(burning)} fill="#FF5A1F" filter={lite ? undefined : 'url(#blur2)'}>
-          <animate attributeName="opacity" values="0.75;1;0.8;0.95;0.75" dur="1.4s" repeatCount="indefinite" />
-        </path>
+        {/* recently burnt: ash fades in under embers that dim and go out */}
+        <g filter={lite ? undefined : 'url(#blur2)'}>
+          {cooling.map((c) => (
+            <g key={`k${c.id}`}>
+              <rect className="cell-ash" x={c.x * CELL} y={c.y * CELL} width={CELL} height={CELL} fill="url(#ash)" />
+              <rect className="cell-cool" x={c.x * CELL} y={c.y * CELL} width={CELL} height={CELL} fill="#B8320E" />
+            </g>
+          ))}
+        </g>
+        {/* burning front: each cell catches a moment apart, flares, then settles into a flicker */}
+        <g filter={lite ? undefined : 'url(#blur2)'}>
+          {burning.map((c) => (
+            <rect key={`b${c.id}`} className="cell-ignite" x={c.x * CELL - 2} y={c.y * CELL - 2} width={CELL + 4} height={CELL + 4} rx="6"
+              fill={c.burnTicks >= 2 ? '#E2470F' : '#FF6A1F'} style={{ animationDelay: `${Math.round(jitter(c.id) * 650)}ms` }} />
+          ))}
+        </g>
         {buildings.map((b) => {
           const ring = { x: b.x - 16, y: b.y - 16, w: b.w + 32, h: b.h + 32 };
           if (b.status === 'behind') {

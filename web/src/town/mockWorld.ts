@@ -14,8 +14,8 @@ const BASE_SPREAD = 0.2; // mock pacing only; real constants come from seed/fire
 const WIND_K = 1.4;
 const SPOT_P = 0.02;
 const BURN_TICKS = 3;
-const BUILDING_BURN_TICKS = 14; // ~10 s: burning, then gutted, then it collapses
-const GUTTED_AT = 6;
+const BUILDING_BURN_TICKS = 36; // ~25 s: smoke, growing fire, gutted, then it collapses
+const GUTTED_AT = 20;
 const TICK_MS = 700;
 
 type Seed = [number, string, BuildingKind, number, number, number, number, number, number, number, number, number, number];
@@ -185,6 +185,7 @@ function step(w: World): World {
   const ignite: number[] = [];
 
   for (const c of cells) {
+    if (c.state === 2) { if (c.burnTicks < 60) c.burnTicks += 1; continue; }
     if (c.state !== 1) continue;
     for (const [dx, dy] of NEIGHBORS) {
       const nx = c.x + dx, ny = c.y + dy;
@@ -230,7 +231,7 @@ function step(w: World): World {
     if (u.status === 'onscene') {
       for (const i of hoseCells(tb)) {
         const c = cells[i];
-        if (c.state === 1) c.state = 2;
+        if (c.state === 1) { c.state = 2; c.burnTicks = BURN_TICKS; }
         c.fuel = Math.min(c.fuel, 0.12);
       }
     }
@@ -251,19 +252,25 @@ function step(w: World): World {
     if (b.status === 'lost' || b.status === 'clear') return b;
     if (b.status === 'burning' && protectedIds.has(b.id)) {
       // engine on scene: the fire is knocked down instead of spreading through the building
-      burnCount[b.id] = Math.max(0, (burnCount[b.id] ?? 0) - 1);
+      burnCount[b.id] = Math.max(0, (burnCount[b.id] ?? 0) - 2);
+      b.burnProgress = burnCount[b.id] / BUILDING_BURN_TICKS;
+      if (burnCount[b.id] < GUTTED_AT) b.damage = 1;
       if (burnCount[b.id] === 0) { b.status = b.evacStarted ? 'evacuating' : 'ok'; b.damage = 0; }
       return b;
     }
     if (b.status === 'burning') {
+      // a structure fire keeps burning (and throwing heat at its neighbours) until it is out or collapses
+      for (const i of fp) { if (cells[i].state !== 0 || cells[i].fuel > 0) { cells[i].state = 1; cells[i].burnTicks = 0; } }
       burnCount[b.id] = (burnCount[b.id] ?? 0) + 1;
       b.damage = burnCount[b.id] >= GUTTED_AT ? 2 : 1;
-      if (burnCount[b.id] >= BUILDING_BURN_TICKS) { b.status = 'lost'; b.damage = 3; }
+      b.burnProgress = burnCount[b.id] / BUILDING_BURN_TICKS;
+      if (burnCount[b.id] >= BUILDING_BURN_TICKS) { b.status = 'lost'; b.damage = 3; b.burnProgress = 1; }
       return b;
     }
     if (fp.some((i) => cells[i].state === 1) && Math.random() < (b.risk / 100) * 0.5 * (protectedIds.has(b.id) ? 0.15 : 1)) {
       b.status = 'burning';
       b.damage = 1;
+      b.burnProgress = 0;
       for (const i of fp) if (cells[i].state === 0) { cells[i].state = 1; cells[i].burnTicks = 0; }
       return b;
     }
@@ -287,7 +294,7 @@ function step(w: World): World {
     else if (b.status === 'lost') events = log(events, sim.tick, `${b.name} collapsed${b.residents - b.peopleOut > 0 ? `, ${b.residents - b.peopleOut} still inside` : ''}`, 'bad', 'collapse');
     else if (b.status === 'clear') events = log(events, sim.tick, `${b.name} is clear: everyone is out`, 'good');
   }
-  if (!cells.some((c) => c.state === 1)) {
+  if (!cells.some((c) => c.state === 1) && !buildings.some((b) => b.status === 'burning')) {
     sim.phase = 'ended';
     sim.running = false;
     events = log(events, sim.tick, 'The fire is out', 'info');

@@ -40,13 +40,13 @@ ANCHOR_X, ANCHOR_Y = 220, 220
 # ------------------------------------------------------------------ palettes
 BASE = dict(stucco='#E6D2B5', stucco2='#EDE6D8', house2='#CFCBB2', civic='#D3CEC2', stone='#9C8B78',
             trim='#F2EBDD', roof='#8F8A82', metal='#3B3F45', metalL='#B8BCC2', concrete='#B9B3A8',
-            asphalt='#2C2D30', grass='#4E6B2E', foliage='#3F6A2A', palm='#6B8A3A', trunk='#4A3626', van='#F2F2EF',
+            asphalt='#2C2D30', grass='#4E6B2E', foliage='#3F6A2A', palm='#6B8A3A', euc='#6F8D72', bark='#CFC6B4', trunk='#4A3626', van='#F2F2EF',
             amber='#F2A93B', glass='#1C2A36', cw='#4E7088', solar='#14243A', canopy='#4A4038',
             tile='#B85E36', awning='#2F6B5E', green='#4C6B33', deck='#8E6A48', sign='#3DD68C',
             spandrel='#20272E', wood='#6B4A32', car1='#8C2F2F', car2='#2F4C7A')
 CHAR = dict(stucco='#4A423D', stucco2='#463F3A', house2='#433C37', civic='#433D39', stone='#2E2926',
             trim='#57504A', roof='#26211F', metal='#1F1B19', metalL='#3A3431', concrete='#4A443F',
-            asphalt='#242120', grass='#3A332E', foliage='#2A2522', palm='#2A2522', trunk='#151110', van='#2A2523',
+            asphalt='#242120', grass='#3A332E', foliage='#2A2522', palm='#2A2522', euc='#2A2522', bark='#3A3430', trunk='#151110', van='#2A2523',
             amber='#3A2A20', glass='#050505', cw='#0A0A0A', solar='#0F0E0E', canopy='#1A1614',
             tile='#2E2624', awning='#221D1B', green='#2A2420', deck='#1E1917', sign='#2A2522',
             spandrel='#121010', wood='#1A1513', car1='#221C1A', car2='#1E1A19')
@@ -55,7 +55,7 @@ ASH = dict(CHAR, stucco='#5E5650', stucco2='#5A534D', house2='#58514B', civic='#
            trim='#6E665F', roof='#3E3834', concrete='#6E6660', grass='#3E3833')
 MAQ = dict(stucco='#F2F0EB', stucco2='#EEEBE4', house2='#EAE6DD', civic='#F0EEE9', stone='#E4E0D8',
            trim='#FFFFFF', roof='#E9E6E0', metal='#D8D4CC', metalL='#E6E3DC', concrete='#ECE7DD',
-           asphalt='#DDD6C8', grass='#D9BF92', foliage='#F4F2EE', palm='#EFECE5', trunk='#D7C9AE', van='#FFFFFF',
+           asphalt='#DDD6C8', grass='#D9BF92', foliage='#F4F2EE', palm='#EFECE5', euc='#F1EFEA', bark='#E6E0D4', trunk='#D7C9AE', van='#FFFFFF',
            amber='#E0D8C8', glass='#B4C3CA', cw='#BFCDD3', solar='#AAB6BE', canopy='#E2DED6',
            tile='#E8E2D6', awning='#E0D9CC', green='#D8DCCB', deck='#DCC7A5', sign='#B9CDBE',
            spandrel='#E6E2DA', wood='#D9C9AC', car1='#FFFFFF', car2='#F2EFE9')
@@ -1033,7 +1033,23 @@ def build_snag(c):
         branch((0, 0, z), rx, rz, ln, 0.09, M['trunk'])
     return 2, 2, 4
 
-PROPS = dict(oak=build_oak, palm=build_palm, shrub=build_shrub, snag=build_snag)
+def build_euc(c):
+    """Eucalyptus: tall pale trunk that forks, sparse drooping blue-green crown."""
+    p = c.p
+    bark = make_mat('bark', p['bark'], rough=0.7, noise=0.6, nscale=4, bump=0.3, bscale=40)
+    leaf = make_mat('eucLeaf', p['euc'], rough=0.7, noise=0.0 if c.maq else 0.6, nscale=3, bump=0.8, bscale=40)
+    prop_ground(c)
+    cylinder('trunk', 0, 0, 0.0, 5.5, 0.26, bark, verts=12)
+    for (rx, rz, ln, r) in ((14, 30, 5.0, 0.17), (18, 200, 4.4, 0.15), (24, 110, 3.4, 0.11)):
+        branch((0, 0, 5.2), rx, rz, ln, r, bark)
+    tips = [((0.9, 0.5, 10.2), 1.3), ((-0.9, -0.6, 9.3), 1.15), ((0.3, 1.3, 8.6), 1.0), ((-0.2, -0.1, 10.9), 0.9),
+            ((1.4, -0.4, 8.9), 0.9), ((-1.2, 0.6, 8.2), 0.85)]
+    for k, (loc, r) in enumerate(tips):
+        o = blob('eucCrown', loc, r, leaf, k + 11)
+        o.scale = (1.0, 1.0, 1.35)
+    return 3, 3, 11
+
+PROPS = dict(oak=build_oak, palm=build_palm, shrub=build_shrub, snag=build_snag, euc=build_euc)
 
 # ------------------------------------------------------------------ fire damage
 SITE = ('catcher', 'lawn', 'apron', 'walk', 'drive', 'plaza', 'lot', 'stripes', 'trunk', 'crown', 'shrub', 'pole', 'lamp',

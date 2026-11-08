@@ -42,6 +42,8 @@ export interface Building {
   explanation: string;
   /** Client-side fire damage stage: 0 intact, 1 burning, 2 gutted (roof caved in), 3 collapsed. */
   damage?: number;
+  /** 0..1 through the burn (smoke, growing fire, gutted, collapse). */
+  burnProgress?: number;
 }
 
 export interface FireCell {

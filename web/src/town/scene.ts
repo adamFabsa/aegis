@@ -61,7 +61,7 @@ export const SPRITE_BOX = { w: 520, h: 380, ax: 220, ay: 220 }; // must match BO
 /** Vegetation sprite frame (must match PROP_BOX in blender/build_sprites.py); anchor = trunk base. */
 export const PROP_BOX = { w: 176, h: 110, ax: 36, ay: 62 };
 
-export function propUrl(type: 'oak' | 'palm' | 'shrub' | 'snag', pack: Pack): string {
+export function propUrl(type: 'oak' | 'palm' | 'shrub' | 'snag' | 'euc', pack: Pack): string {
   return `${import.meta.env.BASE_URL}sprites/prop_${type}_${type === 'snag' ? 'lost' : pack}.webp`;
 }
 
@@ -90,7 +90,7 @@ export function spriteUrl(kind: BuildingKind, variant: string): string {
 }
 
 // ---------------------------------------------------------------- vegetation (deterministic)
-export interface Plant { x: number; y: number; type: 'oak' | 'palm' | 'shrub' }
+export interface Plant { x: number; y: number; type: 'oak' | 'palm' | 'shrub' | 'euc' }
 
 function rng(seed: number) {
   let s = seed;
@@ -117,8 +117,21 @@ export function generatePlants(buildings: Pick<Building, 'x' | 'y' | 'w' | 'h'>[
     if (SIDEWALKS.some((r) => x > r.x - 6 && x < r.x + r.w + 6 && y > r.y - 6 && y < r.y + r.h + 6)) continue;
     if (blocks.some(([a, b, c, d]) => x > a && x < c && y > b && y < d)) continue;
     if (out.some((p) => p.type !== 'shrub' && Math.hypot(p.x - x, p.y - y) < 34)) continue;
-    out.push({ x, y, type: n % 3 === 1 ? 'palm' : 'oak' });
+    // Altadena mix: oaks, eucalyptus windbreaks near the hills, palms in the yards
+    const nearHills = inHills(x + 90, y + 90);
+    out.push({ x, y, type: nearHills && n % 2 === 0 ? 'euc' : n % 4 === 1 ? 'palm' : n % 4 === 3 ? 'euc' : 'oak' });
     n++;
+  }
+  // palm-lined avenues: a tall fan palm every 64 units along both main streets
+  const clear = (x: number, y: number) =>
+    !blocks.some(([a, b, c, d]) => x > a + 18 && x < c - 18 && y > b + 18 && y < d - 18) && !isLot(x, y) && !inHills(x, y);
+  for (let x = 30; x < 990; x += 64) {
+    if (x > 330 && x < 420) continue;
+    for (const y of [419, 477]) if (clear(x, y)) out.push({ x, y, type: 'palm' });
+  }
+  for (let y = 30; y < 600; y += 64) {
+    if (y > 400 && y < 490) continue;
+    for (const x of [349, 403]) if (clear(x, y) && !(x === 403 && y > 200 && y < 250)) out.push({ x, y, type: 'palm' });
   }
   return out;
 }
@@ -154,4 +167,29 @@ export function routeLength(pts: [number, number][]): number {
   let len = 0;
   for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
   return len;
+}
+
+/** San Gabriel Mountains backdrop: three hazy ridgelines behind the town (screen space). */
+export function ridgePaths(): string[] {
+  const rng2 = (seed: number) => { let t = seed; return () => (t = (t * 16807) % 2147483647) / 2147483647; };
+  const layers: [number, number, number, number][] = [
+    // base height at left, base at right, amplitude, seed
+    [250, 520, 120, 3],
+    [300, 590, 95, 11],
+    [360, 650, 70, 23],
+  ];
+  return layers.map(([y0, y1, amp, seed]) => {
+    const r = rng2(seed);
+    let d = `M -1400 ${y0 + 200}`;
+    let x = -1400;
+    let wave = 0;
+    while (x <= 2900) {
+      const t = Math.min(1, Math.max(0, (x + 40) / 1540));
+      wave = wave * 0.55 + (r() - 0.5) * 0.9;
+      const ridge = y0 + (y1 - y0) * t - amp * (0.55 + 0.45 * Math.sin(t * 7 + seed) + wave * 0.6);
+      d += ` L ${x.toFixed(0)} ${ridge.toFixed(0)}`;
+      x += 18 + r() * 26;
+    }
+    return d + ` L 2900 ${y1 + 330} L -1400 ${y1 + 330} Z`;
+  });
 }

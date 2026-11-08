@@ -24,7 +24,7 @@ export default function App() {
   useEffect(() => {
     const kinds: BuildingKind[] = ['senior', 'apartments', 'office', 'shelter', 'homes'];
     for (const k of kinds) for (const v of ['night', 'dusk', 'maquette', 'burning', 'gutted', 'lost']) new Image().src = spriteUrl(k, v);
-    for (const t of ['oak', 'palm', 'shrub'] as const) for (const v of ['night', 'dusk', 'maquette'] as const) new Image().src = propUrl(t, v);
+    for (const t of ['oak', 'palm', 'shrub', 'euc'] as const) for (const v of ['night', 'dusk', 'maquette'] as const) new Image().src = propUrl(t, v);
     new Image().src = propUrl('snag', 'night');
   }, []);
 
