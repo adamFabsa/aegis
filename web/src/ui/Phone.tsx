@@ -7,11 +7,13 @@ import type { BuildingProfile, FixView, Measure } from '../town/world';
 import { advise, type Action, type Instruction } from './advisor';
 import { fmtClock, fmtUsd } from './format';
 import { PersonPicker, type PickItem, type PickTone } from './PersonPicker';
+import { Portrait } from './Portrait';
+import { ALERT_LABEL, buildingAlerts, seedOf, type PersonAlert } from './alerts';
 
 /** A resident's state as a pill in the picker. */
 function residentTag(x: Person): { tone: PickTone; tag?: string } {
   switch (x.status) {
-    case 'pinged': return x.escalated && !x.replyText ? { tone: 'bad', tag: 'No reply' } : { tone: 'warn', tag: 'Asked' };
+    case 'pinged': return x.escalated && !x.replyText ? { tone: 'bad', tag: 'No reply' } : { tone: 'idle', tag: 'Asked' };
     case 'cant_move': return { tone: 'bad', tag: 'Needs help' };
     case 'claimed': return { tone: 'warn', tag: 'Help coming' };
     case 'safe': return { tone: 'ok', tag: 'Safe' };
@@ -76,11 +78,15 @@ function ResidentView({ sim, buildings, persons, tasks, onReply, initialPerson }
     <div className="phone-body">
       <PersonPicker label="resident" placeholder="Search name, building or need" value={String(pid)}
         onChange={(id) => { setPid(Number(id)); setError(null); }}
-        items={groups.flatMap(({ b: g, list }) => list.map((x): PickItem => ({
-          id: String(x.id), name: x.name, group: g.name,
-          sub: `${g.kind === 'homes' ? g.name : `Floor ${x.floor}`}${x.note ? ` · ${x.note}` : ''}`,
-          ...residentTag(x),
-        })))} />
+        items={groups.flatMap(({ b: g, list }) => list.map((x): PickItem => {
+          const t = residentTag(x);
+          return {
+            id: String(x.id), name: x.name, group: g.name, seed: x.id, older: g.kind === 'senior',
+            sub: `${g.kind === 'homes' ? g.name : `Floor ${x.floor}`}${x.note ? ` · ${x.note}` : ''}`,
+            attention: x.needsHelp || t.tone === 'bad' || t.tone === 'warn',
+            ...t,
+          };
+        }))} />
       <div className="chat" aria-live="polite">
         {!pinged ? (
           <Bubble from="lantern">{sim.phase === 'prep' ? `Hi ${p.name.split(' ')[0]}, Lantern watches the fire risk for ${b.name}. Nothing to do right now.`
@@ -124,6 +130,7 @@ function StaffView({ buildings, persons, tasks, onClaim, onDone, initialStaff }:
   }, [buildings]);
   const [me, setMe] = useState(initialStaff ?? crew[0]?.names[0] ?? 'Alex');
   const [error, setError] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
   const open = tasks.filter((t) => !t.done).sort((a, b) => b.priority - a.priority || a.createdTick - b.createdTick);
   const mine = open.filter((t) => t.claimedBy === me);
   const rest = open.filter((t) => t.claimedBy !== me);
@@ -132,6 +139,7 @@ function StaffView({ buildings, persons, tasks, onClaim, onDone, initialStaff }:
     const b = buildings.find((x) => x.id === t.buildingId);
     return (
       <li key={t.id} className={`task ${t.claimedBy === me ? 'mine' : ''}`}>
+        {p && <Portrait seed={p.id} size={34} older={b?.kind === 'senior'} tone={t.claimedBy ? 'warn' : 'bad'} />}
         <span className="task-text">
           <b>{p?.name}</b>
           <small>{b?.name} · floor {p?.floor}{p?.note ? ` · ${p.note}` : ''}{p?.escalated && !p.replyText ? ' · no reply' : ''}</small>
@@ -151,12 +159,13 @@ function StaffView({ buildings, persons, tasks, onClaim, onDone, initialStaff }:
         onChange={(n) => { setMe(n); setError(null); }}
         items={crew.flatMap(({ b, names }) => names.map((n): PickItem => {
           const jobs = open.filter((t) => t.claimedBy === n).length;
-          return { id: n, name: n, group: b.name, sub: `On duty at ${b.name}`, tone: jobs ? 'warn' : 'idle', tag: jobs ? `${jobs} task${jobs === 1 ? '' : 's'}` : undefined };
+          return { id: n, name: n, group: b.name, sub: `On duty at ${b.name}`, seed: seedOf(n), attention: true, tone: jobs ? 'warn' : 'idle', tag: jobs ? `${jobs} task${jobs === 1 ? '' : 's'}` : undefined };
         }))} />
       {error && <p className="phone-error" role="alert">{error}</p>}
       {mine.length > 0 && <><h4 className="phone-h">Your tasks</h4><ul className="tasks">{mine.map(row)}</ul></>}
       <h4 className="phone-h">Open tasks · most urgent first</h4>
-      {rest.length ? <ul className="tasks">{rest.map(row)}</ul> : <p className="phone-empty">No one is waiting for help right now.</p>}
+      {rest.length ? <ul className="tasks">{(showAll ? rest : rest.slice(0, 5)).map(row)}</ul> : <p className="phone-empty">No one is waiting for help right now.</p>}
+      {rest.length > 5 && <button type="button" className="pick-more" onClick={() => setShowAll((v) => !v)}>{showAll ? 'Show fewer' : `Show ${rest.length - 5} more`}</button>}
     </div>
   );
 }
@@ -270,14 +279,103 @@ function AdvisorView(props: PhoneProps) {
   );
 }
 
-type Role = 'advisor' | 'resident' | 'staff';
+type Role = 'advisor' | 'alerts' | 'resident' | 'staff';
+
+const STATUS_PILL: Record<string, [string, string]> = {
+  behind: ['Behind', 'bad'], burning: ['On fire', 'bad'], lost: ['Lost', 'bad'], evacuating: ['Evacuating', 'warn'], clear: ['All out', 'ok'],
+};
+
+/** Alerts for the people, building by building: who needs someone, who hasn't answered, who has help coming. */
+function AlertsView(props: PhoneProps) {
+  const { sim, buildings, persons, tasks } = props;
+  const alerts = useMemo(() => buildingAlerts(sim, buildings, persons, tasks), [sim, buildings, persons, tasks]);
+  const [open, setOpen] = useState<Set<number>>(() => new Set());
+  const [busy, setBusy] = useState<Set<number>>(() => new Set());
+  const [error, setError] = useState<string | null>(null);
+  const send = async (taskIds: number[]) => {
+    if (!props.onAssign) return;
+    setBusy((s) => new Set([...s, ...taskIds]));
+    setError(null);
+    for (const id of taskIds) {
+      const r = await props.onAssign(id);
+      if (typeof r === 'string' && !/already claimed/.test(r)) { setError(r); break; }
+    }
+  };
+  if (sim.phase === 'prep') {
+    return <div className="phone-body"><p className="phone-empty al-empty">No alerts yet. When the fire starts, Lantern lists every resident who needs someone here, building by building.</p></div>;
+  }
+  const list = buildings
+    .map((b) => ({ b, a: alerts.get(b.id) }))
+    .filter((x): x is { b: Building; a: NonNullable<typeof x.a> } => !!x.a)
+    .sort((x, y) => y.a.leftBehind - x.a.leftBehind || y.a.needHelp - x.a.needHelp || y.a.noReply - x.a.noReply);
+  if (!list.length) {
+    return <div className="phone-body"><p className="phone-empty al-empty">All clear: nobody is waiting for help right now.</p></div>;
+  }
+  const row = (pa: PersonAlert, b: Building) => {
+    const p = pa.person;
+    const tone = pa.kind === 'needs_help' || pa.kind === 'left_behind' ? 'bad' : 'warn';
+    const detail = pa.kind === 'help_coming' ? `${staffName(pa.claimedBy ?? '')} is on the way`
+      : pa.kind === 'no_reply' ? `No reply · ${Math.round(pa.minutes)}m`
+        : pa.kind === 'left_behind' ? 'Firefighters notified'
+          : p.replyText ? `“${p.replyText.slice(0, 40)}”` : `No reply · ${Math.round(pa.minutes)}m`;
+    return (
+      <li key={p.id} className={`al-row ${pa.kind}`}>
+        <Portrait seed={p.id} size={34} older={b.kind === 'senior'} tone={tone} />
+        <span className="al-text">
+          <b>{p.name}</b>
+          <small>{b.kind === 'homes' ? '' : `Floor ${p.floor}`}{p.note ? `${b.kind === 'homes' ? '' : ' · '}${p.note}` : ''}</small>
+          <small className="al-detail">{detail}</small>
+        </span>
+        {pa.kind === 'needs_help' && pa.taskId !== undefined && props.onAssign
+          ? <button type="button" className="btn small urgent" disabled={busy.has(pa.taskId)} onClick={() => void send([pa.taskId!])}>{busy.has(pa.taskId) ? 'Sent…' : 'Send staff'}</button>
+          : <span className={`pick-tag ${tone}`}>{ALERT_LABEL[pa.kind]}</span>}
+      </li>
+    );
+  };
+  return (
+    <div className="phone-body al">
+      {error && <p className="phone-error" role="alert">{error}</p>}
+      {list.map(({ b, a }) => {
+        const [pill, pillTone] = STATUS_PILL[b.status] ?? ['', ''];
+        const expanded = open.has(b.id);
+        const shown = expanded ? a.people : a.people.slice(0, 3);
+        const waiting = a.people.filter((x) => x.kind === 'needs_help' && x.taskId !== undefined).map((x) => x.taskId!);
+        return (
+          <section key={b.id} className={`al-b ${a.leftBehind || a.needHelp ? 'hot' : ''}`}>
+            <button type="button" className="al-head" onClick={() => props.onSelect?.(b.id)} title="Show on the map">
+              <span className="al-name"><b>{b.name}</b>{pill && <span className={`pick-tag ${pillTone}`}>{pill}</span>}</span>
+              <small>{b.peopleOut}/{b.residents} out{b.fireEtaMin === 0 ? ' · fire here' : b.fireEtaMin > 0 ? ` · fire in ${fmtClock(Math.round(b.fireEtaMin))}` : ''}</small>
+            </button>
+            <p className="al-counts">
+              {a.leftBehind > 0 && <span className="pick-tag bad">{a.leftBehind} left behind</span>}
+              {a.needHelp > 0 && <span className="pick-tag bad">{a.needHelp} need{a.needHelp === 1 ? 's' : ''} help</span>}
+              {a.noReply > 0 && <span className="pick-tag warn">{a.noReply} no reply</span>}
+              {a.helpComing > 0 && <span className="pick-tag warn">{a.helpComing} help coming</span>}
+            </p>
+            <ul className="al-list">{shown.map((x) => row(x, b))}</ul>
+            <div className="al-foot">
+              {a.people.length > 3 && <button type="button" className="pick-more" onClick={() => setOpen((s) => { const n = new Set(s); if (n.has(b.id)) n.delete(b.id); else n.add(b.id); return n; })}>{expanded ? 'Show fewer' : `+${a.people.length - 3} more`}</button>}
+              {waiting.length > 1 && props.onAssign && <button type="button" className="btn small urgent al-all" disabled={waiting.every((id) => busy.has(id))} onClick={() => void send(waiting)}>Send staff to all {waiting.length}</button>}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
 
 export function Phone(props: PhoneProps & { framed?: boolean; onClose?: () => void }) {
   const hasAdvisor = !!props.fixesFor;
   const [role, setRole] = useState<Role>(props.initialRole ?? (hasAdvisor ? 'advisor' : 'resident'));
   const openTasks = props.tasks.filter((t) => !t.done && !t.claimedBy).length;
+  const urgent = useMemo(() => {
+    let n = 0;
+    for (const a of buildingAlerts(props.sim, props.buildings, props.persons, props.tasks).values()) n += a.needHelp + a.leftBehind;
+    return n;
+  }, [props.sim, props.buildings, props.persons, props.tasks]);
   const tabs: { id: Role; label: string; count?: number }[] = [
     ...(hasAdvisor ? [{ id: 'advisor' as const, label: 'AI coach' }] : []),
+    { id: 'alerts', label: 'Alerts', count: urgent || undefined },
     { id: 'resident', label: 'Resident' },
     { id: 'staff', label: 'Staff', count: openTasks || undefined },
   ];
@@ -297,7 +395,7 @@ export function Phone(props: PhoneProps & { framed?: boolean; onClose?: () => vo
           ))}
         </div>
         <div className="phone-view" key={role}>
-          {role === 'advisor' ? <AdvisorView {...props} /> : role === 'resident' ? <ResidentView {...props} /> : <StaffView {...props} />}
+          {role === 'advisor' ? <AdvisorView {...props} /> : role === 'alerts' ? <AlertsView {...props} /> : role === 'resident' ? <ResidentView {...props} /> : <StaffView {...props} />}
         </div>
       </div>
     </>

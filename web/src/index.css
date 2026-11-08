@@ -753,3 +753,36 @@ h2, p { margin: 0; }
 @media (prefers-reduced-motion: reduce) { .pick-pop { animation: none; } }
 .pick-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .pick-line b { min-width: 0; }
+
+/* ------------------------------------------------------------------ portraits, attention lists, Alerts tab */
+.portrait { flex: none; display: block; border-radius: 50%; }
+.portrait.bad { filter: drop-shadow(0 0 6px rgba(255, 90, 78, 0.35)); }
+.pick-more { align-self: flex-start; border: 0; background: transparent; color: #8AB4F8; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; padding: 4px 8px; border-radius: 8px; }
+.pick-more:hover { background: rgba(138, 180, 248, 0.1); }
+.pick-foot { font-size: 11px; color: #6F7A8F; margin: 6px 6px 2px; line-height: 1.35; }
+.tasks .task { display: flex; align-items: center; gap: 10px; }
+.tasks .task .task-text { flex: 1; min-width: 0; }
+/* four tabs on the phone: tighter */
+.phone-tabs button { padding-left: 4px; padding-right: 4px; font-size: 13.5px; flex: 1; min-width: 0; white-space: nowrap; }
+.phone-tabs .tab-count { margin-left: 4px; }
+
+.al { gap: 10px; }
+.al-empty { padding: 18px 4px; line-height: 1.45; }
+.al-b { border: 1px solid var(--border); border-radius: 16px; background: var(--panel); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.al-b.hot { border-color: rgba(255, 90, 78, 0.45); background: linear-gradient(180deg, rgba(255, 90, 78, 0.07), rgba(255, 90, 78, 0.015)); }
+.al-head { display: flex; flex-direction: column; gap: 2px; text-align: left; border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; font: inherit; }
+.al-head small { font-size: 12px; color: var(--muted); }
+.al-name { display: flex; align-items: center; gap: 8px; }
+.al-name b { font-size: 14.5px; }
+.al-counts { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; }
+.al-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.al-row { display: flex; align-items: center; gap: 9px; padding: 6px; border-radius: 12px; background: rgba(255, 255, 255, 0.025); animation: ai-in 320ms ease both; }
+.al-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.al-text b { font-size: 13.5px; }
+.al-text small { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.al-text .al-detail { color: #CFD6E4; }
+.al-row.needs_help .al-detail, .al-row.left_behind .al-detail { color: #FF9A94; }
+.al-row .btn.small { min-height: 30px; padding: 5px 10px; font-size: 12px; border-radius: 10px; }
+.al-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.al-foot:empty { display: none; }
+.al-all { margin-left: auto; }
