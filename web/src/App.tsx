@@ -10,7 +10,7 @@ import { sound } from './audio/sound';
 
 export default function App() {
   const world = useMockWorld();
-  const { sim, buildings, cells, approved, events } = world;
+  const { sim, buildings, cells, approved, events, units } = world;
   const [look, setLook] = useState<Look>(() => {
     const l = new URLSearchParams(window.location.search).get('look');
     return l === 'night' || l === 'dusk' || l === 'maquette' ? l : 'auto';
@@ -84,7 +84,8 @@ export default function App() {
     const first = lastEvent.current === 0 && events.length > 1;
     lastEvent.current = e.id;
     if (first) return; // do not replay history after a deep link
-    if (e.tone === 'bad') sound.alert('fire');
+    if (e.kind === 'dispatch') sound.siren(4.5);
+    else if (e.tone === 'bad') sound.alert('fire');
     else if (e.tone === 'warn') sound.alert('behind');
     else if (e.tone === 'good') sound.alert('good');
   }, [events]);
@@ -97,7 +98,7 @@ export default function App() {
       <MapView
         sim={sim} buildings={buildings} fireCells={cells} pack={pack}
         selectedId={selectedId} onSelect={setSelectedId}
-        topInset={insets.top} bottomInset={insets.bottom} lite={lite}
+        topInset={insets.top} bottomInset={insets.bottom} lite={lite} units={units}
       >
         <div ref={topRef} className="top-slot">
           <TopBar
@@ -116,6 +117,9 @@ export default function App() {
           onEvacuate={world.startEvacuation}
           onStartFire={startFire}
           onRestart={() => { world.reset(); setSelectedId(null); }}
+          units={units} cells={cells}
+          onDispatch={world.dispatchUnit}
+          onRelease={world.releaseUnit}
         />
       </MapView>
     </div>

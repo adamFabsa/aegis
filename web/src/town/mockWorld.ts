@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Building, BuildingKind, FireCell, Phase, Sim } from './types';
 import { CELL, COLS, ROWS } from './iso';
-import { LOTS, inHills, onRoad } from './scene';
+import { LOTS, inHills, onRoad, routeLength, unitRoute } from './scene';
 
 const BASE_SPREAD = 0.2; // mock pacing only; real constants come from seed/fire_params.json
 const WIND_K = 1.4;
@@ -145,19 +145,37 @@ function fireTicks(cells: FireCell[], dirDeg: number): Float64Array {
 }
 
 /** Mirrors the spec's event_log table (the dashboard's live feed). */
-export interface LogEvent { id: number; tick: number; text: string; tone: 'info' | 'good' | 'warn' | 'bad' }
+export interface LogEvent { id: number; tick: number; text: string; tone: 'info' | 'good' | 'warn' | 'bad'; kind?: 'dispatch' }
 
-interface World { sim: Sim; buildings: Building[]; cells: FireCell[]; burnCount: Record<number, number>; approved: Record<number, FixKey[]>; events: LogEvent[] }
+/** Fire units for the incident-command side (engines protect a building once on scene). */
+export interface Unit { id: number; name: string; status: 'ready' | 'enroute' | 'onscene'; targetId: number | null; ticksLeft: number; travelTicks: number }
+const seedUnits = (): Unit[] => [
+  { id: 1, name: 'Engine 1', status: 'ready', targetId: null, ticksLeft: 0, travelTicks: 0 },
+  { id: 2, name: 'Engine 2', status: 'ready', targetId: null, ticksLeft: 0, travelTicks: 0 },
+  { id: 3, name: 'Truck 3', status: 'ready', targetId: null, ticksLeft: 0, travelTicks: 0 },
+];
+export const TICK_SECONDS = 0.7;
+
+interface World { sim: Sim; buildings: Building[]; cells: FireCell[]; burnCount: Record<number, number>; approved: Record<number, FixKey[]>; events: LogEvent[]; units: Unit[] }
 
 let eventSeq = 1;
 const hm = (m: number) => { const h = Math.floor(m / 60); const r = Math.round(m % 60); return h ? `${h}h ${String(r).padStart(2, '0')}m` : `${r}m`; };
-function log(events: LogEvent[], tick: number, text: string, tone: LogEvent['tone']): LogEvent[] {
-  return [{ id: eventSeq++, tick, text, tone }, ...events].slice(0, 40);
+function log(events: LogEvent[], tick: number, text: string, tone: LogEvent['tone'], kind?: LogEvent['kind']): LogEvent[] {
+  return [{ id: eventSeq++, tick, text, tone, kind }, ...events].slice(0, 40);
+}
+
+/** Cells covered by an engine's hoses: the footprint plus a two-cell ring. */
+function hoseCells(b: Building): number[] {
+  const out: number[] = [];
+  for (let y = Math.floor(b.y / CELL) - 2; y <= Math.floor((b.y + b.h - 1) / CELL) + 2; y++)
+    for (let x = Math.floor(b.x / CELL) - 2; x <= Math.floor((b.x + b.w - 1) / CELL) + 2; x++)
+      if (x >= 0 && x < COLS && y >= 0 && y < ROWS) out.push(y * COLS + x);
+  return out;
 }
 
 function freshWorld(): World {
   const buildings = seedBuildings();
-  return { sim: seedSim(), buildings, cells: seedCells(buildings), burnCount: {}, approved: {}, events: [] };
+  return { sim: seedSim(), buildings, cells: seedCells(buildings), burnCount: {}, approved: {}, events: [], units: seedUnits() };
 }
 
 function step(w: World): World {
@@ -189,6 +207,35 @@ function step(w: World): World {
     if (n.state === 0 && n.fuel > 0) { n.state = 1; n.burnTicks = 0; }
   }
 
+  // fire units: drive, arrive, then keep the cells around their building wet
+  let events = w.events;
+  const units = w.units.map((u) => ({ ...u }));
+  for (const u of units) {
+    const tb = w.buildings.find((b) => b.id === u.targetId);
+    if (!tb) continue;
+    if (tb.status === 'lost') {
+      events = log(events, sim.tick, `${u.name} returning to staging: ${tb.name} was lost`, 'info');
+      u.status = 'ready';
+      u.targetId = null;
+      continue;
+    }
+    if (u.status === 'enroute') {
+      u.ticksLeft -= 1;
+      if (u.ticksLeft <= 0) {
+        u.status = 'onscene';
+        events = log(events, sim.tick, `${u.name} on scene at ${tb.name}, water on the building`, 'good');
+      }
+    }
+    if (u.status === 'onscene') {
+      for (const i of hoseCells(tb)) {
+        const c = cells[i];
+        if (c.state === 1) c.state = 2;
+        c.fuel = Math.min(c.fuel, 0.12);
+      }
+    }
+  }
+  const protectedIds = new Set(units.filter((u) => u.status === 'onscene').map((u) => u.targetId));
+
   const eta = sim.tick % 5 === 0 || sim.tick === 1 ? fireTicks(cells, sim.windDirDeg) : null;
   const burnCount = { ...w.burnCount };
   const buildings = w.buildings.map((b0) => {
@@ -201,12 +248,18 @@ function step(w: World): World {
     }
     if (b.kind === 'shelter') return b;
     if (b.status === 'lost' || b.status === 'clear') return b;
+    if (b.status === 'burning' && protectedIds.has(b.id)) {
+      // engine on scene: the fire is knocked down instead of spreading through the building
+      burnCount[b.id] = Math.max(0, (burnCount[b.id] ?? 0) - 1);
+      if (burnCount[b.id] === 0) b.status = b.evacStarted ? 'evacuating' : 'ok';
+      return b;
+    }
     if (b.status === 'burning') {
       burnCount[b.id] = (burnCount[b.id] ?? 0) + 1;
       if (burnCount[b.id] >= BUILDING_BURN_TICKS) b.status = 'lost';
       return b;
     }
-    if (fp.some((i) => cells[i].state === 1) && Math.random() < (b.risk / 100) * 0.5) {
+    if (fp.some((i) => cells[i].state === 1) && Math.random() < (b.risk / 100) * 0.5 * (protectedIds.has(b.id) ? 0.15 : 1)) {
       b.status = 'burning';
       for (const i of fp) if (cells[i].state === 0) { cells[i].state = 1; cells[i].burnTicks = 0; }
       return b;
@@ -221,7 +274,6 @@ function step(w: World): World {
     return b;
   });
 
-  let events = w.events;
   for (const b of buildings) {
     const before = w.buildings.find((x) => x.id === b.id)!.status;
     if (before === b.status) continue;
@@ -235,7 +287,7 @@ function step(w: World): World {
     sim.running = false;
     events = log(events, sim.tick, 'The fire is out', 'info');
   }
-  return { ...w, sim, buildings, cells, burnCount, events };
+  return { ...w, sim, buildings, cells, burnCount, events, units };
 }
 
 export function useMockWorld() {
@@ -319,5 +371,29 @@ export function useMockWorld() {
   const togglePause = useCallback(() => setWorld((w) => (w.sim.phase === 'fire' ? { ...w, sim: { ...w.sim, running: !w.sim.running } } : w)), []);
   const reset = useCallback(() => setWorld(freshWorld()), []);
 
-  return { ...world, setPhase, startEvacuation, approveFix, togglePause, reset, advance };
+  /** Send the first free unit to a building (incident command). */
+  const dispatchUnit = useCallback((buildingId: number) => {
+    setWorld((w) => {
+      const b = w.buildings.find((x) => x.id === buildingId);
+      const u = w.units.find((x) => x.status === 'ready');
+      if (!b || !u || w.sim.phase !== 'fire' || b.status === 'lost' || w.units.some((x) => x.targetId === buildingId)) return w;
+      const travel = Math.max(2, Math.ceil(routeLength(unitRoute(b)) / 170));
+      return {
+        ...w,
+        units: w.units.map((x) => (x.id === u.id ? { ...x, status: 'enroute', targetId: buildingId, ticksLeft: travel, travelTicks: travel } : x)),
+        events: log(w.events, w.sim.tick, `${u.name} responding to ${b.name}`, 'info', 'dispatch'),
+      };
+    });
+  }, []);
+
+  /** Bring a unit back to staging so it can be sent somewhere else. */
+  const releaseUnit = useCallback((unitId: number) => {
+    setWorld((w) => ({
+      ...w,
+      units: w.units.map((x) => (x.id === unitId ? { ...x, status: 'ready', targetId: null, ticksLeft: 0 } : x)),
+      events: log(w.events, w.sim.tick, `${w.units.find((x) => x.id === unitId)?.name ?? 'Unit'} back at staging`, 'info'),
+    }));
+  }, []);
+
+  return { ...world, setPhase, startEvacuation, approveFix, togglePause, reset, advance, dispatchUnit, releaseUnit };
 }

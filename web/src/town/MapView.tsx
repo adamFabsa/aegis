@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Town } from './Town';
 import type { Building, FireCell, Pack, Sim } from './types';
+import type { Unit } from './mockWorld';
 import { VIEW_H, VIEW_W, project } from './iso';
 import { SPRITE, spriteScale } from './scene';
 
@@ -18,6 +19,7 @@ interface MapViewProps {
   topInset?: number;
   bottomInset?: number;
   lite?: boolean;
+  units?: Unit[];
 }
 
 const PHONE = 760;
@@ -58,7 +60,7 @@ function clampCam(c: Cam, w: number, h: number, top = 0, bottom = 0): Cam {
   return { k, x: cx - w / (2 * k), y: cy - (top + vh / 2) / k };
 }
 
-export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect, children, topInset = 0, bottomInset = 0, lite = false }: MapViewProps) {
+export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect, children, topInset = 0, bottomInset = 0, lite = false, units }: MapViewProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [userCam, setUserCam] = useState<Cam | null>(null);
@@ -169,8 +171,8 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
   });
   const ready = cam !== null;
   const town = useMemo(
-    () => (ready ? <Town sim={sim} buildings={buildings} fireCells={fireCells} pack={pack} selectedId={selectedId} onSelect={select} svgRef={svgRef} tagScale={tagScale} lite={lite} /> : null),
-    [ready, sim, buildings, fireCells, pack, selectedId, select, tagScale, lite],
+    () => (ready ? <Town sim={sim} buildings={buildings} fireCells={fireCells} pack={pack} selectedId={selectedId} onSelect={select} svgRef={svgRef} tagScale={tagScale} lite={lite} units={units} /> : null),
+    [ready, sim, buildings, fireCells, pack, selectedId, select, tagScale, lite, units],
   );
 
   return (

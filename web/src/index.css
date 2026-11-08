@@ -228,6 +228,32 @@ h2, p { margin: 0; }
 .result-grid dd { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 26px; font-variant-numeric: tabular-nums; }
 .result-grid dd small { font-size: 14px; color: var(--muted); }
 
+/* fire: tabs + incident command */
+.tabs { display: flex; gap: 4px; padding: 3px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; }
+.tabs button {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; background: transparent;
+  color: var(--muted); font-size: 14px; font-weight: 700; padding: 8px 12px; border-radius: 9px; cursor: pointer; min-height: 38px;
+}
+.tabs button.on { background: #222B3D; color: var(--text); }
+.tab-count { font-size: 11px; font-weight: 800; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 5px; display: inline-grid; place-items: center; background: var(--amber); color: #0B0F17; }
+.incident-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.incident-stats > div { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px; }
+.incident-stats dt { font-size: 11px; color: var(--muted); }
+.incident-stats dd { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 20px; }
+.incident-stats dd small { font-size: 12px; color: var(--muted); font-weight: 600; font-family: Inter, sans-serif; }
+.incident-stats dd.ok { color: var(--green); }
+.incident-stats dd.bad { color: var(--red); }
+.row.static { cursor: default; }
+.row.static:hover { background: var(--panel); border-color: var(--border); }
+.unit-badge { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; flex: none; background: #222B3D; color: var(--muted); }
+.unit-badge.enroute { background: rgba(242, 169, 59, 0.16); color: var(--amber); }
+.unit-badge.onscene { background: rgba(76, 141, 255, 0.16); color: #7FB0FF; }
+.row-unit { display: inline-flex; vertical-align: -2px; margin-left: 6px; color: #7FB0FF; }
+.mini-title { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin: 2px 0 -4px; }
+.btn.secondary { background: #1B2A44; border-color: #2F4A7A; color: #CFE0FF; }
+.btn.secondary:hover:not(:disabled) { background: #24375A; }
+.unit-line { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #9DC0FF; }
+
 /* ------------------------------------------------------------------ phone */
 @media (max-width: 760px) {
   .top-slot { top: 8px; left: 8px; right: 8px; }
@@ -264,6 +290,9 @@ h2, p { margin: 0; }
   .kpis.wide .kpi { padding: 8px 12px; }
   .row { min-height: 50px; padding: 8px 10px; }
   .feed { padding: 7px 10px; font-size: 12px; }
+  .incident-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .incident-stats dd { font-size: 18px; }
+  .tabs button { font-size: 13px; padding: 7px 8px; }
   .result-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .result-grid dd { font-size: 22px; }
   .kpis:not(.wide) { width: 100%; justify-content: flex-start; }
@@ -281,4 +310,12 @@ h2, p { margin: 0; }
   .dock { max-height: 50vh; gap: 10px; }
   .dock h2 { font-size: 18px; }
   .dock-head > .btn { min-height: 42px; padding: 9px 14px; }
+}
+
+/* narrow phones: the step bar needs the room more than the logo */
+@media (max-width: 420px) {
+  .logo { display: none; }
+  .topbar.map-chrome { padding-left: 5px; gap: 5px; }
+  .status-pill { padding-left: 8px; }
+  .pill-val { font-size: 15px; padding-right: 4px; }
 }

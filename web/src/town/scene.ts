@@ -131,3 +131,18 @@ export function evacRoute(b: Building, shelter: Building | undefined): [number, 
   }
   return [[doorX, doorY], [doorX, roadY], [sx, roadY], [sx, sy]];
 }
+
+/** Fire units wait in the office parking lot (map space) and drive the roads to a building. */
+export const STAGING: [number, number] = [72, 540];
+
+export function unitRoute(b: Building): [number, number][] {
+  const doorX = b.x + b.w / 2;
+  const front = b.y + b.h < 430 ? b.y + b.h + 6 : b.y - 6;
+  return [STAGING, [STAGING[0], 448], [doorX, 448], [doorX, front]];
+}
+
+export function routeLength(pts: [number, number][]): number {
+  let len = 0;
+  for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  return len;
+}

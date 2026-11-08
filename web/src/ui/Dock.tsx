@@ -1,6 +1,6 @@
-import { forwardRef } from 'react';
-import type { Building, Sim } from '../town/types';
-import { FIXES, REFERENCE_ETA_MIN, type FixKey, type LogEvent } from '../town/mockWorld';
+import { forwardRef, useState } from 'react';
+import type { Building, FireCell, Sim } from '../town/types';
+import { FIXES, REFERENCE_ETA_MIN, type FixKey, type LogEvent, type Unit } from '../town/mockWorld';
 import { STATUS_COLORS } from '../town/palettes';
 import { statusTag } from '../town/status';
 import { KIND_LABEL, fmtMin, fmtUsd } from './format';
@@ -16,6 +16,22 @@ interface DockProps {
   onEvacuate: (id: number) => void;
   onStartFire: () => void;
   onRestart: () => void;
+  units: Unit[];
+  cells: FireCell[];
+  onDispatch: (buildingId: number) => void;
+  onRelease: (unitId: number) => void;
+}
+
+function TruckIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 16V8h11v8M13 11h4l3 3v2h-7" /><circle cx="6.5" cy="17.5" r="1.8" /><circle cx="16.5" cy="17.5" r="1.8" /><path d="M2 6h8" />
+    </svg>
+  );
+}
+
+function unitFor(units: Unit[], buildingId: number) {
+  return units.find((u) => u.targetId === buildingId && u.status !== 'ready');
 }
 
 const riskColor = (r: number) => (r >= 70 ? STATUS_COLORS.red : r >= 40 ? STATUS_COLORS.amber : STATUS_COLORS.green);
@@ -197,7 +213,7 @@ function FireList(p: DockProps) {
               <div className="row" role="button" tabIndex={0} onClick={() => onSelect(b.id)} onKeyDown={(e) => { if (e.key === 'Enter') onSelect(b.id); }}>
                 <span className="row-bar" style={{ background: tag.color }} aria-hidden="true" />
                 <span className="row-text">
-                  <span className="row-name">{b.name}</span>
+                  <span className="row-name">{b.name}{unitFor(p.units, b.id) && <span className="row-unit" title={unitFor(p.units, b.id)!.name}><TruckIcon size={14} /></span>}</span>
                   <span className="row-detail">{detail}</span>
                 </span>
                 <RowAction b={b} sim={sim} onEvacuate={onEvacuate} />
@@ -234,6 +250,16 @@ function FireDetail(p: DockProps & { selected: Building }) {
         </>
       )}
       {canEvac && <button type="button" className="btn primary wide" onClick={() => onEvacuate(b.id)}>Start evacuation</button>}
+      {sim.phase === 'fire' && b.kind !== 'shelter' && b.status !== 'lost' && (() => {
+        const u = unitFor(p.units, b.id);
+        const free = p.units.find((x) => x.status === 'ready');
+        if (u) return <p className="unit-line"><TruckIcon /> {u.name} {u.status === 'enroute' ? 'is on the way' : 'is on scene, water on the building'}</p>;
+        return (
+          <button type="button" className="btn secondary wide" disabled={!free} onClick={() => p.onDispatch(b.id)}>
+            <TruckIcon /> {free ? `Send ${free.name}` : 'All units are busy'}
+          </button>
+        );
+      })()}
       {b.evacStarted && (
         <div className="progress">
           <div className="progress-row"><span>Residents out</span><b>{b.peopleOut} of {b.residents}</b></div>
@@ -243,6 +269,78 @@ function FireDetail(p: DockProps & { selected: Building }) {
       {b.status === 'lost' && <p className="hint">Building lost. {b.residents - b.peopleOut} residents were still inside.</p>}
       {b.status === 'clear' && <p className="hint">Everyone is out and accounted for.</p>}
       {b.kind === 'shelter' && <p className="hint">Destination for every evacuation.</p>}
+    </>
+  );
+}
+
+function Incident(p: DockProps) {
+  const { sim, buildings, units, cells, onSelect, onDispatch, onRelease } = p;
+  const burning = cells.filter((c) => c.state === 1).length;
+  const hills = cells.filter((c) => c.fuel >= 1 || c.state === 2).length || 1;
+  const burned = cells.filter((c) => c.state === 2).length;
+  const free = units.filter((u) => u.status === 'ready').length;
+  const needs = buildings
+    .filter((b) => b.kind !== 'shelter' && !unitFor(units, b.id) && (b.status === 'behind' || b.status === 'burning' || (b.fireEtaMin >= 0 && b.fireEtaMin < 90 && b.status !== 'lost' && b.status !== 'clear')))
+    .sort((a, b) => (a.status === 'burning' ? -1 : 0) - (b.status === 'burning' ? -1 : 0) || a.fireEtaMin - b.fireEtaMin)
+    .slice(0, 3);
+  return (
+    <>
+      <dl className="incident-stats">
+        <div><dt>Burning now</dt><dd className={burning ? 'bad' : ''}>{burning}<small> cells</small></dd></div>
+        <div><dt>Burned</dt><dd>{Math.min(100, Math.round((100 * burned) / hills))}<small>% of hills</small></dd></div>
+        <div><dt>Wind</dt><dd>SW<small> {sim.windMph} mph</small></dd></div>
+        <div><dt>Units free</dt><dd className={free ? 'ok' : 'bad'}>{free}<small>/{units.length}</small></dd></div>
+      </dl>
+      <ul className="rows" aria-label="Units">
+        {units.map((u) => {
+          const b = buildings.find((x) => x.id === u.targetId);
+          const text = u.status === 'ready' ? 'At staging, ready' : u.status === 'enroute' ? `Responding to ${b?.name}` : `On scene at ${b?.name}`;
+          return (
+            <li key={u.id}>
+              <div className="row static">
+                <span className={`unit-badge ${u.status}`}><TruckIcon /></span>
+                <span className="row-text"><span className="row-name">{u.name}</span><span className="row-detail">{text}</span></span>
+                {u.status !== 'ready' && <button type="button" className="btn small" onClick={() => onRelease(u.id)}>Return</button>}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {needs.length > 0 && (
+        <>
+          <h3 className="mini-title">Needs a unit</h3>
+          <ul className="rows" aria-label="Buildings that need a unit">
+            {needs.map((b) => (
+              <li key={b.id}>
+                <div className="row" role="button" tabIndex={0} onClick={() => onSelect(b.id)} onKeyDown={(e) => { if (e.key === 'Enter') onSelect(b.id); }}>
+                  <span className="row-bar" style={{ background: b.status === 'burning' || b.status === 'behind' ? STATUS_COLORS.red : STATUS_COLORS.amber }} aria-hidden="true" />
+                  <span className="row-text">
+                    <span className="row-name">{b.name}</span>
+                    <span className="row-detail">{b.status === 'burning' ? 'Burning' : `Fire in ${fmtMin(b.fireEtaMin)}`} · {b.residents - b.peopleOut} inside</span>
+                  </span>
+                  <button type="button" className="btn small urgent" disabled={!free} onClick={(e) => { e.stopPropagation(); onDispatch(b.id); }}>Send unit</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </>
+  );
+}
+
+function FireTabs(p: DockProps) {
+  const [tab, setTab] = useState<'people' | 'units'>('people');
+  return (
+    <>
+      <div className="tabs" role="tablist" aria-label="Fire view">
+        <button type="button" role="tab" aria-selected={tab === 'people'} className={tab === 'people' ? 'on' : ''} onClick={() => setTab('people')}>Residents</button>
+        <button type="button" role="tab" aria-selected={tab === 'units'} className={tab === 'units' ? 'on' : ''} onClick={() => setTab('units')}>
+          Incident command
+          <span className="tab-count">{p.units.filter((u) => u.status === 'ready').length}</span>
+        </button>
+      </div>
+      {tab === 'people' ? <FireList {...p} /> : <Incident {...p} />}
     </>
   );
 }
@@ -279,7 +377,7 @@ export const Dock = forwardRef<HTMLElement, DockProps>(function Dock(props, ref)
   let body;
   if (sim.phase === 'ended' && !selected) body = <ResultsView {...props} />;
   else if (sim.phase === 'prep') body = selected && selected.kind !== 'shelter' ? <PrepDetail {...props} selected={selected} /> : <PrepList {...props} />;
-  else body = selected ? <FireDetail {...props} selected={selected} /> : <FireList {...props} />;
+  else body = selected ? <FireDetail {...props} selected={selected} /> : <FireTabs {...props} />;
   return (
     <section ref={ref} className="dock map-chrome" aria-label="Control panel">
       <div className="dock-grip" aria-hidden="true" />

@@ -6,7 +6,8 @@ import {
   evacRoute, generatePlants, spriteScale, spriteUrl, spriteVariant,
 } from './scene';
 import { PALETTES, STATUS_COLORS, type GroundPalette } from './palettes';
-import { Markers, StreetLife } from './markers';
+import { FireUnits, Markers, StreetLife } from './markers';
+import { TICK_SECONDS, type Unit } from './mockWorld';
 
 interface TownProps {
   sim: Sim;
@@ -21,6 +22,7 @@ interface TownProps {
   lite?: boolean;
   /** Screen-constant scale for status tags so they stay readable when zoomed out. */
   tagScale?: number;
+  units?: Unit[];
 }
 
 const LOT_STRIPES =
@@ -288,7 +290,7 @@ function BuildingSprite({ b, pack, selected, onSelect, lite }: { b: Building; pa
   );
 }
 
-export const Town = memo(function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, svgRef, tagScale = 1, lite = false }: TownProps) {
+export const Town = memo(function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, svgRef, tagScale = 1, lite = false, units = [] }: TownProps) {
   const P = PALETTES[pack];
   // plants only depend on building footprints, which never change during a run
   const footprintKey = buildings.map((b) => `${b.x},${b.y},${b.w},${b.h}`).join('|');
@@ -412,6 +414,9 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
 
       {/* depth-sorted world */}
       {items.map((it) => <g key={it.key}>{it.node}</g>)}
+
+      {/* fire units sit on top so engines at a building front and their water are never hidden */}
+      <FireUnits units={units} buildings={buildings} tickSeconds={TICK_SECONDS} />
 
       {/* smoke, embers, fire light */}
       {fireOn && (

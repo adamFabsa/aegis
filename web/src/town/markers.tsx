@@ -3,7 +3,8 @@
 import { useEffect, useRef } from 'react';
 import type { Building, Sim } from './types';
 import { project } from './iso';
-import { SPRITE, evacRoute, spriteScale } from './scene';
+import { SPRITE, STAGING, evacRoute, spriteScale, unitRoute } from './scene';
+import type { Unit } from './mockWorld';
 import { STATUS_COLORS } from './palettes';
 
 type IconName = 'shield' | 'alert' | 'flame' | 'walk' | 'check' | 'x' | 'house';
@@ -270,6 +271,86 @@ export function StreetLife({ buildings, phase }: { buildings: Building[]; phase:
                 <animateMotion path={d} dur={`${drive}s`} begin={`${(-i * drive) / Math.max(1, b.vans)}s`} repeatCount="indefinite" />
               </use>
             ))}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+// ------------------------------------------------------------------ fire units (incident command)
+function EngineDefs() {
+  const body = (
+    <>
+      <ellipse cx="1" cy="0.6" rx="13" ry="3" fill="#000" opacity="0.35" />
+      <rect x="-11" y="-9.4" width="22" height="9" rx="1.6" fill="#C8262B" />
+      <rect x="4.6" y="-12.6" width="6.4" height="4.2" rx="1" fill="#C8262B" />
+      <rect x="5.6" y="-12" width="4.4" height="2.6" rx="0.5" fill="#1C2A36" />
+      <path d="M-10 -10.6 H3.6 M-8.6 -10.6 v-1.5 M-5.6 -10.6 v-1.5 M-2.6 -10.6 v-1.5 M0.4 -10.6 v-1.5 M-10 -12.1 H1.6" stroke="#E6E6E2" strokeWidth="0.8" fill="none" />
+      <rect x="-11" y="-5" width="22" height="1.1" fill="#F2F2EF" />
+      <circle cx="-6.6" cy="-0.3" r="1.7" fill="#111" />
+      <circle cx="6.6" cy="-0.3" r="1.7" fill="#111" />
+    </>
+  );
+  return (
+    <defs>
+      <g id="engine"><g transform="scale(1.6)">{body}</g></g>
+      <g id="engineOn">
+        <g transform="scale(1.6)">
+        {body}
+        <rect x="5.2" y="-14" width="2" height="1.4" rx="0.4" fill="#FF3B30"><animate attributeName="opacity" values="1;0.15;1" dur="0.5s" repeatCount="indefinite" /></rect>
+        <rect x="8" y="-14" width="2" height="1.4" rx="0.4" fill="#4C8DFF"><animate attributeName="opacity" values="0.15;1;0.15" dur="0.5s" repeatCount="indefinite" /></rect>
+        <circle cx="6.6" cy="-13.3" r="9" fill="url(#beacon)" opacity="0.5"><animate attributeName="opacity" values="0.6;0.1;0.6" dur="0.5s" repeatCount="indefinite" /></circle>
+        </g>
+      </g>
+      <radialGradient id="beacon"><stop offset="0" stopColor="#FF5A4E" stopOpacity="0.8" /><stop offset="1" stopColor="#FF5A4E" stopOpacity="0" /></radialGradient>
+      <radialGradient id="mist"><stop offset="0" stopColor="#CFEFFF" stopOpacity="0.7" /><stop offset="1" stopColor="#CFEFFF" stopOpacity="0" /></radialGradient>
+    </defs>
+  );
+}
+
+/** Drives once along the route when dispatched (mounts on dispatch, freezes at the building). */
+function Responding({ d, dur }: { d: string; dur: number }) {
+  const motion = useRef<SVGAnimationElement>(null);
+  useEffect(() => {
+    try { motion.current?.beginElement(); } catch { /* no SMIL: engine appears on scene when it arrives */ }
+  }, []);
+  return (
+    <use href="#engineOn">
+      <animateMotion ref={motion} path={d} dur={`${dur}s`} begin="indefinite" fill="freeze" />
+    </use>
+  );
+}
+
+export function FireUnits({ units, buildings, tickSeconds }: { units: Unit[]; buildings: Building[]; tickSeconds: number }) {
+  const ready = units.filter((u) => u.status === 'ready');
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      <EngineDefs />
+      {ready.map((u, i) => {
+        const [x, y] = project(STAGING[0] - 30 + i * 30, STAGING[1] + 30);
+        return <use key={`r${u.id}`} href="#engine" x={x} y={y} />;
+      })}
+      {units.filter((u) => u.status !== 'ready').map((u) => {
+        const b = buildings.find((x) => x.id === u.targetId);
+        if (!b) return null;
+        const route = unitRoute(b);
+        if (u.status === 'enroute') return <Responding key={`m${u.id}-${b.id}`} d={pathOf(route)} dur={u.travelTicks * tickSeconds} />;
+        const [ex, ey] = project(...route[route.length - 1]);
+        const [rx, ry] = project(b.x + b.w / 2, b.y + b.h / 2, SPRITE[b.kind].roof * spriteScale(b));
+        const cx = (ex + rx) / 2;
+        const cy = Math.min(ey, ry) - 46;
+        return (
+          <g key={`s${u.id}`}>
+            <use href="#engineOn" x={ex} y={ey} />
+            {[0, 1].map((k) => (
+              <path key={k} d={`M${ex + 8} ${ey - 21} Q ${cx + k * 10} ${cy - k * 8} ${rx + (k ? 14 : -10)} ${ry}`} stroke="#A9DEFF" strokeWidth={k ? 1.6 : 2.4} fill="none" strokeLinecap="round" strokeDasharray="5 7" opacity="0.85">
+                <animate attributeName="stroke-dashoffset" from="24" to="0" dur={k ? '0.45s' : '0.6s'} repeatCount="indefinite" />
+              </path>
+            ))}
+            <circle cx={rx} cy={ry} r="22" fill="url(#mist)">
+              <animate attributeName="r" values="18;26;18" dur="1.4s" repeatCount="indefinite" />
+            </circle>
           </g>
         );
       })}
