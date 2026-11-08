@@ -178,7 +178,7 @@ const StaticGround = memo(function StaticGround({ P }: { P: GroundPalette }) {
         <rect width={MAP_W} height={MAP_H} fill="#fff" filter="url(#patchesHi)" opacity={P.patchOp * 0.6} />
         <rect width={MAP_W} height={MAP_H} fill="#000" filter="url(#grain)" opacity={P.grainOp} />
         <rect x={PARK.x} y={PARK.y} width={PARK.w} height={PARK.h} rx="14" fill={P.lawn} />
-        <rect x={PARK.x} y={PARK.y} width={PARK.w} height={PARK.h} rx="14" fill="url(#mow)" />
+        <rect x={PARK.x} y={PARK.y} width={PARK.w} height={PARK.h} rx="14" fill="url(#mow)" opacity={P.patchOp > 0.3 ? 0.45 : 1} />
         <rect x={PARK.x} y={PARK.y} width={PARK.w} height={PARK.h} rx="14" fill="none" stroke={P.curb} strokeWidth="2" opacity="0.6" />
         <ellipse cx="128" cy="86" rx="44" ry="26" fill={P.water} />
         <ellipse cx="128" cy="86" rx="44" ry="26" fill="none" stroke={P.sidewalk} strokeWidth="3" />
