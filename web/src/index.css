@@ -40,7 +40,7 @@ h2, p { margin: 0; }
 
 /* ------------------------------------------------------------------ app bar: the first rows of the panel */
 .topbar {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "logo tools" "sub sub" "steps steps";
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "logo tools" "steps steps";
   align-items: center; gap: 12px 8px; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--border);
 }
 .logo svg { flex: none; }
@@ -698,3 +698,58 @@ h2, p { margin: 0; }
 .ignition-flame { transform-box: fill-box; transform-origin: 50% 100%; animation: ig-flicker 1.1s ease-in-out infinite alternate; }
 @keyframes ig-flicker { 0% { transform: scale(1, 1); } 45% { transform: scale(0.93, 1.09); } 100% { transform: scale(1.05, 0.95); } }
 @media (prefers-reduced-motion: reduce) { .ignition-flame, .sc-btn.busy svg { animation: none; } }
+
+/* ------------------------------------------------------------------ phone: who am I (searchable contact picker) */
+.pick { position: relative; }
+.pick-card {
+  width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer;
+  padding: 8px 10px 8px 8px; border-radius: 16px; background: var(--panel); border: 1px solid var(--border);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.pick-card:hover, .pick.open .pick-card { border-color: var(--border-2); background: #161E2E; }
+.pick-text { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.pick-text b { font-size: 14px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pick-text small { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pick-chev { flex: none; color: var(--muted); transition: transform 0.2s ease; }
+.pick.open .pick-chev { transform: rotate(180deg); }
+.pick-av {
+  flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+  font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 0.3px;
+  background: #222B3D; color: #CFD6E4; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.04);
+}
+.pick-av.sm { width: 28px; height: 28px; font-size: 11px; }
+.pick-av.ok { background: rgba(61, 214, 140, 0.16); color: var(--green); }
+.pick-av.warn { background: rgba(242, 169, 59, 0.16); color: var(--amber); }
+.pick-av.bad { background: rgba(255, 90, 78, 0.18); color: #FF8A80; }
+.pick-tag { flex: none; font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 2px 8px; white-space: nowrap; background: #222B3D; color: var(--muted); }
+.pick-tag.ok { background: rgba(61, 214, 140, 0.12); color: var(--green); }
+.pick-tag.warn { background: rgba(242, 169, 59, 0.14); color: var(--amber); }
+.pick-tag.bad { background: rgba(255, 90, 78, 0.14); color: #FF8A80; }
+.pick-pop {
+  position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 6px);
+  background: #0F1522; border: 1px solid var(--border-2); border-radius: 16px; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+  padding: 8px; animation: pick-in 160ms ease both;
+}
+.pick-search {
+  display: flex; align-items: center; gap: 8px; padding: 0 10px; height: 38px; border-radius: 11px;
+  background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+}
+.pick-search:focus-within { border-color: var(--amber); }
+.pick-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 13.5px; }
+.pick-search input::placeholder { color: #6F7A8F; }
+.pick-clear { border: 0; background: transparent; color: var(--muted); font-size: 17px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.pick-list { max-height: 300px; overflow-y: auto; overscroll-behavior: contain; margin-top: 6px; padding-right: 2px; }
+.pick-g { font-size: 10.5px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #6F7A8F; margin: 8px 6px 4px; }
+.pick-row {
+  width: 100%; display: flex; align-items: center; gap: 9px; text-align: left; cursor: pointer;
+  padding: 6px 8px; border: 0; border-radius: 10px; background: transparent;
+}
+.pick-row:hover { background: #18202F; }
+.pick-row.on { background: rgba(242, 169, 59, 0.1); box-shadow: inset 0 0 0 1px rgba(242, 169, 59, 0.35); }
+.pick-row .pick-text b { font-size: 13px; }
+.pick-row .pick-text small { font-size: 11.5px; }
+.pick-none { font-size: 13px; color: var(--muted); padding: 12px 8px; }
+@keyframes pick-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .pick-pop { animation: none; } }
+.pick-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pick-line b { min-width: 0; }

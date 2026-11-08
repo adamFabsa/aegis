@@ -6,6 +6,20 @@ import { staffOf, type Unit } from '../town/mockWorld';
 import type { BuildingProfile, FixView, Measure } from '../town/world';
 import { advise, type Action, type Instruction } from './advisor';
 import { fmtClock, fmtUsd } from './format';
+import { PersonPicker, type PickItem, type PickTone } from './PersonPicker';
+
+/** A resident's state as a pill in the picker. */
+function residentTag(x: Person): { tone: PickTone; tag?: string } {
+  switch (x.status) {
+    case 'pinged': return x.escalated && !x.replyText ? { tone: 'bad', tag: 'No reply' } : { tone: 'warn', tag: 'Asked' };
+    case 'cant_move': return { tone: 'bad', tag: 'Needs help' };
+    case 'claimed': return { tone: 'warn', tag: 'Help coming' };
+    case 'safe': return { tone: 'ok', tag: 'Safe' };
+    case 'out': return { tone: 'ok', tag: 'Out' };
+    case 'left_behind': return { tone: 'bad', tag: 'Left behind' };
+    default: return { tone: 'idle' };
+  }
+}
 
 export interface PhoneProps {
   sim: Sim;
@@ -60,16 +74,13 @@ function ResidentView({ sim, buildings, persons, tasks, onReply, initialPerson }
   const myReply = p.replyText || (p.status === 'safe' ? "I'm safe" : p.status === 'cant_move' ? "I can't get out" : '');
   return (
     <div className="phone-body">
-      <label className="phone-pick">
-        <span>Resident</span>
-        <select value={pid} onChange={(e) => { setPid(Number(e.target.value)); setError(null); }}>
-          {groups.map(({ b: g, list }) => (
-            <optgroup key={g.id} label={g.name}>
-              {list.map((x) => <option key={x.id} value={x.id}>{x.name}{x.needsHelp ? ` (${x.note})` : ''}</option>)}
-            </optgroup>
-          ))}
-        </select>
-      </label>
+      <PersonPicker label="resident" placeholder="Search name, building or need" value={String(pid)}
+        onChange={(id) => { setPid(Number(id)); setError(null); }}
+        items={groups.flatMap(({ b: g, list }) => list.map((x): PickItem => ({
+          id: String(x.id), name: x.name, group: g.name,
+          sub: `${g.kind === 'homes' ? g.name : `Floor ${x.floor}`}${x.note ? ` · ${x.note}` : ''}`,
+          ...residentTag(x),
+        })))} />
       <div className="chat" aria-live="polite">
         {!pinged ? (
           <Bubble from="lantern">{sim.phase === 'prep' ? `Hi ${p.name.split(' ')[0]}, Lantern watches the fire risk for ${b.name}. Nothing to do right now.`
@@ -136,14 +147,12 @@ function StaffView({ buildings, persons, tasks, onClaim, onDone, initialStaff }:
   };
   return (
     <div className="phone-body">
-      <label className="phone-pick">
-        <span>Staff member</span>
-        <select value={me} onChange={(e) => { setMe(e.target.value); setError(null); }}>
-          {crew.map(({ b, names }) => (
-            <optgroup key={b.id} label={b.name}>{names.map((n) => <option key={`${b.id}${n}`} value={n}>{n}</option>)}</optgroup>
-          ))}
-        </select>
-      </label>
+      <PersonPicker label="staff member" placeholder="Search staff or building" value={me}
+        onChange={(n) => { setMe(n); setError(null); }}
+        items={crew.flatMap(({ b, names }) => names.map((n): PickItem => {
+          const jobs = open.filter((t) => t.claimedBy === n).length;
+          return { id: n, name: n, group: b.name, sub: `On duty at ${b.name}`, tone: jobs ? 'warn' : 'idle', tag: jobs ? `${jobs} task${jobs === 1 ? '' : 's'}` : undefined };
+        }))} />
       {error && <p className="phone-error" role="alert">{error}</p>}
       {mine.length > 0 && <><h4 className="phone-h">Your tasks</h4><ul className="tasks">{mine.map(row)}</ul></>}
       <h4 className="phone-h">Open tasks · most urgent first</h4>
