@@ -104,7 +104,8 @@ def mix_rgb(nt, fac, a, b):
     return [s for s in n.outputs if s.type == 'RGBA'][0]
 
 def make_mat(name, color, rough=0.6, metal=0.0, spec=0.5, emit=None, estr=0.0, trans=0.0,
-             noise=0.0, nscale=18.0, bump=0.0, bscale=220.0, grime=0.0, brick=None, coat=0.0, wave=None):
+             noise=0.0, nscale=18.0, bump=0.0, bscale=220.0, grime=0.0, brick=None, coat=0.0, wave=None,
+             streaks=0.0, emit_var=False):
     m = bpy.data.materials.new(name)
     try:
         m.use_nodes = True
@@ -159,6 +160,22 @@ def make_mat(name, color, rough=0.6, metal=0.0, spec=0.5, emit=None, estr=0.0, t
         mr.inputs['To Min'].default_value = grime
         mr.inputs['To Max'].default_value = 0.0
         col = mix_rgb(nt, mr.outputs['Result'], col, scale_col(base, 0.55))
+    if streaks:   # rain streaks: noise stretched vertically, darkening in long drips
+        tc = nt.nodes.new('ShaderNodeTexCoord')
+        mp = nt.nodes.new('ShaderNodeMapping')
+        link(nt, tc.outputs['Object'], mp.inputs['Vector'])
+        mp.inputs['Scale'].default_value = (5.0, 5.0, 0.3)
+        nz = nt.nodes.new('ShaderNodeTexNoise')
+        setin(nz, 'Scale', 2.5)
+        setin(nz, 'Detail', 8.0)
+        link(nt, mp.outputs['Vector'], nz.inputs['Vector'])
+        mr = nt.nodes.new('ShaderNodeMapRange')
+        link(nt, nz.outputs['Fac'], mr.inputs['Value'])
+        mr.inputs['From Min'].default_value = 0.5
+        mr.inputs['From Max'].default_value = 0.8
+        mr.inputs['To Min'].default_value = 0.0
+        mr.inputs['To Max'].default_value = streaks
+        col = mix_rgb(nt, mr.outputs['Result'], col, scale_col(base, 0.6))
     if isinstance(col, tuple):
         bsdf.inputs['Base Color'].default_value = col
     else:
@@ -171,8 +188,49 @@ def make_mat(name, color, rough=0.6, metal=0.0, spec=0.5, emit=None, estr=0.0, t
         setin(bsdf, 'Transmission Weight', trans)
         setin(bsdf, 'IOR', 1.45)
     if emit:
-        setin(bsdf, 'Emission Color', lin(emit) if isinstance(emit, str) else emit)
-        setin(bsdf, 'Emission Strength', estr)
+        ecol = lin(emit) if isinstance(emit, str) else emit
+        if emit_var and estr > 0:
+            # lived-in rooms: brightness and colour temperature vary pane to pane, faint blinds
+            tc = nt.nodes.new('ShaderNodeTexCoord')
+            nz = nt.nodes.new('ShaderNodeTexNoise')
+            setin(nz, 'Scale', 0.7)
+            setin(nz, 'Detail', 1.0)
+            link(nt, tc.outputs['Object'], nz.inputs['Vector'])
+            mr = nt.nodes.new('ShaderNodeMapRange')
+            link(nt, nz.outputs['Fac'], mr.inputs['Value'])
+            mr.inputs['From Min'].default_value = 0.3
+            mr.inputs['From Max'].default_value = 0.7
+            mr.inputs['To Min'].default_value = 0.3
+            mr.inputs['To Max'].default_value = 1.4
+            wv = nt.nodes.new('ShaderNodeTexWave')
+            wv.wave_type = 'BANDS'
+            try:
+                wv.bands_direction = 'Z'
+            except Exception:
+                pass
+            link(nt, tc.outputs['Object'], wv.inputs['Vector'])
+            setin(wv, 'Scale', 18.0)
+            wr = nt.nodes.new('ShaderNodeMapRange')
+            link(nt, wv.outputs['Fac'], wr.inputs['Value'])
+            wr.inputs['To Min'].default_value = 0.8
+            wr.inputs['To Max'].default_value = 1.0
+            m1 = nt.nodes.new('ShaderNodeMath')
+            m1.operation = 'MULTIPLY'
+            link(nt, mr.outputs['Result'], m1.inputs[0])
+            link(nt, wr.outputs['Result'], m1.inputs[1])
+            m2 = nt.nodes.new('ShaderNodeMath')
+            m2.operation = 'MULTIPLY'
+            link(nt, m1.outputs[0], m2.inputs[0])
+            m2.inputs[1].default_value = estr
+            link(nt, m2.outputs[0], bsdf.inputs['Emission Strength'])
+            nz2 = nt.nodes.new('ShaderNodeTexNoise')
+            setin(nz2, 'Scale', 1.9)
+            setin(nz2, 'Detail', 1.0)
+            link(nt, tc.outputs['Object'], nz2.inputs['Vector'])
+            link(nt, mix_rgb(nt, nz2.outputs['Fac'], ecol, lin('#FFEBD0')), bsdf.inputs['Emission Color'])
+        else:
+            setin(bsdf, 'Emission Color', ecol)
+            setin(bsdf, 'Emission Strength', estr)
     if bump and height is None:
         nz2 = nt.nodes.new('ShaderNodeTexNoise')
         setin(nz2, 'Scale', bscale)
@@ -366,11 +424,12 @@ class Ctx:
         p, lamps = self.p, v['lamps']
         on = (lambda s: s if lamps else 0.0)
         grime = 0.0 if (self.lost or self.maq) else 0.45
+        streak = 0.0 if self.maq else 0.5
         self.M = dict(
-            stucco=make_mat('stucco', p['stucco'], rough=0.88, noise=0.35, nscale=6, bump=0.25, grime=grime),
-            stucco2=make_mat('stucco2', p['stucco2'], rough=0.85, noise=0.3, nscale=6, bump=0.25, grime=grime),
-            house2=make_mat('house2', p['house2'], rough=0.88, noise=0.35, nscale=6, bump=0.25),
-            civic=make_mat('civic', p['civic'], rough=0.85, noise=0.3, nscale=10, bump=0.2, grime=grime * 0.6),
+            stucco=make_mat('stucco', p['stucco'], rough=0.88, noise=0.35, nscale=6, bump=0.25, grime=grime, streaks=streak),
+            stucco2=make_mat('stucco2', p['stucco2'], rough=0.85, noise=0.3, nscale=6, bump=0.25, grime=grime, streaks=streak),
+            house2=make_mat('house2', p['house2'], rough=0.88, noise=0.35, nscale=6, bump=0.25, grime=grime * 0.7, streaks=streak * 0.7),
+            civic=make_mat('civic', p['civic'], rough=0.85, noise=0.3, nscale=10, bump=0.2, grime=grime * 0.6, streaks=streak * 0.8),
             stone=make_mat('stone', p['stone'], rough=0.8, noise=0.5, nscale=30, bump=0.35, bscale=90),
             trim=make_mat('trim', p['trim'], rough=0.55, noise=0.15, nscale=12),
             roof=make_mat('roof', p['roof'], rough=0.95, noise=0.6, nscale=40, bump=0.4, bscale=300),
@@ -397,9 +456,9 @@ class Ctx:
             wood=make_mat('wood', p['wood'], rough=0.6),
             spandrel=make_mat('spandrel', p['spandrel'], rough=0.4, metal=0.5),
             rail=make_mat('rail', '#DCEBF2', rough=0.02, trans=1.0),
-            lit1=make_mat('lit1', p['glass'], rough=0.05, emit=v['lit_col'], estr=v['lit_str']),
-            lit2=make_mat('lit2', p['glass'], rough=0.05, emit='#FFE0B0' if not v.get('roof_fire') else '#FF8A3D', estr=v['lit_str'] * 0.55),
-            lobby=make_mat('lobby', p['glass'], rough=0.05, emit='#FFD49A' if not v.get('roof_fire') else '#FF7A2E', estr=v['lobby']),
+            lit1=make_mat('lit1', p['glass'], rough=0.05, emit=v['lit_col'], estr=v['lit_str'], emit_var=True),
+            lit2=make_mat('lit2', p['glass'], rough=0.05, emit='#FFE0B0' if not v.get('roof_fire') else '#FF8A3D', estr=v['lit_str'] * 0.55, emit_var=True),
+            lobby=make_mat('lobby', p['glass'], rough=0.05, emit='#FFD49A' if not v.get('roof_fire') else '#FF7A2E', estr=v['lobby'], emit_var=True),
             strip=make_mat('strip', '#FFE2B8', rough=0.5, emit='#FFE2B8', estr=on(6.0)),
             beacon=make_mat('beacon', '#F2A93B', rough=0.4, emit='#F2A93B', estr=on(8.0)),
             head=make_mat('head', '#FFF4D8', rough=0.2, emit='#FFF4D8', estr=on(10.0)),
@@ -410,6 +469,9 @@ class Ctx:
             ink=make_mat('ink', '#0B0F17', rough=0.5),
             red=make_mat('red', '#FF3B30', rough=0.3, emit='#FF3B30', estr=0.0 if (self.lost or self.maq) else 6.0),
             tire=make_mat('tire', '#141414', rough=0.8),
+            pavers=make_mat('pavers', p['concrete'], rough=0.85, brick=2.4, bump=0.2),
+            reveal=make_mat('reveal', scale_col(lin(p['stucco']), 0.62), rough=0.9),
+            sconce=make_mat('sconce', '#FFE2B8', rough=0.4, emit='#FFD9A0', estr=on(9.0)),
         )
         self.reset_lists()
         self.fire_spots = []
@@ -486,7 +548,34 @@ class Ctx:
         c.is_shadow_catcher = True
         boxes('lawn', [(-W / 2 - 4, W / 2 + 4, -D / 2 - 4, D / 2 + 4, 0, 0.02)], M['grass'])
         if apron:
-            boxes('apron', [(-W / 2 - 1.25, W / 2 + 1.25, -D / 2 - 1.25, D / 2 + 1.25, 0, 0.04)], M['concrete'])
+            boxes('apron', [(-W / 2 - 1.25, W / 2 + 1.25, -D / 2 - 1.25, D / 2 + 1.25, 0, 0.04)], M['pavers'])
+
+    def sconces(self, xs, hd, z):
+        """Wall lights along the front face; at night they wash the facade and the sidewalk."""
+        boxes('sconces', [(x - 0.13, x + 0.13, -hd - 0.16, -hd, z, z + 0.32) for x in xs], self.M['sconce'])
+        if self.v['lamps']:
+            for x in xs:
+                light('POINT', 'sconce', (x, -hd - 0.45, z - 0.1), 45, '#FFC98A', size=0.12)
+
+    def reveals(self, W, D, floors, FH):
+        """Recessed floor-line grooves on the two visible faces."""
+        hw, hd = W / 2, D / 2
+        bx = []
+        for f in range(1, floors):
+            z = f * FH
+            bx += [(-hw - 0.02, hw + 0.02, -hd - 0.02, -hd + 0.01, z - 0.05, z + 0.05), (hw - 0.01, hw + 0.02, -hd - 0.02, hd + 0.02, z - 0.05, z + 0.05)]
+        boxes('reveals', bx, self.M['reveal'])
+
+    def roof_clutter(self, x0, x1, y0, y1, z, n):
+        """Vents, stacks and conduit runs so flat roofs do not read as empty planes."""
+        r = random.Random(77)
+        M = self.M
+        for _ in range(n):
+            x = x0 + r.random() * (x1 - x0)
+            y = y0 + r.random() * (y1 - y0)
+            cylinder('vent', x, y, z, z + 0.35 + r.random() * 0.5, 0.12 + r.random() * 0.1, M['metalL'], verts=12)
+        runs = [(x0, x1, y0 + 0.4, y0 + 0.55, z, z + 0.15), (x0 + 0.5, x0 + 0.65, y0, y1, z, z + 0.15)]
+        boxes('conduit', runs, M['metal'])
 
     def tree(self, x, y, s, k):
         M = self.M
@@ -627,6 +716,9 @@ def build_senior(c):
         c.tree(tx, ty, s, k + 20)
     c.lamp_post(-20.5, -15.0)
     c.lamp_post(19.0, -17.4)
+    c.sconces((-17.5, -11.0, -4.0, 5.0, 11.5, 17.5), hd, 3.05)
+    c.reveals(W, D, NF, FH)
+    c.roof_clutter(-16.5, 4.0, 0.5, 8.0, H + 0.05, 9)
     if c.v['lamps']:
         light('POINT', 'canopyLight', (0.5, -11.2, 3.6), 180, '#FFD49A', size=0.3)
     c.fire_spots = [(-5, -1), (5, -4), (-13, 3), (12, 2)]
@@ -686,6 +778,9 @@ def build_apartments(c):
         c.tree(tx, ty, s, k + 20)
     c.lamp_post(-17.5, -16.5)
     c.lamp_post(4.5, -16.5)
+    c.sconces((-14.8, -2.6, 2.6, 14.8), hd, 3.0)
+    c.reveals(W, D, NF, FH)
+    c.roof_clutter(1.5, 13.5, 1.0, 10.0, H + 0.05, 7)
     c.fire_spots = [(-7, -5), (3, 4), (9, -5), (-11, 6)]
     return W, D, H
 
@@ -748,6 +843,7 @@ def build_office(c):
         c.tree(tx, ty, s, k + 20)
     c.lamp_post(-12.0, -hd - 6.5)
     c.lamp_post(12.0, -hd - 6.5)
+    c.roof_clutter(-15.0, -9.5, -6.5, 6.5, H + 0.04, 6)
     c.fire_spots = [(-8, 0), (6, -2), (12, 3), (-13, 2)]
     return W, D, H
 
@@ -795,6 +891,8 @@ def build_shelter(c):
         c.tree(tx, ty, s, k + 20)
     c.lamp_post(-7.0, -hd - 6.5)
     c.lamp_post(7.0, -hd - 6.5)
+    c.sconces((-15.0, -10.0, 10.0, 15.0), hd, 5.0)
+    c.roof_clutter(-16.0, -11.0, -6.0, 6.0, H + 0.05, 5)
     c.fire_spots = [(-8, 2), (8, -2), (0, 1)]
     return W, D, H + 3
 

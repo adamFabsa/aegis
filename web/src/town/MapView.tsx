@@ -31,7 +31,7 @@ function initialCam(w: number, h: number): Cam {
   const fit = fitCam(w, h);
   if (w >= PHONE) return fit;
   // show the whole town core (Building 3 on the left to the fire front on the right) across the phone width
-  const k = Math.max(fit.k, Math.min(0.62, w / 860));
+  const k = Math.max(fit.k, Math.min(0.66, Math.max(w / 860, h / 1080)));
   return centerOn({ x: 0, y: 0, k }, 700, 560, w, h);
 }
 

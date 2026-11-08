@@ -246,6 +246,30 @@ function BuildingSprite({ b, pack, selected, onSelect }: { b: Building; pack: Pa
   );
 }
 
+interface PlacedTag { b: Building; x: number; y: number; w: number; text: string; color: string; lifted: number }
+
+/** Place one tag above each roof; front buildings keep their spot, ones behind move up until clear. */
+function layoutTags(buildings: Building[], phase: Sim['phase'], scale: number): PlacedTag[] {
+  const order = [...buildings].sort((a, b) => b.x + b.w / 2 + b.y + b.h / 2 - (a.x + a.w / 2 + a.y + a.h / 2));
+  const placed: PlacedTag[] = [];
+  for (const b of order) {
+    const s = spriteScale(b);
+    const [x, y0] = project(b.x + b.w / 2, b.y + b.h / 2, SPRITE[b.kind].tag * s + 26);
+    const tag = statusTag(b, phase);
+    const w = 30 + (b.name.length + tag.text.length + 3) * 6.6;
+    let y = y0;
+    const hw = (w * scale) / 2 + 4;
+    const hh = 13 * scale + 3;
+    for (let i = 0; i < 12; i++) {
+      const hit = placed.find((p) => Math.abs(p.x - x) < hw + (p.w * scale) / 2 && Math.abs(p.y - y) < hh * 2);
+      if (!hit) break;
+      y = hit.y - hh * 2 - 2;
+    }
+    placed.push({ b, x, y, w, text: tag.text, color: tag.color, lifted: y0 - y });
+  }
+  return placed;
+}
+
 export function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, viewBox, tagScale = 1 }: TownProps) {
   const P = PALETTES[pack];
   // plants only depend on building footprints, which never change during a run
@@ -391,25 +415,19 @@ export function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, vi
         </g>
       )}
 
-      {/* status tags */}
+      {/* status tags: laid out front-to-back, nudged upward when they would overlap */}
       <g style={{ pointerEvents: 'none' }}>
-        {buildings.map((b) => {
-          const s = spriteScale(b);
-          const [tx, ty] = project(b.x + b.w / 2, b.y + b.h / 2, SPRITE[b.kind].tag * s + 26);
-          const tag = statusTag(b, sim.phase);
-          const label = `${b.name}`;
-          const width = 30 + (label.length + tag.text.length + 3) * 6.6;
-          return (
-            <g key={`t${b.id}`} transform={`translate(${tx} ${ty}) scale(${tagScale})`}>
-              <rect x={-width / 2} y="-13" width={width} height="26" rx="13" fill="rgba(11,15,23,0.88)" stroke={tag.color} strokeWidth={selectedId === b.id ? 2 : 1} />
-              <circle cx={-width / 2 + 14} cy="0" r="4" fill={tag.color} />
-              <text x={-width / 2 + 24} y="4.2" fontSize="12" fontWeight="600" fill="#EEF1F7" fontFamily="Inter, system-ui, sans-serif">
-                {label}
-                <tspan fill={tag.color}>{` · ${tag.text}`}</tspan>
-              </text>
-            </g>
-          );
-        })}
+        {layoutTags(buildings, sim.phase, tagScale).map((t) => (
+          <g key={`t${t.b.id}`} transform={`translate(${t.x} ${t.y}) scale(${tagScale})`}>
+            {t.lifted > 0 && <line x1="0" y1="13" x2="0" y2={13 + t.lifted / tagScale} stroke={t.color} strokeWidth="1" opacity="0.6" />}
+            <rect x={-t.w / 2} y="-13" width={t.w} height="26" rx="13" fill="rgba(11,15,23,0.9)" stroke={t.color} strokeWidth={selectedId === t.b.id ? 2.2 : 1} />
+            <circle cx={-t.w / 2 + 14} cy="0" r="4" fill={t.color} />
+            <text x={-t.w / 2 + 24} y="4.2" fontSize="12" fontWeight="600" fill="#EEF1F7" fontFamily="Inter, system-ui, sans-serif">
+              {t.b.name}
+              <tspan fill={t.color}>{` · ${t.text}`}</tspan>
+            </text>
+          </g>
+        ))}
       </g>
     </svg>
   );

@@ -5,6 +5,9 @@ import { PALETTES, STATUS_COLORS } from './town/palettes';
 import type { Pack } from './town/types';
 import { Header } from './ui/Header';
 import { BuildingCard } from './ui/BuildingCard';
+import { Results } from './ui/Results';
+import { spriteUrl } from './town/scene';
+import type { BuildingKind } from './town/types';
 
 type Look = 'auto' | Pack;
 const LOOKS: { id: Look; label: string }[] = [
@@ -26,6 +29,13 @@ export default function App() {
     const sel = new URLSearchParams(window.location.search).get('select');
     return sel ? Number(sel) : window.innerWidth >= 760 ? 12 : null;
   });
+
+  // Warm the image cache so switching look or status never flashes an empty building.
+  useEffect(() => {
+    const kinds: BuildingKind[] = ['senior', 'apartments', 'office', 'shelter', 'homes'];
+    for (const k of kinds) for (const v of ['night', 'dusk', 'maquette', 'burning', 'lost']) new Image().src = spriteUrl(k, v);
+  }, []);
+  const [hideResults, setHideResults] = useState(false);
 
   // Demo deep link: ?phase=fire&ticks=30&evac=12&prep=12&look=night&select=12
   const booted = useRef(false);
@@ -63,7 +73,7 @@ export default function App() {
         onReset={() => { world.reset(); setSelectedId(window.innerWidth >= 760 ? 12 : null); }}
       />
 
-      <main className={`main ${selected ? 'has-card' : ''}`} style={{ background: PALETTES[pack].bg }}>
+      <main className={`main ${selected ? 'has-card' : ''} ${sim.phase === 'ended' && !hideResults ? 'has-results' : ''}`} style={{ background: PALETTES[pack].bg }}>
         <MapView sim={sim} buildings={buildings} fireCells={cells} pack={pack} selectedId={selectedId} onSelect={setSelectedId}>
           <div className="map-chrome looks" role="group" aria-label="Look">
             {LOOKS.map((l) => (
@@ -80,7 +90,10 @@ export default function App() {
             <span><i style={{ background: STATUS_COLORS.red }} />Behind · burning</span>
             <span><i style={{ background: STATUS_COLORS.gray }} />Lost</span>
           </div>
-          {!selected && <div className="map-hint">Tap a building</div>}
+          {!selected && sim.phase !== 'ended' && <div className="map-hint">Tap a building</div>}
+          {sim.phase === 'ended' && !hideResults && (
+            <Results sim={sim} buildings={buildings} onClose={() => setHideResults(true)} onRestart={() => { world.reset(); setHideResults(false); }} />
+          )}
         </MapView>
 
         {selected && (
