@@ -3,6 +3,13 @@
   "server": "http://127.0.0.1:3000",
   "module-path": "./spacetimedb",
   "generate": [
-    { "language": "typescript", "out-dir": "./web/src/module_bindings" }
+    {
+      "language": "typescript",
+      "out-dir": "./web/src/module_bindings"
+    },
+    {
+      "language": "typescript",
+      "out-dir": "./worker/src/module_bindings"
+    }
   ]
 }

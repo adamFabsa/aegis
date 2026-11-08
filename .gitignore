@@ -24,3 +24,6 @@ spacetime.*.local.json
 
 # Part B (web + Blender)
 blender/renders/
+
+# Event material (large, not ours to publish)
+*.pptx
