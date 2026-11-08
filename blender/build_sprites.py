@@ -1320,6 +1320,46 @@ def apply_damage(c, kind, W, D, H, mode):
         light('POINT', 'innerFire', (W * 0.22, -D * 0.2, H * 0.8), 2600, '#FF5A1F', size=2.5)
         light('POINT', 'innerFire', (-W * 0.24, -D * 0.4, H * 0.65), 1200, '#FF6A1F', size=1.5)
 
+# ------------------------------------------------------------------ window export
+def export_windows(path):
+    """Project every window/door pane onto the sprite frame so the web app can light, darken or
+    set fire to each room on its own. Output: {kind: [[x1,y1,x2,y2,x3,y3,x4,y4,floor,face], ...]}"""
+    import json
+    from bpy_extras.object_utils import world_to_camera_view
+    data = {}
+    for kind in ('senior', 'apartments', 'office', 'shelter', 'homes'):
+        v = VARIANT['night']
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        setup_render(v)
+        setup_camera()
+        c = Ctx(v)
+        BUILDERS[kind](c)
+        sc = bpy.context.scene
+        cam = sc.camera
+        out = []
+        for (x0, x1, y0, y1, z0, z1) in c.openings:
+            if (y1 - y0) < (x1 - x0):      # pane on the front face (outward -y)
+                quad = [(x0, y0, z0), (x1, y0, z0), (x1, y0, z1), (x0, y0, z1)]
+                face = 0
+            else:                           # pane on the side face (outward +x)
+                quad = [(x1, y1, z0), (x1, y0, z0), (x1, y0, z1), (x1, y1, z1)]
+                face = 1
+            pts = []
+            for q in quad:
+                uv = world_to_camera_view(sc, cam, Vector(q))
+                pts += [round(uv.x * BOX_W, 1), round((1 - uv.y) * BOX_H, 1)]
+            out.append(pts + [int(z0 // 3.5), face])
+        data[kind] = out
+        print(f'[windows] {kind}: {len(out)}', flush=True)
+    with open(path, 'w') as f:
+        json.dump(data, f, separators=(',', ':'))
+    print('[windows] wrote', path, flush=True)
+
+if '--export-windows' in argv:
+    BOX_W, BOX_H, ANCHOR_X, ANCHOR_Y = 520, 380, 220, 220
+    export_windows(os.path.join(ROOT, 'web', 'src', 'town', 'windows.json'))
+    sys.exit(0)
+
 # ------------------------------------------------------------------ main
 ext = 'webp' if FMT == 'webp' else 'png'
 for kind in KINDS:

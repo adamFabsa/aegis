@@ -29,3 +29,10 @@ A full run (5 kinds × 5 variants) takes about 15 minutes on an M1.
 
 Only the sun or moon casts shadows. Fire, lamp and ember lights are shadowless on purpose, because otherwise they
 paint huge fake shadows across the catcher.
+
+## Window map
+
+`blender -b -P blender/build_sprites.py -- --export-windows` writes `web/src/town/windows.json`:
+the on-screen outline of every window and door pane per building kind, in sprite-frame units.
+The web app uses it to light, flicker, darken or set fire to each room on its own.
+Re-run it whenever a building's facade changes.

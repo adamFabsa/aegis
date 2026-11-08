@@ -7,6 +7,7 @@ import {
 } from './scene';
 import { PALETTES, STATUS_COLORS, type GroundPalette } from './palettes';
 import { FireUnits, Markers, StreetLife } from './markers';
+import { WindowLayer } from './WindowLayer';
 import { TICK_SECONDS, type Unit } from './mockWorld';
 
 interface TownProps {
@@ -108,6 +109,22 @@ function Defs({ P }: { P: GroundPalette }) {
       <radialGradient id="smokePlume"><stop offset="0" stopColor={P.smoke} stopOpacity="0.9" /><stop offset="0.55" stopColor={P.smoke} stopOpacity="0.45" /><stop offset="1" stopColor={P.smoke} stopOpacity="0" /></radialGradient>
       <radialGradient id="smokeDark"><stop offset="0" stopColor="#2A2627" stopOpacity="0.95" /><stop offset="0.6" stopColor="#2A2627" stopOpacity="0.4" /><stop offset="1" stopColor="#2A2627" stopOpacity="0" /></radialGradient>
       <radialGradient id="smokeGray"><stop offset="0" stopColor="#6B6460" stopOpacity="0.9" /><stop offset="0.6" stopColor="#6B6460" stopOpacity="0.35" /><stop offset="1" stopColor="#6B6460" stopOpacity="0" /></radialGradient>
+      {/* fire inside a room: white-hot at the sill, deep red at the head; bands roll upward */}
+      <linearGradient id="winFire" x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0" stopColor="#FFE9A8" />
+        <stop offset="0.35" stopColor="#FF9A2E" />
+        <stop offset="0.75" stopColor="#E2470F" />
+        <stop offset="1" stopColor="#7A1A08" />
+      </linearGradient>
+      <linearGradient id="winWave" x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0" stopColor="#FFD27A" stopOpacity="0" />
+        <stop offset="0.2" stopColor="#FFD27A" stopOpacity="0.9">
+          <animate attributeName="offset" values="0;0.85;0" dur="1.1s" repeatCount="indefinite" />
+        </stop>
+        <stop offset="0.4" stopColor="#FF6A1F" stopOpacity="0">
+          <animate attributeName="offset" values="0.2;1;0.2" dur="1.1s" repeatCount="indefinite" />
+        </stop>
+      </linearGradient>
       <radialGradient id="roofGlow">
         <stop offset="0" stopColor="#FF8A3D" stopOpacity="0.75" />
         <stop offset="0.5" stopColor="#FF5A1F" stopOpacity="0.28" />
@@ -262,6 +279,8 @@ function BuildingSprite({ b, pack, selected, onSelect, lite }: { b: Building; pa
       {/* the previous damage stage fades out underneath while the new one fades in */}
       {prev && <image key={`prev-${prev}`} className={variant === 'lost' ? 'sprite-collapse' : 'sprite-out'} href={spriteUrl(b.kind, prev)} {...box} preserveAspectRatio="none" style={{ pointerEvents: 'none' }} />}
       <image key={`cur-${variant}`} className={prev ? (variant === 'lost' ? 'sprite-in-late' : 'sprite-in') : undefined} href={spriteUrl(b.kind, variant)} {...box} preserveAspectRatio="none" style={{ pointerEvents: 'none' }} />
+      {/* rooms: power failing, then fire moving through them */}
+      <WindowLayer b={b} ox={box.x} oy={box.y} s={s} lite={lite} />
       {b.status === 'burning' && (() => {
         // fire builds over time: first smoke from the windows, then flames that spread across the roof
         const p = Math.min(1, b.burnProgress ?? 0);
