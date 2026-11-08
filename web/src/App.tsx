@@ -171,10 +171,9 @@ export default function App() {
         rotation={rotation} onRotate={[1, 2, 3].every((r) => ready(spriteUrl('homes', pack, r)) && ready(spriteUrl('office', pack, r))) ? onRotate : undefined}
         onPhone={vw >= 1180 && !phoneOpen ? () => setPhoneOpen(true) : undefined}
       />
-      <WindChip deg={sim.windDirDeg} mph={sim.windMph} style={phoneLayout ? { right: 8, top: 'calc(130px + env(safe-area-inset-top))' } : { left: insets.left + 4, bottom: 16 }} />
       {world.live && (
         <LiveChip tick={sim.tick} phase={sim.phase} devices={world.live.devices} worker={world.live.workerOnline}
-          style={phoneLayout ? { right: 8, top: 'calc(180px + env(safe-area-inset-top))' } : { left: insets.left + 4, bottom: 66 }} />
+          style={phoneLayout ? { right: 8, top: 'calc(180px + env(safe-area-inset-top))' } : { left: insets.left + 4, bottom: 16 }} />
       )}
       {showFrame && <Phone {...phoneProps} framed onClose={() => setPhoneOpen(false)} />}
         <Dock
@@ -224,26 +223,6 @@ function LiveChip({ tick, phase, devices, worker, style }: { tick: number; phase
         <b>Live on SpacetimeDB</b>
         <small>{phase === 'fire' ? `tick ${tick} · ` : ''}{devices} device{devices === 1 ? '' : 's'}{worker ? ' · AI worker on' : ''}</small>
       </span>
-    </div>
-  );
-}
-
-const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-/** Map heading (map north = -y) to the on-screen angle of the isometric view. */
-function screenAngle(deg: number): number {
-  const r = (deg * Math.PI) / 180;
-  const wx = Math.sin(r);
-  const wy = -Math.cos(r);
-  return (Math.atan2(0.5 * (wx + wy), 0.866 * (wx - wy)) * 180) / Math.PI;
-}
-/** Wind direction and speed, as the arrow the fire follows. */
-function WindChip({ deg, mph, style }: { deg: number; mph: number; style: React.CSSProperties }) {
-  return (
-    <div className="wind map-chrome" style={style} aria-label={`Wind toward ${COMPASS[Math.round(deg / 45) % 8]} at ${mph} mph`}>
-      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" style={{ transform: `rotate(${screenAngle(deg)}deg)` }}>
-        <path d="M3 12h15M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-      <span><b>{COMPASS[Math.round(deg / 45) % 8]} {mph} mph</b><small>wind</small></span>
     </div>
   );
 }

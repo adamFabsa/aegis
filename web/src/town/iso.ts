@@ -92,6 +92,14 @@ export function projectVec(dx: number, dy: number): [number, number] {
   return [C * (a - b), 0.5 * (a + b)];
 }
 
+/** On-screen direction the wind blows toward in the current view: unit vector and angle in degrees. */
+export function windScreen(dirDeg: number): { ux: number; uy: number; deg: number } {
+  const [wx, wy] = windVector(dirDeg);
+  const [sx, sy] = projectVec(wx, wy);
+  const len = Math.hypot(sx, sy) || 1;
+  return { ux: sx / len, uy: sy / len, deg: (Math.atan2(sy, sx) * 180) / Math.PI };
+}
+
 export function pointsAttr(pts: [number, number][]): string {
   return pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
 }

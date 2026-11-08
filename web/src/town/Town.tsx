@@ -1,13 +1,14 @@
-import { memo, useMemo, type CSSProperties, type ReactNode, type Ref } from 'react';
-import type { Building, FireCell, Pack, Sim } from './types';
-import { CELL, MAP_H, MAP_W, VIEW_H, VIEW_W, depthOf, groundMatrix, pointsAttr, project, projectRaw, projectVec, rotRect, viewRotation, windVector } from './iso';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type Ref } from 'react';
+import type { Building, FireCell, Ghost, Pack, Sim } from './types';
+import { CELL, MAP_H, MAP_W, VIEW_H, VIEW_W, depthOf, groundMatrix, pointsAttr, project, projectRaw, projectVec, rotRect, viewRotation, windScreen, windVector } from './iso';
 import {
   GROUND_PLATE, LAMPS, groundUrl, PROP_BOX, SPRITE, SPRITE_BOX, propUrl,
   evacRoute, generatePlants, previousVariant, ridgePaths, spriteScale, spriteUrl, spriteVariant,
 } from './scene';
 import { PALETTES, STATUS_COLORS, type GroundPalette } from './palettes';
-import { FireUnits, Markers, ParkedEngine, StreetLife } from './markers';
-import { enginePark } from './vehicleData';
+import { Markers, StreetLife } from './markers';
+import { FireUnits } from './trucks';
+import { WindStreaks } from './wind';
 import { WindowLayer } from './WindowLayer';
 import { ready } from './assets';
 import { FireDefs } from './FireDefs';
@@ -31,6 +32,33 @@ interface TownProps {
   assets?: number;
   /** view rotation (0..3); the projection reads it from iso.ts, this prop just re-renders the town */
   rotation?: number;
+  /** the look/phase the map just left: dissolved over the new frame for a moment (see MapView useGhost) */
+  ghost?: Ghost | null;
+  /** real seconds per server tick, for the fire engines' driving speed */
+  tickSeconds?: number;
+}
+
+/** True while `on`, and for `ms` after it turns off (so a layer can fade out instead of popping). */
+function useLinger(on: boolean, ms: number): boolean {
+  const [linger, setLinger] = useState(false);
+  const [was, setWas] = useState(on);
+  if (was !== on) {
+    setWas(on);
+    if (!on) setLinger(true);
+  }
+  useEffect(() => {
+    if (!linger) return;
+    const t = setTimeout(() => setLinger(false), ms);
+    return () => clearTimeout(t);
+  }, [linger, ms]);
+  return on || linger;
+}
+
+const cellKey = (x: number, y: number) => y * 1000 + x;
+function stateMap(cells: FireCell[]): Map<number, number> {
+  const m = new Map<number, number>();
+  for (const c of cells) if (c.state) m.set(cellKey(c.x, c.y), c.state);
+  return m;
 }
 
 const FLAMES = ['fireA', 'fireB', 'fireC'];
@@ -136,30 +164,41 @@ function Defs({ P }: { P: GroundPalette }) {
   );
 }
 
+/** The San Gabriel Mountains behind the town, fading into haze. */
+function Ridges({ P, id }: { P: GroundPalette; id: string }) {
+  return (
+    <g aria-hidden="true">
+      <defs>
+        {P.mtn.map((c, i) => (
+          <linearGradient key={i} id={`${id}${i}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor={c} stopOpacity={0.6 + i * 0.18} />
+            <stop offset="0.55" stopColor={c} stopOpacity={0.35 + i * 0.12} />
+            <stop offset="1" stopColor={c} stopOpacity="0" />
+          </linearGradient>
+        ))}
+      </defs>
+      {RIDGES.map((d, i) => <path key={i} d={d} fill={`url(#${id}${i})`} />)}
+    </g>
+  );
+}
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const StaticGround = memo(function StaticGround({ P, pack, lite }: { P: GroundPalette; pack: Pack; lite: boolean; rotation: number; assets: number }) {
+const StaticGround = memo(function StaticGround({ P, pack, lite, from, epoch }: { P: GroundPalette; pack: Pack; lite: boolean; rotation: number; assets: number; from: Pack | null; epoch: number }) {
+  // the look the map just left (dusk -> night when the fire starts) dissolves over the new one,
+  // each layer in its own place: the old sky over the new sky, the old ground plate over the new plate
+  const fromUrl = from ? groundUrl(from, lite, viewRotation()) : '';
   return (
     <>
-      {/* the San Gabriel Mountains behind the town, fading into haze */}
-      <g aria-hidden="true">
-        <defs>
-          {P.mtn.map((c, i) => (
-            <linearGradient key={i} id={`mtn${i}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor={c} stopOpacity={0.6 + i * 0.18} />
-              <stop offset="0.55" stopColor={c} stopOpacity={0.35 + i * 0.12} />
-              <stop offset="1" stopColor={c} stopOpacity="0" />
-            </linearGradient>
-          ))}
-        </defs>
-        {RIDGES.map((d, i) => <path key={i} d={d} fill={`url(#mtn${i})`} />)}
-      </g>
+      <Ridges P={P} id="mtn" />
+      {from && <g key={`m${epoch}`} className="pack-out"><Ridges P={PALETTES[from]} id="mtnFrom" /></g>}
       <polygon points={pointsAttr([project(0, 0), project(MAP_W, 0), project(MAP_W, MAP_H), project(0, MAP_H)].map(([x, y]) => [x + (x > 720 ? 10 : -8), y + 42] as [number, number]))} fill="#000" opacity={lite ? 0.22 : 0.35} filter={lite ? undefined : 'url(#blur20)'} />
       {/* the board itself (terrain, roads, sidewalks, park, lots, soil edge) is one Blender render;
           the flat polygon underneath only shows while the image loads */}
       <polygon points={pointsAttr([project(0, 0), project(MAP_W, 0), project(MAP_W, MAP_H), project(0, MAP_H)])} fill={P.ground} />
       {ready(groundUrl(pack, lite, viewRotation())) && <image href={groundUrl(pack, lite, viewRotation())} x={GROUND_PLATE.x} y={GROUND_PLATE.y} width={GROUND_PLATE.w} height={GROUND_PLATE.h} preserveAspectRatio="none" />}
+      {from && ready(fromUrl) && <image key={`g${epoch}`} className="pack-out" href={fromUrl} x={GROUND_PLATE.x} y={GROUND_PLATE.y} width={GROUND_PLATE.w} height={GROUND_PLATE.h} preserveAspectRatio="none" />}
       <g transform={groundMatrix()}>
-        <g opacity={P.lampOp}>
+        <g style={{ opacity: P.lampOp, transition: 'opacity 2s ease' }}>
           {LAMPS.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="34" fill="url(#lamp)" />)}
         </g>
       </g>
@@ -174,7 +213,16 @@ function pickSprite(kind: Building['kind'], variant: string): string {
   return !r || ready(url) ? url : spriteUrl(kind, variant, 0);
 }
 
-function BuildingSprite({ b, pack, selected, onSelect, lite }: { b: Building; pack: Pack; selected: boolean; onSelect: (id: number) => void; lite: boolean }) {
+/** Screen-space wind for smoke: on-screen direction (ux, uy) and strength (1 = 40 mph). */
+interface Wind { ux: number; uy: number; s: number }
+const f1 = (n: number) => n.toFixed(1);
+/** A smoke path that rises `h` and is bent `reach` downwind, the way a column leans in a steady wind. */
+function windPath(w: Wind, h: number, reach: number): string {
+  const r = reach * w.s;
+  return `M0 0 C ${f1(w.ux * r * 0.06)} ${f1(-h * 0.45)} ${f1(w.ux * r * 0.45)} ${f1(-h * 0.85 + w.uy * r * 0.2)} ${f1(w.ux * r)} ${f1(-h + w.uy * r * 0.45)}`;
+}
+
+function BuildingSprite({ b, pack, selected, onSelect, lite, ghost, wind }: { b: Building; pack: Pack; selected: boolean; onSelect: (id: number) => void; lite: boolean; ghost: { variant: string; epoch: number } | null; wind: Wind }) {
   const s = spriteScale(b);
   // geometry in the turned view: the visible faces are always the view's front (+y) and side (+x)
   const r = rotRect(b);
@@ -205,6 +253,10 @@ function BuildingSprite({ b, pack, selected, onSelect, lite }: { b: Building; pa
       {prev && <image key={`prev-${prev}`} className={variant === 'lost' ? 'sprite-collapse' : 'sprite-out'} href={pickSprite(b.kind, prev)} {...box} preserveAspectRatio="none" style={{ pointerEvents: 'none' }} />}
       <image key={`cur-${variant}`} className={prev ? (variant === 'lost' ? 'sprite-in-late' : 'sprite-in') : undefined} href={pickSprite(b.kind, variant)} {...box} preserveAspectRatio="none"
         filter={b.status === 'burning' && !lite ? 'url(#heatHaze)' : undefined} style={{ pointerEvents: 'none' }} />
+      {/* the look the map just left (dusk, or the ruins before a reset) dissolves over the new sprite */}
+      {ghost && ghost.variant !== variant && (
+        <image key={`ghost-${ghost.epoch}`} className="pack-out" href={pickSprite(b.kind, ghost.variant)} {...box} preserveAspectRatio="none" style={{ pointerEvents: 'none' }} />
+      )}
       {/* rooms: power failing, then fire moving through them */}
       <WindowLayer b={b} ox={box.x} oy={box.y} s={s} lite={lite} />
       {b.status === 'burning' && (() => {
@@ -213,18 +265,27 @@ function BuildingSprite({ b, pack, selected, onSelect, lite }: { b: Building; pa
         const grow = Math.min(1, p / 0.55);
         const nRoof = Math.max(1, Math.round(1 + grow * 7));
         const flameScale = (0.45 + grow * 0.9) * (heavy ? 1.5 : 1);
+        // the smoke column thickens as the fire takes hold and leans downwind
+        const column = (0.55 + grow * 0.45) * (heavy ? 1.35 : 1);
+        const rise = windPath(wind, 120, 170);
+        const leak = windPath(wind, 60, 85);
         return (
           <g style={{ pointerEvents: 'none' }}>
+            {/* fire light on the roof, breathing (kept out of the warp filter: it does not need it, and it is big) */}
+            <g className="glow-flicker">
+              <ellipse cx={rx} cy={ry} rx={(0.433 * (b.w + b.h) + 24) * (heavy ? 1.35 : 1)} ry={(0.25 * (b.w + b.h) + 30) * (heavy ? 1.35 : 1)} fill="url(#roofGlow)"
+                style={{ opacity: 0.25 + grow * 0.75, transition: 'opacity 1.5s ease', ...(lite ? {} : { mixBlendMode: 'screen' as const }) }} />
+            </g>
+            {/* early smoke leaking from the facade, thinning as the flames take over */}
+            <g style={{ opacity: Math.max(0.15, 1 - grow * 0.6), transition: 'opacity 2s ease' }}>
+              {facePts.slice(0, 4).map(([px, py], i) => (
+                <circle key={`ws${i}`} cx={px} cy={py} r="6" fill="url(#smokeDark)">
+                  <animate attributeName="r" values="4;22" dur="3.4s" begin={`${-i * 0.8}s`} repeatCount="indefinite" />
+                  <animateMotion path={leak} dur="3.4s" begin={`${-i * 0.8}s`} repeatCount="indefinite" />
+                </circle>
+              ))}
+            </g>
             <g filter={lite ? undefined : 'url(#flameWarp)'} style={lite ? undefined : { mixBlendMode: 'screen' }}>
-            <ellipse cx={rx} cy={ry} rx={(0.433 * (b.w + b.h) + 24) * (heavy ? 1.35 : 1)} ry={(0.25 * (b.w + b.h) + 30) * (heavy ? 1.35 : 1)} fill="url(#roofGlow)"
-              style={{ opacity: 0.25 + grow * 0.75, transition: 'opacity 1.5s ease', ...(lite ? {} : { mixBlendMode: 'screen' as const }) }} />
-            {/* early smoke leaking from the facade */}
-            {facePts.slice(0, 4).map(([px, py], i) => (
-              <circle key={`ws${i}`} cx={px} cy={py} r="6" fill="url(#smokeDark)" style={{ opacity: Math.max(0.15, 1 - grow * 0.6) }}>
-                <animate attributeName="r" values="4;22" dur="3.4s" begin={`${-i * 0.8}s`} repeatCount="indefinite" />
-                <animateMotion path="M0 0 C -12 -30 -40 -55 -80 -70" dur="3.4s" begin={`${-i * 0.8}s`} repeatCount="indefinite" />
-              </circle>
-            ))}
             {roofPts.slice(0, nRoof).map(([px, py], i) => (
               <g key={i} transform={`translate(${px} ${py})`}>
                 <g className="flame-grow" style={{ animationDelay: `${i * 140}ms` }}>
@@ -240,13 +301,18 @@ function BuildingSprite({ b, pack, selected, onSelect, lite }: { b: Building; pa
               </g>
             ))}
             </g>
-            {[0, 1, 2, ...(heavy ? [3, 4] : [])].map((i) => (
-              <circle key={i} cx={roofPts[(i * 2) % 8][0]} cy={ry - 12} r="10" fill="url(#smokeDark)">
-                <animate attributeName="r" values={heavy ? '12;56' : '8;38'} dur="5s" begin={`${-i * 1.2}s`} repeatCount="indefinite" />
-                <animate attributeName="opacity" values="0;0.8;0" dur="5s" begin={`${-i * 1.2}s`} repeatCount="indefinite" />
-                <animateMotion path="M0 0 C -30 -40 -80 -70 -150 -95" dur="5s" begin={`${-i * 1.2}s`} repeatCount="indefinite" />
-              </circle>
-            ))}
+            {/* the smoke column: always five puffs on one clock, scaled up as the fire grows (no puffs popping in) */}
+            <g transform={`translate(${f1(rx)} ${f1(ry - 12)})`}>
+              <g style={{ transform: `scale(${column.toFixed(2)})`, transition: 'transform 2.5s ease' }}>
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <circle key={i} cx={f1((roofPts[(i * 2) % 8][0] - rx) * 0.6)} cy="0" r="10" fill="url(#smokeDark)">
+                    <animate attributeName="r" values="9;46" dur="5s" begin={`${-i}s`} repeatCount="indefinite" />
+                    <animate attributeName="opacity" values="0;0.85;0" dur="5s" begin={`${-i}s`} repeatCount="indefinite" />
+                    <animateMotion path={rise} dur="5s" begin={`${-i}s`} repeatCount="indefinite" />
+                  </circle>
+                ))}
+              </g>
+            </g>
           </g>
         );
       })()}
@@ -286,8 +352,16 @@ const COOL_TICKS = 7;
 /** Stable 0..1 jitter per cell so neighbours ignite a few hundred ms apart instead of in lockstep. */
 const jitter = (id: number) => ((id * 2654435761) % 1000) / 1000;
 
-export const Town = memo(function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, svgRef, tagScale = 1, lite = false, units = [], rotation = 0, assets = 0 }: TownProps) {
+export const Town = memo(function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, svgRef, tagScale = 1, lite = false, units = [], rotation = 0, assets = 0, ghost = null, tickSeconds = TICK_SECONDS }: TownProps) {
   const P = PALETTES[pack];
+  // what the map looked like a moment ago, while it dissolves (look change, fire start, reset)
+  const ghostPack = ghost && ghost.pack !== pack ? ghost.pack : null;
+  const ghostCells = useMemo(() => (ghost ? stateMap(ghost.cells) : null), [ghost]);
+  const ghostVariant = (b: Building) => {
+    const o = ghost?.buildings.find((x) => x.id === b.id);
+    return ghost && o ? { variant: spriteVariant(ghost.pack, o.status, o.damage ?? 0), epoch: ghost.epoch } : null;
+  };
+  const leftFire = ghost !== null && ghost.phase !== 'prep' && sim.phase === 'prep';
   // plants only depend on building footprints, which never change during a run
   const footprintKey = buildings.map((b) => `${b.x},${b.y},${b.w},${b.h}`).join('|');
   const plants = useMemo(
@@ -296,11 +370,7 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
   );
   const shelter = buildings.find((b) => b.kind === 'shelter');
 
-  const cellState = useMemo(() => {
-    const m = new Map<number, number>();
-    for (const c of fireCells) if (c.state) m.set(c.y * 1000 + c.x, c.state);
-    return m;
-  }, [fireCells]);
+  const cellState = useMemo(() => stateMap(fireCells), [fireCells]);
   const burning = fireCells.filter((c) => c.state === 1);
   const burnedAll = fireCells.filter((c) => c.state === 2);
   // burnTicks keeps counting after a cell goes out, so it cools from embers to ash over a few ticks
@@ -316,33 +386,48 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
   let fcx = 0, fcy = 0;
   for (const c of burning) { fcx += c.x * CELL + CELL / 2; fcy += c.y * CELL + CELL / 2; }
   if (burning.length) { fcx /= burning.length; fcy /= burning.length; }
-  const [gsx, gsy] = project(fcx, fcy);
+  // the fire's light and smoke glide after the front between ticks, and linger to fade out when it dies
+  const lastFire = useRef<[number, number]>([MAP_W * 0.8, MAP_H * 0.2]);
+  useLayoutEffect(() => { if (fireOn) lastFire.current = [fcx, fcy]; });
+  const [ffx, ffy] = fireOn ? [fcx, fcy] : lastFire.current;
+  const fxOn = useLinger(fireOn, 2600);
+  const [gsx, gsy] = project(ffx, ffy);
   const [wx, wy] = windVector(sim.windDirDeg);
   const [wsx, wsy] = projectVec(wx, wy);
   const smokePath = `M0 0 C ${wsx * 140} ${wsy * 140 - 70} ${wsx * 340} ${wsy * 340 - 140} ${wsx * 580} ${wsy * 580 - 200}`;
+  const ws = windScreen(sim.windDirDeg);
+  const wind = useMemo(() => ({ ux: ws.ux, uy: ws.uy, s: Math.min(1.4, Math.max(0.4, sim.windMph / 40)) }), [ws.ux, ws.uy, sim.windMph]);
 
   // ---------------- billboards sorted back-to-front by map depth (x + y)
   const items: { depth: number; key: string; node: ReactNode }[] = [];
+  const propSize = (type: string, i: number) => (type === 'shrub' ? 0.8 : type === 'palm' ? 1.12 : 0.92) + ((i * 37) % 10) / 40;
   for (const [i, p] of plants.entries()) {
-    const st = cellState.get(Math.floor(p.y / CELL) * 1000 + Math.floor(p.x / CELL)) ?? 0;
-    if (p.type === 'shrub' && st === 2) continue;
+    const k = cellKey(Math.floor(p.x / CELL), Math.floor(p.y / CELL));
+    const st = cellState.get(k) ?? 0;
+    const gst = ghostCells ? (ghostCells.get(k) ?? 0) : st;
+    const gone = p.type === 'shrub' && st === 2;
+    const wasGone = p.type === 'shrub' && gst === 2;
+    if (gone && (!ghost || wasGone)) continue;
     const [px, py] = project(p.x, p.y);
     const type = st === 2 ? 'snag' : p.type;
+    const gType = gst === 2 ? 'snag' : p.type;
     // deterministic size jitter so the rows of trees do not look stamped
-    const sc = (type === 'shrub' ? 0.8 : type === 'palm' ? 1.12 : 0.92) + ((i * 37) % 10) / 40;
+    const img = (t: typeof type, pk: Pack, cls?: string, key?: string) => {
+      const sc = propSize(t, i);
+      return (
+        <image key={key} className={cls} href={propUrl(t, pk)} x={px - PROP_BOX.ax * sc} y={py - PROP_BOX.ay * sc} width={PROP_BOX.w * sc} height={PROP_BOX.h * sc}
+          preserveAspectRatio="none" style={{ pointerEvents: 'none' }} />
+      );
+    };
+    const fromChanged = ghost && !wasGone && (gType !== type || gone || ghost.pack !== pack);
     items.push({
       depth: depthOf(p.x, p.y),
       key: `p${i}`,
       node: (
-        <image
-          href={propUrl(type, pack)}
-          x={px - PROP_BOX.ax * sc}
-          y={py - PROP_BOX.ay * sc}
-          width={PROP_BOX.w * sc}
-          height={PROP_BOX.h * sc}
-          preserveAspectRatio="none"
-          style={{ pointerEvents: 'none' }}
-        />
+        <>
+          {!gone && img(type, pack, ghost && wasGone ? 'fx-in' : undefined, 'cur')}
+          {fromChanged && img(gType, ghost.pack, 'pack-out', `from${ghost.epoch}`)}
+        </>
       ),
     });
   }
@@ -350,7 +435,7 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
     items.push({
       depth: depthOf(b.x + b.w / 2, b.y + b.h / 2),
       key: `b${b.id}`,
-      node: <BuildingSprite b={b} pack={pack} selected={selectedId === b.id} onSelect={onSelect} lite={lite} />,
+      node: <BuildingSprite b={b} pack={pack} selected={selectedId === b.id} onSelect={onSelect} lite={lite} ghost={ghostVariant(b)} wind={wind} />,
     });
   }
   let flameCount = 0;
@@ -389,14 +474,6 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
       ),
     });
   }
-  // engines on scene stand at the curb and sort with the buildings, so a building in front hides them
-  for (const u of units) {
-    if (u.status !== 'onscene') continue;
-    const b = buildings.find((x) => x.id === u.targetId);
-    if (!b) continue;
-    const { x, y } = enginePark(b, buildings);
-    items.push({ depth: depthOf(x, y), key: `eng${u.id}`, node: <ParkedEngine b={b} all={buildings} pack={pack} /> });
-  }
   items.sort((a, b) => a.depth - b.depth);
 
   const evacuating = buildings.filter((b) => b.status === 'evacuating');
@@ -412,13 +489,20 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
       onClick={() => onSelect(null)}
     >
       <Defs P={P} />
-      <StaticGround P={P} pack={pack} lite={lite} rotation={rotation} assets={assets} />
+      <StaticGround P={P} pack={pack} lite={lite} rotation={rotation} assets={assets} from={ghostPack} epoch={ghost?.epoch ?? 0} />
 
       {/* ground-level dynamic layer: fire cells, rings, routes */}
       <g transform={groundMatrix()}>
-        {fireOn && <circle cx={fcx} cy={fcy} r="300" fill="url(#groundGlow)" opacity={P.glowOp} />}
+        {fxOn && (
+          <circle className="fx-in" r="300" fill="url(#groundGlow)"
+            style={{ transform: `translate(${f1(ffx)}px, ${f1(ffy)}px)`, opacity: fireOn ? P.glowOp : 0, transition: 'transform 1.1s linear, opacity 2.4s ease' }} />
+        )}
         {/* settled ash */}
         <path d={cellPath(burned)} fill="url(#ash)" filter={lite ? undefined : 'url(#blur2)'} opacity="0.92" />
+        {/* after a reset the burn scar fades away instead of vanishing */}
+        {leftFire && ghost && (
+          <path key={`ash${ghost.epoch}`} className="pack-out" d={cellPath(ghost.cells.filter((c) => c.state === 2))} fill="url(#ash)" filter={lite ? undefined : 'url(#blur2)'} />
+        )}
         {/* recently burnt: ash fades in under embers that dim and go out */}
         <g filter={lite ? undefined : 'url(#blur2)'}>
           {cooling.map((c) => (
@@ -428,8 +512,9 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
             </g>
           ))}
         </g>
-        {/* burning front: each cell catches a moment apart, flares, then settles into a flicker */}
-        <g filter={lite ? undefined : 'url(#blur2)'}>
+        {/* burning front: each cell catches a moment apart, flares, then the whole front flickers together
+            (one animation on the layer instead of one per cell) */}
+        <g className="front-flicker" filter={lite ? undefined : 'url(#blur2)'}>
           {burning.map((c) => (
             <rect key={`b${c.id}`} className="cell-ignite" x={c.x * CELL - 2} y={c.y * CELL - 2} width={CELL + 4} height={CELL + 4} rx="6"
               fill={c.burnTicks >= 2 ? '#E2470F' : '#FF6A1F'} style={{ animationDelay: `${Math.round(jitter(c.id) * 650)}ms` }} />
@@ -457,34 +542,40 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
       </g>
 
       {/* cars, strolling residents, evacuation columns and vans; engines on the road */}
-      <StreetLife buildings={buildings} phase={sim.phase} pack={pack} />
-      <FireUnits units={units} buildings={buildings} tickSeconds={TICK_SECONDS} pack={pack} layer="under" />
+      <StreetLife buildings={buildings} phase={sim.phase} pack={pack} fadeFrom={ghost} />
+      {/* engines: one persistent sprite per unit, driven frame by frame along its route */}
+      <FireUnits units={units} buildings={buildings} tickSeconds={tickSeconds} pack={pack} layer="under" rotation={rotation} />
 
       {/* depth-sorted world */}
       {items.map((it) => <g key={it.key}>{it.node}</g>)}
 
-      {/* light bars, hoses and mist stay visible above the buildings */}
-      <FireUnits units={units} buildings={buildings} tickSeconds={TICK_SECONDS} pack={pack} layer="over" lite={lite} />
+      {/* hoses and mist stay visible above the buildings */}
+      <FireUnits units={units} buildings={buildings} tickSeconds={tickSeconds} pack={pack} layer="over" lite={lite} />
 
-      {/* smoke, embers, fire light */}
-      {fireOn && (
-        <g style={{ pointerEvents: 'none' }}>
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <circle key={i} cx={gsx} cy={gsy} r="30" fill="url(#smokePlume)">
-              <animate attributeName="r" values="26;120" dur="11s" begin={`${-i * 1.8}s`} repeatCount="indefinite" />
-              <animate attributeName="opacity" values={`0;${P.smokeOp};0`} dur="11s" begin={`${-i * 1.8}s`} repeatCount="indefinite" />
-              <animateMotion path={smokePath} dur="11s" begin={`${-i * 1.8}s`} repeatCount="indefinite" />
-            </circle>
-          ))}
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <circle key={`e${i}`} cx={gsx + (i - 3) * 14} cy={gsy + (i % 3) * 10} r={1.3 + (i % 3) * 0.3} fill="#FFC46B">
-              <animateMotion path={`M0 0 C ${wsx * 60} ${-50 - i * 6} ${wsx * 160} ${-70} ${wsx * (220 + i * 30)} -30`} dur={`${3 + (i % 3)}s`} begin={`${-i * 0.6}s`} repeatCount="indefinite" />
-              <animate attributeName="opacity" values="1;1;0" dur={`${3 + (i % 3)}s`} begin={`${-i * 0.6}s`} repeatCount="indefinite" />
-            </circle>
-          ))}
-          <ellipse cx={gsx} cy={gsy} rx="460" ry="300" fill="url(#fireGlow)" opacity={P.glowOp * (lite ? 0.7 : 1)} style={lite ? undefined : { mixBlendMode: 'screen' }}>
-            <animate attributeName="rx" values="440;470;450;440" dur="2.6s" repeatCount="indefinite" />
-          </ellipse>
+      {/* wind: gust lines drifting across the town, the way the smoke leans */}
+      <WindStreaks dirDeg={sim.windDirDeg} mph={sim.windMph} pack={pack} phase={sim.phase} lite={lite} rotation={rotation} />
+
+      {/* smoke, embers, fire light: glide after the fire front between ticks, fade in and out with it */}
+      {fxOn && (
+        <g className="fx-in" style={{ pointerEvents: 'none', opacity: fireOn ? 1 : 0, transition: 'opacity 2.4s ease' }}>
+          <g style={{ transform: `translate(${f1(gsx)}px, ${f1(gsy)}px)`, transition: 'transform 1.1s linear' }}>
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <circle key={i} r="30" fill="url(#smokePlume)">
+                <animate attributeName="r" values="26;120" dur="11s" begin={`${-i * 1.8}s`} repeatCount="indefinite" />
+                <animate attributeName="opacity" values={`0;${P.smokeOp};0`} dur="11s" begin={`${-i * 1.8}s`} repeatCount="indefinite" />
+                <animateMotion path={smokePath} dur="11s" begin={`${-i * 1.8}s`} repeatCount="indefinite" />
+              </circle>
+            ))}
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <circle key={`e${i}`} cx={(i - 3) * 14} cy={(i % 3) * 10} r={1.3 + (i % 3) * 0.3} fill="#FFC46B">
+                <animateMotion path={`M0 0 C ${wsx * 60} ${-50 - i * 6} ${wsx * 160} ${-70} ${wsx * (220 + i * 30)} -30`} dur={`${3 + (i % 3)}s`} begin={`${-i * 0.6}s`} repeatCount="indefinite" />
+                <animate attributeName="opacity" values="1;1;0" dur={`${3 + (i % 3)}s`} begin={`${-i * 0.6}s`} repeatCount="indefinite" />
+              </circle>
+            ))}
+            <ellipse rx="460" ry="300" fill="url(#fireGlow)" opacity={P.glowOp * (lite ? 0.7 : 1)} style={lite ? undefined : { mixBlendMode: 'screen' }}>
+              <animate attributeName="rx" values="440;470;450;440" dur="2.6s" repeatCount="indefinite" />
+            </ellipse>
+          </g>
         </g>
       )}
 

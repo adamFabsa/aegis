@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Town } from './Town';
 import { useAssetVersion } from './assets';
-import type { Building, FireCell, Pack, Sim } from './types';
-import type { Unit } from './mockWorld';
+import type { Building, FireCell, Ghost, Pack, Sim } from './types';
+import { TICK_SECONDS, type Unit } from './mockWorld';
+import { PALETTES } from './palettes';
+import { WindCompass } from './wind';
 import { VIEW_H, VIEW_W, project, unproject } from './iso';
 import { SPRITE, spriteScale } from './scene';
 
@@ -28,6 +30,32 @@ interface MapViewProps {
   onRotate?: (dir: 1 | -1) => void;
   lite?: boolean;
   units?: Unit[];
+  /** real seconds per server tick (live 1.0, mock 0.7): fire engines drive at the speed this implies */
+  tickSeconds?: number;
+}
+
+/** How long the old look (dusk / night, fire damage) takes to dissolve into the new one. */
+const FADE_MS = 2000;
+
+/**
+ * Keeps the frame the map just left (look, phase, buildings, fire cells) for FADE_MS after the look or
+ * phase changes, so Town can dissolve it over the new one instead of swapping everything in one frame.
+ * The snapshot is taken in a layout effect, so the frame with the change is never painted without it.
+ */
+function useGhost(pack: Pack, phase: Sim['phase'], buildings: Building[], cells: FireCell[]): Ghost | null {
+  const [ghost, setGhost] = useState<Ghost | null>(null);
+  const last = useRef<Omit<Ghost, 'epoch'> | null>(null);
+  useLayoutEffect(() => {
+    const prev = last.current;
+    last.current = { pack, phase, buildings, cells };
+    if (prev && (prev.pack !== pack || prev.phase !== phase)) setGhost({ ...prev, epoch: performance.now() });
+  }, [pack, phase, buildings, cells]);
+  useEffect(() => {
+    if (!ghost) return;
+    const t = setTimeout(() => setGhost(null), FADE_MS + 200);
+    return () => clearTimeout(t);
+  }, [ghost]);
+  return ghost;
 }
 
 const PHONE = 760;
@@ -75,7 +103,8 @@ function clampCam(c: Cam, w: number, h: number, I: Ins): Cam {
   return { k, x: cx - mx / k, y: cy - my / k };
 }
 
-export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect, topInset = 0, bottomInset = 0, leftInset = 0, rightInset = 0, onPhone, rotation = 0, onRotate, lite = false, units }: MapViewProps) {
+export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect, topInset = 0, bottomInset = 0, leftInset = 0, rightInset = 0, onPhone, rotation = 0, onRotate, lite = false, units, tickSeconds = TICK_SECONDS }: MapViewProps) {
+  const ghost = useGhost(pack, sim.phase, buildings, fireCells);
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [userCam, setUserCam] = useState<Cam | null>(null);
@@ -91,7 +120,29 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
   }, []);
 
   const { w, h } = size;
-  const I = useMemo(() => ({ top: topInset, bottom: bottomInset, left: leftInset, right: rightInset }), [topInset, bottomInset, leftInset, rightInset]);
+  // The framing glides when the chrome around the map changes (the phone appearing when the fire
+  // starts, the panel resizing) instead of the whole town jumping in one frame.
+  const target = useMemo(() => ({ top: topInset, bottom: bottomInset, left: leftInset, right: rightInset }), [topInset, bottomInset, leftInset, rightInset]);
+  const [I, setI] = useState(target);
+  const shownI = useRef(target); // the insets actually on screen, mid-glide included
+  useLayoutEffect(() => {
+    const from = shownI.current;
+    if (from === target) return;
+    const t0 = performance.now();
+    const D = 650;
+    let raf = 0;
+    const step = (now: number) => {
+      const u = Math.min(1, (now - t0) / D);
+      const e = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+      const mix = (a: number, b: number) => a + (b - a) * e;
+      const next = u >= 1 ? target : { top: mix(from.top, target.top), bottom: mix(from.bottom, target.bottom), left: mix(from.left, target.left), right: mix(from.right, target.right) };
+      shownI.current = next;
+      setI(next);
+      if (u < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target]);
   const cam = w && h ? clampCam(userCam ?? initialCam(w, h, I), w, h, I) : null;
   const camRef = useRef(cam);
   useLayoutEffect(() => {
@@ -250,8 +301,8 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
   const ready = cam !== null;
   const assets = useAssetVersion();
   const town = useMemo(
-    () => (ready ? <Town sim={sim} buildings={buildings} fireCells={fireCells} pack={pack} selectedId={selectedId} onSelect={select} svgRef={svgRef} tagScale={tagScale} lite={lite} units={units} rotation={rotation} assets={assets} /> : null),
-    [ready, sim, buildings, fireCells, pack, selectedId, select, tagScale, lite, units, rotation, assets],
+    () => (ready ? <Town sim={sim} buildings={buildings} fireCells={fireCells} pack={pack} selectedId={selectedId} onSelect={select} svgRef={svgRef} tagScale={tagScale} lite={lite} units={units} rotation={rotation} assets={assets} ghost={ghost} tickSeconds={tickSeconds} /> : null),
+    [ready, sim, buildings, fireCells, pack, selectedId, select, tagScale, lite, units, rotation, assets, ghost, tickSeconds],
   );
 
   return (
@@ -269,8 +320,11 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
         }
       }}
     >
+      {/* the old sky dissolves over the new one (CSS cannot interpolate between two gradients) */}
+      {ghost && ghost.pack !== pack && <div key={ghost.epoch} className="pack-veil pack-out" style={{ background: PALETTES[ghost.pack].bg }} aria-hidden="true" />}
       {town}
       <div className="map-chrome zoom" role="group" aria-label="Map zoom" style={rightInset ? { right: rightInset } : undefined}>
+        <WindCompass dirDeg={sim.windDirDeg} mph={sim.windMph} />
         {onPhone && (
           <button type="button" aria-label="Show phone" onClick={onPhone}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5" /><path d="M11 18.5h2" /></svg>

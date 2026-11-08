@@ -8,9 +8,10 @@
 interface Spec { id: string; height: number; width: number; count: number; dur: number }
 
 const SPECS: Spec[] = [
-  { id: 'fireA', height: 30, width: 8, count: 7, dur: 1.0 },
-  { id: 'fireB', height: 24, width: 11, count: 7, dur: 0.9 },
-  { id: 'fireC', height: 17, width: 6, count: 5, dur: 0.75 },
+  // every <use> of a flame clones all of these animations, so the lick count is the main cost of a fire front
+  { id: 'fireA', height: 30, width: 8, count: 5, dur: 1.0 },
+  { id: 'fireB', height: 24, width: 11, count: 5, dur: 0.9 },
+  { id: 'fireC', height: 17, width: 6, count: 4, dur: 0.75 },
 ];
 
 /** deterministic 0..1 */
@@ -58,7 +59,6 @@ function Flame({ id, height, width, count, dur }: Spec) {
         <animateMotion path={`M${x0.toFixed(1)} ${y0.toFixed(1)} C ${(x0 + sway).toFixed(1)} ${((y0 + top) * 0.55).toFixed(1)} ${(x0 - sway).toFixed(1)} ${(top * 0.85).toFixed(1)} ${(x0 + sway * 0.5).toFixed(1)} ${top.toFixed(1)}`}
           dur={`${d.toFixed(2)}s`} begin={begin} repeatCount="indefinite" />
         <animate attributeName="ry" values={`${(rx * 2.1).toFixed(1)};${(rx * 1.6).toFixed(1)};${(rx * 0.4).toFixed(1)}`} dur={`${d.toFixed(2)}s`} begin={begin} repeatCount="indefinite" />
-        <animate attributeName="rx" values={`${rx.toFixed(1)};${(rx * 0.7).toFixed(1)};${(rx * 0.25).toFixed(1)}`} dur={`${d.toFixed(2)}s`} begin={begin} repeatCount="indefinite" />
         <animate attributeName="opacity" values="0;0.9;0.55;0" keyTimes="0;0.15;0.6;1" dur={`${d.toFixed(2)}s`} begin={begin} repeatCount="indefinite" />
       </ellipse>,
     );

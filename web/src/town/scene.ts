@@ -195,7 +195,8 @@ function screenBox(o: Pick<Building, 'kind' | 'x' | 'y' | 'w' | 'h'>) {
  * another building, so the engine (and its hoses) can be seen from the camera.
  */
 function parkAlong(b: Building, all: Building[], road: 0 | 1 | 2, lane: number, lo: number, hi: number, mid: number): number {
-  const front = all.filter((o) => o.id !== b.id);
+  // the building itself counts too: on the street behind it the engine (and its hoses) would be hidden
+  const front = all.some((o) => o.id === b.id) ? all : [...all, b];
   const visible = (t: number) => {
     const [x, y] = road === 1 ? [lane, t] : [t, lane];
     const [ex, ey] = project(x, y);
