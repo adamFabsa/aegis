@@ -1,0 +1,2355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lantern Sim Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0B0F17; --panel: #121826; --panel2: #0f1420; --border: #232B3B; --text: #e6e9ef; --muted: #8b95a7;
+    --amber: #F2A93B; --red: #FF5A4E; --green: #3DD68C; --blue: #5aa9ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 Inter, system-ui, -apple-system, Segoe UI, sans-serif; }
+  button, select, input { font: inherit; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--panel2); }
+  .brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+  .logo { font: 700 20px 'Space Grotesk', Inter, sans-serif; color: var(--amber); letter-spacing: .3px; }
+  .sub { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pill { padding: 3px 10px; border-radius: 999px; font-weight: 600; font-size: 12px; border: 1px solid var(--border); }
+  .pill.prep { color: var(--green); border-color: #1f4d37; }
+  .pill.fire { color: var(--red); border-color: #5a2522; }
+  .pill.ended { color: var(--muted); }
+  #clock { font: 500 15px 'Space Grotesk', Inter, sans-serif; color: var(--text); white-space: nowrap; }
+  .counters { display: flex; gap: 14px; flex-wrap: wrap; }
+  .counter { display: flex; flex-direction: column; line-height: 1.1; }
+  .counter b { font: 700 17px 'Space Grotesk', Inter, sans-serif; }
+  .counter span { color: var(--muted); font-size: 11px; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; align-items: center; }
+  .btn { background: #1b2232; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+  .btn:hover:not(:disabled) { border-color: #3a465e; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.primary { background: var(--amber); color: #1a1205; border-color: var(--amber); font-weight: 600; }
+  .btn.danger { background: #3a1716; border-color: #6b2a27; color: #ffd9d5; }
+  .btn.good { background: #123524; border-color: #1f5a3c; color: #c9f5de; }
+  .btn.ghost { background: transparent; }
+  .btn.small { padding: 4px 10px; font-size: 12.5px; }
+  .btn.wide { width: 100%; margin-top: 10px; }
+  select, input { background: #0f1420; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; }
+  label.ctl { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px; padding: 14px 16px; }
+  .mapwrap { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; position: relative; }
+  #map { width: 100%; height: auto; display: block; aspect-ratio: 1000 / 620; }
+  aside { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+  .cardtitle { font: 700 18px 'Space Grotesk', Inter, sans-serif; }
+  .cardkind { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0 8px; }
+  .stat { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 8px; min-width: 0; }
+  .statlabel { color: var(--muted); font-size: 11px; line-height: 1.2; min-height: 26px; }
+  .statval { font: 700 20px 'Space Grotesk', Inter, sans-serif; }
+  .statsub { color: var(--muted); font-size: 11px; }
+  .badge { border-radius: 8px; padding: 6px 10px; font-weight: 600; font-size: 12.5px; margin: 6px 0; }
+  .badge.good { background: #123524; color: var(--green); border: 1px solid #1f5a3c; }
+  .badge.warn { background: #33250d; color: var(--amber); border: 1px solid #5c4316; }
+  .explain { color: #c3c9d4; font-size: 12.5px; margin: 8px 0; }
+  .section { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; margin: 12px 0 6px; }
+  .fix, .task { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); }
+  .fixinfo { flex: 1; min-width: 0; }
+  .fixname { font-weight: 600; font-size: 13px; }
+  .fixsub { color: var(--muted); font-size: 12px; }
+  .done { color: var(--green); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+  .task.p3 .fixname { color: #ffb4ad; }
+  .bar { height: 8px; background: var(--panel2); border-radius: 99px; overflow: hidden; border: 1px solid var(--border); margin-top: 10px; }
+  .barfill { height: 100%; background: var(--green); transition: width .3s; }
+  .barlabel { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .names { display: flex; flex-wrap: wrap; gap: 6px; }
+  .name { font-size: 11.5px; padding: 2px 8px; border-radius: 99px; background: var(--panel2); border: 1px solid var(--border); }
+  .name.st-cant_move { border-color: #6b2a27; color: #ffb4ad; }
+  .name.st-claimed { border-color: #1f4a6b; color: #b6dbff; }
+  .name.st-left_behind { border-color: #6b2a27; color: var(--red); text-decoration: line-through; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+  .tab { flex: 1; background: var(--panel2); border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 6px; cursor: pointer; }
+  .tab.on { color: var(--text); border-color: var(--amber); }
+  .select { width: 100%; margin-bottom: 8px; }
+  .msgs { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+  .bubble { padding: 7px 10px; border-radius: 12px; max-width: 92%; font-size: 12.5px; }
+  .bubble.lantern { background: #1b2232; align-self: flex-start; }
+  .bubble.me { background: #33250d; color: #ffe2b0; align-self: flex-end; }
+  .bubble.alert { background: #3a1716; color: #ffd9d5; align-self: flex-start; }
+  .row { display: flex; gap: 8px; }
+  .row .btn { flex: 1; }
+  .muted { color: var(--muted); font-size: 12.5px; }
+  #feed .ev { display: flex; gap: 8px; font-size: 12.5px; padding: 3px 0; border-top: 1px solid var(--border); }
+  #feed .ev:first-child { border-top: 0; color: var(--text); }
+  #feed .ev { color: #aab2c0; }
+  .evt { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 34px; }
+  footer { color: var(--muted); font-size: 11.5px; padding: 0 16px 16px; }
+  /* map */
+  .roadline { stroke: #59627a; stroke-width: 1.5; stroke-dasharray: 10 10; }
+  #fire rect.flame { animation: flicker 0.9s ease-in-out infinite alternate; filter: drop-shadow(0 0 4px rgba(255, 120, 40, .7)); }
+  #fire rect.ash { opacity: .88; }
+  @keyframes flicker { from { opacity: .72; } to { opacity: 1; } }
+  .smoke { fill: #9aa3b3; pointer-events: none; }
+  .route { fill: none; stroke: var(--green); stroke-width: 2.5; stroke-dasharray: 7 7; animation: march 1s linear infinite; opacity: .85; }
+  @keyframes march { to { stroke-dashoffset: -14; } }
+  .bldg { cursor: pointer; }
+  .bldg .body { fill: #1b2433; stroke-width: 2.5; }
+  .bldg.shelter .body { fill: #12382a; }
+  .bldg.st-burning .body { fill: #4a1c17; }
+  .bldg.st-lost .body { fill: #120d0c; stroke-dasharray: 4 3; }
+  .bldg .win { fill: #f2d48a; opacity: .55; }
+  .bldg.st-lost .win, .bldg.st-burning .win { fill: #ff7a3c; opacity: .8; }
+  .bldg .house { fill: #222c3d; stroke: #3a465e; }
+  .bldg.selected .body { stroke-width: 4.5; }
+  .bname { fill: #e6e9ef; font: 600 12px Inter, sans-serif; text-anchor: middle; paint-order: stroke; stroke: #0B0F17; stroke-width: 3px; }
+  .tagbg { fill: #0B0F17; stroke-width: 1; opacity: .92; }
+  .tag { font: 600 10.5px Inter, sans-serif; text-anchor: middle; }
+  .shelterlabel { fill: var(--green); font: 700 13px 'Space Grotesk', Inter, sans-serif; text-anchor: middle; letter-spacing: 2px; }
+  .chip { fill: #0B0F17; stroke: var(--border); opacity: .92; }
+  .chiptext { fill: var(--text); font: 600 13px Inter, sans-serif; }
+  /* overlays */
+  #results { position: fixed; inset: 0; background: rgba(5, 8, 13, .78); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+  #results.show { display: flex; }
+  .resbox { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 22px; width: min(560px, 100%); }
+  .resbox h2 { font: 700 22px 'Space Grotesk', Inter, sans-serif; margin: 0 0 14px; }
+  .rrow { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 8px; padding: 9px 0; border-top: 1px solid var(--border); align-items: center; }
+  .rrow.head { color: var(--muted); font-size: 12px; border-top: 0; }
+  .rk { color: #c3c9d4; }
+  .rv { font: 700 20px 'Space Grotesk', Inter, sans-serif; color: var(--text); }
+  .rv.win { color: var(--green); }
+  .rv.lose { color: var(--red); }
+  .quote { color: var(--amber); font-weight: 600; margin: 16px 0 4px; }
+  #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%) translateY(30px); background: #33250d; color: #ffe2b0; border: 1px solid #5c4316; padding: 8px 14px; border-radius: 10px; opacity: 0; transition: .2s; pointer-events: none; z-index: 20; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #errbar { display: none; background: #3a1716; color: #ffd9d5; padding: 8px 16px; }
+  .panel, .mapwrap, .stat, .fixinfo, .bubble { min-width: 0; overflow-wrap: anywhere; }
+  @media (max-width: 980px) {
+    main { grid-template-columns: minmax(0, 1fr); }
+    .controls { margin-left: 0; }
+  }
+  @media (max-width: 520px) {
+    header { padding: 10px 16px; }
+    main { padding: 12px 16px; }
+    .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+    .statval { font-size: 17px; }
+    .statlabel { font-size: 10.5px; }
+    .sub { display: none; }
+    .controls { width: 100%; }
+    #seed { width: 92px; }
+    .counters { gap: 10px; }
+  }
+</style>
+</head>
+<body>
+<div id="errbar"></div>
+<header>
+  <div class="brand"><span class="logo">Lantern</span><span class="sub">Eaton Fire replay · simulated neighborhood · sim preview</span></div>
+  <span id="phasePill" class="pill prep">Prep</span>
+  <span id="clock">T−0</span>
+  <div class="counters">
+    <div class="counter"><b id="cOut">0/0</b><span>People out</span></div>
+    <div class="counter"><b id="cUnacc">0</b><span>Unaccounted</span></div>
+    <div class="counter"><b id="cRisk">0</b><span>At risk</span></div>
+    <div class="counter"><b id="cBurning">0</b><span>Cells burning</span></div>
+    <div class="counter"><b id="budget">$0</b><span>Prep budget</span></div>
+  </div>
+  <div class="controls">
+    <button id="btnPhase" class="btn primary">Start fire</button>
+    <button id="btnPlay" class="btn">Play</button>
+    <button id="btnStep" class="btn">Step</button>
+    <button id="btnEnd" class="btn">End &amp; compare</button>
+    <label class="ctl">Sim min/tick <select id="speed"><option>1</option><option>2</option><option>5</option><option>10</option></select></label>
+    <label class="ctl">Ticks/s <select id="rate"><option>1</option><option>2</option><option>5</option><option>20</option></select></label>
+    <label class="ctl">Fire seed <input id="seed" size="9"><button id="btnSeed" class="btn small">Load</button></label>
+  </div>
+</header>
+<main>
+  <div class="mapwrap"><svg id="map" viewBox="0 0 1000 620" role="img" aria-label="Simulated neighborhood map with fire spread"></svg></div>
+  <aside>
+    <div class="panel" id="card"></div>
+    <div class="panel" id="phone"></div>
+    <div class="panel"><div class="section" style="margin-top:0">Live feed</div><div id="feed"></div></div>
+  </aside>
+</main>
+<footer>Simulated neighborhood, residents and dollar values. Fire calibrated to the real 2025 Eaton Fire (NASA FIRMS, IEM wind); building risk from CAL FIRE damage inspections. Same engine as the Spacetime module (spacetimedb/src/sim.ts).</footer>
+<div id="results"><div class="resbox">
+  <h2>Same fire, with vs without Lantern</h2>
+  <div id="resTable"></div>
+  <div class="quote">“The best claim is the one that never happens.”</div>
+  <div class="muted">Simulated neighborhood; fire calibrated to the real Eaton Fire. “Without” = no prep fixes, evacuation only when the fire is 10 minutes away, no check-ins or escalation.</div>
+  <div class="row" style="margin-top:14px"><button id="closeResults" class="btn">Close</button></div>
+</div></div>
+<div id="toast"></div>
+<script type="module">
+// GENERATED by preview/build.ts — edit preview/app.js or spacetimedb/src/sim.ts, then rebuild.
+const S = (() => {
+// Lantern simulation engine.
+//
+// PURE functions only: no SpacetimeDB imports, no Date, no Math.random, no I/O, no async.
+// The same code runs in three places:
+//   1. the scheduled `tick` reducer (live "with Lantern" run; rng = () => ctx.random()),
+//   2. `run_baseline` (instant "without Lantern" run; rng = mulberry32(seed)),
+//   3. plain Node (tests in spacetimedb/tests, calibration scripts in data/sim).
+//
+// Row interfaces below mirror the Spacetime tables in LANTERN_SPEC.md §4 field-for-field,
+// so the tick reducer can pass table rows straight in (copy them first — rows are readonly).
+//
+// Model summary (constants live in seed/fire_params.json, calibrated by data/sim/calibrate.ts):
+//  - Fire is a 50x31 cellular automaton advanced in fixed sim-minute steps (stepMinutes).
+//    A tick advances minutesPerTick sim-minutes, so changing speed never changes fire behaviour.
+//  - Burning cell → each unburned neighbour ignites with p = baseSpread · fuel · windFactor.
+//  - Embers: burning cells with fuel ≥ spotMinFuel (dry brush, burning buildings) throw a spot
+//    fire 2–4 cells downwind. Roads (fuel 0) stop direct spread; only embers cross them.
+//  - Buildings are NOT fuel cells. A building is "exposed" while a neighbouring cell burns or
+//    an ember lands on it; each exposed step it ignites with p = 1 − (1 − risk/100)^K, K calibrated
+//    so a building the fire reaches is lost with probability ≈ risk/100 (the DINS model's output).
+//    So a low-risk (prepared) building can survive a fire passing right next to it.
+//  - A burning building lights its footprint (which spreads fire and throws embers) and is
+//    lost once the footprint burns out. Anyone not out by then is left behind.
+//  - Fire ETA per building = median first-exposure time over a small Monte Carlo of the
+//    same engine (handles embers and road crossings, which a plain Dijkstra can't).
+//  - Evacuation: mobile residents leave at mobilePerMin; residents who need help move only
+//    when staff/vans complete a help_person task (live) or at the same raw rate (baseline).
+
+// ───────────────────────────── Row types (mirror Spacetime tables) ─────────────────────────────
+
+                         
+             
+                                             
+                   
+               
+                     
+                         
+                     
+                                                                                                   
+                  
+ 
+
+                              
+             
+               
+                                                                           
+            
+            
+            
+            
+                    
+                    
+                
+               
+                   
+               
+                   
+                    
+                                                                                  
+                                                    
+                        
+                       
+                    
+                      
+ 
+
+                            
+             
+               
+                     
+                
+                     
+               
+                                                                                                   
+                       
+                    
+ 
+
+                          
+                                                                               
+                                                         
+                     
+                   
+                                 
+                    
+                
+                      
+ 
+
+                         
+             
+                     
+               
+                  
+                   
+                  
+                    
+ 
+
+                              
+                             
+            
+            
+               
+                                                   
+                                                            
+ 
+
+                            
+                                                         
+                     
+                      
+                        
+                    
+                 
+ 
+
+// ───────────────────────────── Params & seed ─────────────────────────────
+
+                             
+                                               
+                                        
+                           
+                                           
+ 
+
+                             
+                  
+               
+               
+                                                                                
+                                                                    
+
+                                                   
+                                
+
+                     
+                
+                                                                          
+                        
+                         
+
+                                                                         
+                      
+                       
+                                                                                      
+                        
+
+                                                        
+                                                                           
+                                                                                               
+
+                                                                
+                                                                       
+                                                                 
+
+                        
+                  
+                        
+                                                                         
+
+                                                                                                  
+                                                                      
+                                                                                                               
+                                                                                       
+                                                            
+
+                                                                      
+                                                                           
+                                                                           
+                                                                            
+                                                            
+                                                                   
+                                                                                                              
+                                                                                                             
+
+                                                                            
+                  
+                          
+                        
+
+                            
+                                                                         
+
+                        
+                                                                                                            
+                                                                                                             
+
+                                                                                  
+ 
+
+                          
+             
+               
+                  
+                   
+                  
+ 
+
+                               
+             
+               
+               
+            
+            
+            
+            
+                    
+                    
+                
+               
+                   
+                   
+                                                                                     
+                       
+                                     
+                   
+ 
+
+                             
+             
+               
+                     
+                
+                     
+               
+ 
+
+                       
+                            
+                       
+                     
+ 
+
+                        
+              
+                           
+                      
+                   
+                                                              
+ 
+
+                               
+                                          
+/** A seed (number) gives deterministic per-tick streams — use p.fireSeed in the tick reducer. */
+                                     
+
+                   
+            
+           
+              
+ 
+
+/** Independent deterministic streams for one tick, so the fire stream is identical in both scenarios. */
+function tickStreams(src           , tick        )          {
+  if (typeof src === 'function') return { fire: src, eta: src, people: src };
+  const mix = (k        ) => {
+    let h = (Math.imul(src | 0, 0x9e3779b1) ^ Math.imul(tick + 1, 0x85ebca77) ^ k) >>> 0;
+    h = Math.imul(h ^ (h >>> 16), 0x7feb352d) >>> 0;
+    h = Math.imul(h ^ (h >>> 15), 0x846ca68b) >>> 0;
+    return mulberry32((h ^ (h >>> 16)) >>> 0);
+  };
+  return { fire: mix(0x51ed27), eta: mix(0x2c1b3a), people: mix(0x7a3f91) };
+}
+
+/**
+ * Fire randomness for one absolute fire step (step s covers sim-minute s·stepMinutes). Keyed to the step,
+ * not the tick, so the same seed gives the same fire whatever minutesPerTick the presenter picks.
+ */
+function fireStepStream(seed        , step        )      {
+  let h = (Math.imul(seed | 0, 0x27d4eb2f) ^ Math.imul(step + 1, 0x165667b1) ^ 0x3c6ef372) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x7feb352d) >>> 0;
+  h = Math.imul(h ^ (h >>> 15), 0x846ca68b) >>> 0;
+  return mulberry32((h ^ (h >>> 16)) >>> 0);
+}
+
+// ───────────────────────────── Constants ─────────────────────────────
+
+/** On-site staff the simulation dispatches by itself. Humans on /phone use PHONE_STAFF names. */
+const ON_SITE_STAFF = ['Priya', 'Marcus', 'Dana', 'Luis', 'Grace', 'Omar', 'Keiko', 'Ben', 'Rosa', 'Tom'];
+const PHONE_STAFF = ['Alex', 'Sam', 'Jordan', 'Taylor'];
+/** claimedBy suffix for tasks taken by simulated on-site staff (humans' claims never have it). */
+const AUTO_SUFFIX = ' · on-site';
+
+const NB_DX = [-1, 0, 1, -1, 1, -1, 0, 1];
+const NB_DY = [-1, -1, -1, 0, 0, 1, 1, 1];
+const DEG = Math.PI / 180;
+
+const BSTATE_OK = 0;
+const BSTATE_BURNING = 1;
+const BSTATE_LOST = 2;
+
+// ───────────────────────────── Small helpers ─────────────────────────────
+
+/** Deterministic PRNG for the baseline / tests (never use Math.random in a reducer). */
+function mulberry32(seed        )      {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** "1h50m", "45m", "—" for unknown. Handy for event text and the UI. */
+function fmtMin(m        )         {
+  if (!(m >= 0) || !Number.isFinite(m)) return '—';
+  const r = Math.round(m);
+  if (r < 60) return `${r}m`;
+  const h = Math.floor(r / 60);
+  const mm = r % 60;
+  return `${h}h${mm < 10 ? '0' : ''}${mm}m`;
+}
+
+function windAt(p            , minute        , fallback                                  )             {
+  const w = p.wind;
+  if (!w || w.length === 0) {
+    const d = fallback ?? { dirDeg: 225, mph: p.refWindMph };
+    return { minute, dirDeg: d.dirDeg, mph: d.mph, gustMph: d.mph };
+  }
+  let cur = w[0];
+  for (let i = 1; i < w.length; i++) {
+    if (w[i].minute <= minute) cur = w[i];
+    else break;
+  }
+  return cur;
+}
+
+/** Cells whose centre lies inside a footprint (at least the centre cell). */
+function footprintCellIds(b                                                , p            )           {
+  const out           = [];
+  const cs = p.cellSize;
+  const x0 = Math.max(0, Math.floor(b.x / cs));
+  const x1 = Math.min(p.cols - 1, Math.floor((b.x + b.w) / cs));
+  const y0 = Math.max(0, Math.floor(b.y / cs));
+  const y1 = Math.min(p.rows - 1, Math.floor((b.y + b.h) / cs));
+  for (let cy = y0; cy <= y1; cy++) {
+    for (let cx = x0; cx <= x1; cx++) {
+      const mx = (cx + 0.5) * cs;
+      const my = (cy + 0.5) * cs;
+      if (mx >= b.x && mx < b.x + b.w && my >= b.y && my < b.y + b.h) out.push(cy * p.cols + cx);
+    }
+  }
+  if (out.length === 0) {
+    const cx = Math.min(p.cols - 1, Math.max(0, Math.floor((b.x + b.w / 2) / cs)));
+    const cy = Math.min(p.rows - 1, Math.max(0, Math.floor((b.y + b.h / 2) / cs)));
+    out.push(cy * p.cols + cx);
+  }
+  return out;
+}
+
+// ───────────────────────────── Core fire engine (typed arrays) ─────────────────────────────
+
+/** Static per-call context: fuel, building footprints, risks. */
+                         
+                
+            
+                     
+                                                         
+                                                 
+                                                          
+                                                                    
+                                                     
+ 
+
+/** Mutable fire state. */
+                           
+                    
+                   
+                                                                    
+                                                  
+ 
+
+function makeEngine(p            , fuel                   , buildings                                                                                         )         {
+  const n = p.cols * p.rows;
+  const f = new Float64Array(n);
+  for (let i = 0; i < n; i++) f[i] = fuel[i] ?? 0;
+  const owner = new Int32Array(n).fill(-1);
+  const bIds           = [];
+  const foot             = [];
+  const ring             = [];
+  const risk = new Float64Array(buildings.length);
+  buildings.forEach((b, bi) => {
+    bIds.push(b.id);
+    risk[bi] = b.risk;
+    const cells = footprintCellIds(b, p).filter((c) => owner[c] === -1);
+    for (const c of cells) owner[c] = bi;
+    foot.push(cells);
+  });
+  buildings.forEach((_b, bi) => {
+    const seen = new Set        ();
+    for (const c of foot[bi]) {
+      const cx = c % p.cols;
+      const cy = (c - cx) / p.cols;
+      for (let k = 0; k < 8; k++) {
+        const nx = cx + NB_DX[k];
+        const ny = cy + NB_DY[k];
+        if (nx < 0 || ny < 0 || nx >= p.cols || ny >= p.rows) continue;
+        const j = ny * p.cols + nx;
+        if (owner[j] !== bi) seen.add(j);
+      }
+    }
+    ring.push([...seen]);
+  });
+  return { p, n, fuel: f, owner, bIds, foot, ring, risk };
+}
+
+function cloneGrid(g          )           {
+  return { state: g.state.slice(), burn: g.burn.slice(), bstate: g.bstate.slice(), burning: g.burning.slice() };
+}
+
+                                
+                                                                            
+                                                                   
+                                                    
+ 
+
+/** Advance the fire by one step (stepMinutes of sim time). */
+function fireSubstep(eng        , g          , rng     , wind            )                {
+  const p = eng.p;
+  const cols = p.cols;
+  const rows = p.rows;
+  const { fuel, owner } = eng;
+  const { state, burn, bstate } = g;
+  const nb = eng.bIds.length;
+
+  const wx = Math.sin(wind.dirDeg * DEG);
+  const wy = -Math.cos(wind.dirDeg * DEG);
+  const wm = Math.max(0, wind.mph) / p.refWindMph;
+  const wf = new Float64Array(8);
+  for (let k = 0; k < 8; k++) {
+    const len = Math.hypot(NB_DX[k], NB_DY[k]);
+    const cos = (NB_DX[k] * wx + NB_DY[k] * wy) / len;
+    const diag = NB_DX[k] !== 0 && NB_DY[k] !== 0;
+    wf[k] = Math.max(p.minWindFactor, 1 + p.windK * wm * cos) * (diag ? p.diagonalFactor : 1) * p.baseSpread;
+  }
+  // Embers: rate and reach both scale with gusts (Eaton's 60–80 mph gusts threw embers far ahead).
+  const gm = Math.max(0, wind.gustMph || wind.mph) / p.refWindMph;
+  const spotScale = p.spotP * gm;
+  const spotMax = Math.max(p.spotMinCells, Math.round(p.spotMaxCells * Math.min(2.5, gm)));
+  const spotSpan = spotMax - p.spotMinCells + 1;
+
+  const exposedFlag = new Uint8Array(nb);
+  const ignite           = [];
+  // Canonical order: random draws must go to the same cells however the steps were batched into ticks.
+  g.burning.sort((a, c) => a - c);
+
+  for (let bi = 0; bi < g.burning.length; bi++) {
+    const i = g.burning[bi];
+    const cx = i % cols;
+    const cy = (i - cx) / cols;
+    const own = owner[i];
+    for (let k = 0; k < 8; k++) {
+      const nx = cx + NB_DX[k];
+      const ny = cy + NB_DY[k];
+      if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+      const j = ny * cols + nx;
+      const o = owner[j];
+      if (o >= 0) {
+        if (o !== own && bstate[o] === BSTATE_OK) exposedFlag[o] = 1;
+        continue;
+      }
+      if (state[j] !== 0) continue;
+      const fj = fuel[j];
+      if (fj <= 0) continue;
+      if (rng() < fj * wf[k]) ignite.push(j);
+    }
+    const fi = fuel[i];
+    if (spotScale > 0 && fi >= p.spotMinFuel && rng() < spotScale * fi) {
+      const d = p.spotMinCells + Math.floor(rng() * spotSpan);
+      const a = (wind.dirDeg + (rng() * 2 - 1) * p.spotJitterDeg) * DEG;
+      const tx = Math.round(cx + d * Math.sin(a));
+      const ty = Math.round(cy - d * Math.cos(a));
+      if (tx >= 0 && ty >= 0 && tx < cols && ty < rows) {
+        const t = ty * cols + tx;
+        const o = owner[t];
+        if (o >= 0) {
+          if (o !== own && bstate[o] === BSTATE_OK) exposedFlag[o] = 1;
+        } else if (state[t] === 0 && fuel[t] > 0 && rng() < fuel[t]) {
+          ignite.push(t);
+        }
+      }
+    }
+  }
+
+  // Age burning cells.
+  const next           = [];
+  for (const i of g.burning) {
+    burn[i] = Math.min(255, burn[i] + 1);
+    const lim = owner[i] >= 0 ? p.buildingBurnSteps : p.burnSteps;
+    if (burn[i] >= lim) state[i] = 2;
+    else next.push(i);
+  }
+  for (const j of ignite) {
+    if (state[j] === 0) {
+      state[j] = 1;
+      burn[j] = 0;
+      next.push(j);
+    }
+  }
+
+  // Building ignition.
+  const exposed           = [];
+  const ignited           = [];
+  for (let b = 0; b < nb; b++) {
+    if (!exposedFlag[b] || bstate[b] !== BSTATE_OK) continue;
+    exposed.push(b);
+    if (rng() < igniteProb(eng.risk[b], p)) {
+      bstate[b] = BSTATE_BURNING;
+      ignited.push(b);
+      for (const c of eng.foot[b]) {
+        if (state[c] === 0) {
+          state[c] = 1;
+          burn[c] = 0;
+          next.push(c);
+        }
+      }
+    }
+  }
+
+  // Buildings whose footprint has burned out are lost.
+  const lost           = [];
+  for (let b = 0; b < nb; b++) {
+    if (bstate[b] !== BSTATE_BURNING) continue;
+    let done = true;
+    for (const c of eng.foot[b]) {
+      if (state[c] !== 2) {
+        done = false;
+        break;
+      }
+    }
+    if (done) {
+      bstate[b] = BSTATE_LOST;
+      lost.push(b);
+    }
+  }
+
+  g.burning = next;
+  return { exposed, ignited, lost };
+}
+
+/**
+ * Per exposed step ignition probability. With K = 1 / (typical exposure steps), a building that the
+ * fire reaches is lost with probability ≈ risk/100 — the same quantity the DINS model predicts.
+ */
+function igniteProb(risk        , p            )         {
+  const r = Math.min(0.999, Math.max(0, risk / 100));
+  return 1 - Math.pow(1 - r, p.buildingIgniteK);
+}
+
+/** Fire steps (absolute step indices) whose start minute falls in (fromMin, toMin]. */
+function stepRange(p            , fromMin        , toMin        )                   {
+  const first = Math.floor(fromMin / p.stepMinutes) + 1;
+  const last = Math.floor(toMin / p.stepMinutes);
+  return [first, last];
+}
+
+/**
+ * Monte Carlo fire arrival: for each building, the median sim-minutes (from `nowMin`) until the
+ * fire first touches it, over `runs` futures of the same engine. Buildings already burning/lost → 0.
+ *  - default (live "fire arrives in"): median over all futures; -1 if most futures never reach it.
+ *  - conditionalMinReach > 0 (prep "if a fire like this reaches you"): median over the futures that
+ *    do reach it, provided at least that fraction of futures reach it; else -1.
+ */
+function mcArrival(eng        , g0          , rng     , nowMin        , runs        , horizonMin        , conditionalMinReach = 0)           {
+  const p = eng.p;
+  const nb = eng.bIds.length;
+  const samples             = [];
+  for (let b = 0; b < nb; b++) samples.push([]);
+  const [first] = stepRange(p, nowMin, nowMin);
+  const maxSteps = Math.ceil(horizonMin / p.stepMinutes);
+  for (let r = 0; r < runs; r++) {
+    const g = cloneGrid(g0);
+    const arr = new Float64Array(nb).fill(Infinity);
+    let pending = 0;
+    for (let b = 0; b < nb; b++) {
+      if (g.bstate[b] !== BSTATE_OK) arr[b] = 0;
+      else pending++;
+    }
+    for (let s = 0; s < maxSteps && pending > 0 && g.burning.length > 0; s++) {
+      const minute = (first + s) * p.stepMinutes;
+      const res = fireSubstep(eng, g, rng, windAt(p, minute));
+      const dt = Math.max(0, minute - nowMin);
+      for (const b of res.exposed) {
+        if (arr[b] === Infinity) {
+          arr[b] = dt;
+          pending--;
+        }
+      }
+    }
+    for (let b = 0; b < nb; b++) samples[b].push(arr[b]);
+  }
+  return samples.map((all) => {
+    const xs = conditionalMinReach > 0 ? all.filter(Number.isFinite) : all;
+    if (conditionalMinReach > 0 && xs.length < conditionalMinReach * all.length) return -1;
+    if (xs.length === 0) return -1;
+    xs.sort((a, b) => a - b);
+    const m = xs[Math.floor((xs.length - 1) / 2)];
+    return Number.isFinite(m) ? m : -1;
+  });
+}
+
+// ───────────────────────────── Rows ↔ engine ─────────────────────────────
+
+function cellArrays(world       , p            )                                                            {
+  const n = p.cols * p.rows;
+  const fuel = new Float64Array(n);
+  const byId                              = new Array(n);
+  for (const c of world.cells) {
+    if (c.id >= 0 && c.id < n) {
+      byId[c.id] = c;
+      fuel[c.id] = c.fuel;
+    }
+  }
+  return { fuel, byId };
+}
+
+function gridFromRows(byId                             , buildings               , n        )           {
+  const state = new Uint8Array(n);
+  const burn = new Uint8Array(n);
+  const burning           = [];
+  for (let i = 0; i < n; i++) {
+    const c = byId[i];
+    if (!c) continue;
+    state[i] = c.state;
+    burn[i] = c.burnTicks;
+    if (c.state === 1) burning.push(i);
+  }
+  const bstate = new Uint8Array(buildings.length);
+  buildings.forEach((b, bi) => {
+    bstate[bi] = b.status === 'lost' ? BSTATE_LOST : b.status === 'burning' ? BSTATE_BURNING : BSTATE_OK;
+  });
+  return { state, burn, bstate, burning };
+}
+
+// ───────────────────────────── Evacuation model ─────────────────────────────
+
+/** Assisted residents per hour this building can move (staff × vans bottleneck). */
+function helpRatePerHour(b                                 , p            , extraPerHour = 0)         {
+  const staffCap = p.staffRatePerHour * b.staff;
+  const transport = b.vans > 0 ? p.vanRatePerHour * b.vans : p.walkRatePerHour * b.staff;
+  const r = Math.min(staffCap, transport);
+  return (r > 0 ? r : p.outsideHelpPerHour) + extraPerHour;
+}
+
+function isAccounted(s        )          {
+  return s === 'out' || s === 'left_behind';
+}
+
+/**
+ * Minutes still needed to get everyone out of `b`:
+ *   (base if not started) + max(mobile remaining / mobilePerMin, 60 · assisted remaining / helpRate)
+ * Building 12 (9 need help, 4 staff, 1 van) → ~3h; with a second van → ~1h35m.
+ */
+function evacNeededMin(b             , people                          , p            , extraPerHour = 0)         {
+  let mobile = 0;
+  let assisted = 0;
+  let any = false;
+  for (const x of people) {
+    if (x.buildingId !== b.id) continue;
+    any = true;
+    if (isAccounted(x.status)) continue;
+    if (x.needsHelp && x.status !== 'safe') assisted++;
+    else if (x.status === 'cant_move' || x.status === 'claimed') assisted++;
+    else mobile++;
+  }
+  if (!any) {
+    // No person rows (e.g. tests): fall back to the building's counts.
+    assisted = Math.max(0, b.needsHelp);
+    mobile = Math.max(0, b.residents - b.needsHelp - b.peopleOut);
+  }
+  if (mobile === 0 && assisted === 0) return 0;
+  const base = b.evacStarted ? 0 : p.evacBaseMin;
+  const mob = mobile / p.mobilePerMin;
+  const help = assisted > 0 ? (60 * assisted) / helpRatePerHour(b, p, extraPerHour) : 0;
+  return base + Math.max(mob, help);
+}
+
+function isPrepared(b             , p            )          {
+  if (b.kind === 'shelter') return false;
+  const evacOk = b.fireEtaMin < 0 || b.evacNeededMin < b.fireEtaMin;
+  // Compare the risk as displayed (rounded), so a building shown as "Risk 70" is never also "Prepared".
+  return Math.round(b.risk) < p.preparedRiskMax && evacOk;
+}
+
+function taskPriority(person           , b             , p            )         {
+  if (person.status === 'cant_move' || b.status === 'burning') return 3;
+  let pr = person.needsHelp ? 2 : 1;
+  if (b.fireEtaMin >= 0 && b.fireEtaMin <= p.urgentEtaMin) pr += 1;
+  return Math.min(3, pr);
+}
+
+function onSiteName(b                , k        )         {
+  return ON_SITE_STAFF[(b.id * 3 + k) % ON_SITE_STAFF.length] + AUTO_SUFFIX;
+}
+
+// ───────────────────────────── Step ─────────────────────────────
+
+                             
+              
+                                                
+                                                    
+                                               
+                                                                            
+                                                        
+                                  
+                                                                             
+ 
+
+class Dirty {
+  cells = new Set             ();
+  buildings = new Set             ();
+  people = new Set           ();
+  tasks = new Set         ();
+  newTasks            = [];
+  events           = [];
+}
+
+                              
+              
+                                                                       
+ 
+
+/**
+ * Advance the live simulation by one tick. Mutates `world` in place and returns what changed.
+ * No-op unless sim.phase === 'fire' && sim.running.
+ */
+function stepSimulation(world       , p            , rngSrc           , opts              = {})             {
+  const mode       = opts.mode ?? 'lantern';
+  const sim = world.sim;
+  const d = new Dirty();
+  if (sim.phase !== 'fire' || !sim.running) return finish(world, d, false);
+
+  const mpt = Math.max(1, Math.round(sim.minutesPerTick));
+  const oldMin = sim.simMinutes;
+  sim.tick += 1;
+  sim.simMinutes = oldMin + mpt;
+  const R = tickStreams(rngSrc, sim.tick);
+
+  // 1. Fire.
+  const n = p.cols * p.rows;
+  const { fuel, byId } = cellArrays(world, p);
+  const eng = makeEngine(p, fuel, world.buildings);
+  const g = gridFromRows(byId, world.buildings, n);
+  const [first, last] = stepRange(p, oldMin, sim.simMinutes);
+  const ignitedB = new Set        ();
+  const lostB = new Set        ();
+  for (let s = first; s <= last; s++) {
+    // Fire randomness is keyed to the absolute fire step, so the fire is the same at any speed.
+    const fireRng = typeof rngSrc === 'number' ? fireStepStream(rngSrc, s) : R.fire;
+    const res = fireSubstep(eng, g, fireRng, windAt(p, s * p.stepMinutes, { dirDeg: sim.windDirDeg, mph: sim.windMph }));
+    for (const b of res.ignited) ignitedB.add(b);
+    for (const b of res.lost) lostB.add(b);
+  }
+  for (let i = 0; i < n; i++) {
+    const c = byId[i];
+    if (!c) continue;
+    if (c.state !== g.state[i] || c.burnTicks !== g.burn[i]) {
+      c.state = g.state[i];
+      c.burnTicks = g.burn[i];
+      d.cells.add(c);
+    }
+  }
+  const w = windAt(p, sim.simMinutes, { dirDeg: sim.windDirDeg, mph: sim.windMph });
+  sim.windDirDeg = w.dirDeg;
+  sim.windMph = w.mph;
+
+  const byPerson = new Map                   ();
+  const peopleOf = new Map                     ();
+  for (const x of world.people) {
+    byPerson.set(x.id, x);
+    const arr = peopleOf.get(x.buildingId);
+    if (arr) arr.push(x);
+    else peopleOf.set(x.buildingId, [x]);
+  }
+
+  world.buildings.forEach((b, bi) => {
+    if (ignitedB.has(bi) && b.status !== 'burning' && b.status !== 'lost') {
+      b.status = 'burning';
+      b.fireEtaMin = 0;
+      d.buildings.add(b);
+      d.events.push(`${b.name} caught fire`);
+    }
+    if (lostB.has(bi) && b.status !== 'lost') {
+      b.status = 'lost';
+      b.fireEtaMin = 0;
+      d.buildings.add(b);
+      let left = 0;
+      for (const x of peopleOf.get(b.id) ?? []) {
+        if (x.status !== 'out' && x.status !== 'left_behind') {
+          x.status = 'left_behind';
+          d.people.add(x);
+          left++;
+        }
+      }
+      for (const t of world.tasks) {
+        if (t.buildingId === b.id && !t.done) {
+          t.done = true;
+          d.tasks.add(t);
+        }
+      }
+      d.events.push(left > 0 ? `${b.name} lost — ${left} ${left === 1 ? 'person' : 'people'} left behind` : `${b.name} lost — everyone was already out`);
+    }
+  });
+
+  // 2. Fire ETAs (Monte Carlo every etaEveryTicks, counted down in between).
+  const runs = opts.etaRuns ?? p.etaRuns;
+  const recompute = (sim.tick - 1) % Math.max(1, p.etaEveryTicks) === 0 || ignitedB.size > 0;
+  if (recompute && runs > 0 && g.burning.length > 0) {
+    const eta = mcArrival(eng, g, R.eta, sim.simMinutes, runs, p.etaHorizonMin);
+    world.buildings.forEach((b, bi) => {
+      let v = eta[bi];
+      if (b.status === 'burning' || b.status === 'lost') v = 0;
+      else if (v >= 0 && b.fireEtaMin > 0 && p.etaSmoothing > 0) {
+        const prev = Math.max(0, b.fireEtaMin - mpt);
+        v = p.etaSmoothing * prev + (1 - p.etaSmoothing) * v;
+      }
+      v = v < 0 ? -1 : Math.round(v);
+      if (v !== b.fireEtaMin) {
+        b.fireEtaMin = v;
+        d.buildings.add(b);
+      }
+    });
+  } else {
+    for (const b of world.buildings) {
+      if (b.status === 'burning' || b.status === 'lost') continue;
+      if (g.burning.length === 0 && b.fireEtaMin !== -1) {
+        b.fireEtaMin = -1;
+        d.buildings.add(b);
+      } else if (b.fireEtaMin > 0) {
+        b.fireEtaMin = Math.max(0, b.fireEtaMin - mpt);
+        d.buildings.add(b);
+      }
+    }
+  }
+
+  // 3. Evacuation.
+  const tasksByPerson = new Map                   ();
+  for (const t of world.tasks) {
+    const arr = tasksByPerson.get(t.personId);
+    if (arr) arr.push(t);
+    else tasksByPerson.set(t.personId, [t]);
+  }
+  const silent = new Set(p.silentPersonIds);
+  const replyP = 1 - Math.pow(1 - Math.min(1, p.autoReplyPerMin), mpt);
+  // Lantern knows which buildings are already clear and sends their staff to buildings with none.
+  const aid = mode === 'lantern' ? world.buildings.filter((x) => x.status === 'clear' && x.staff > 0 && x.kind !== 'shelter') : [];
+  const extraFor = (b             ) => (b.staff === 0 && b.kind !== 'shelter' ? p.mutualAidPerHour * aid.length : 0);
+
+  for (const b of world.buildings) {
+    if (b.status === 'lost' || b.kind === 'shelter') continue;
+    const ppl = peopleOf.get(b.id) ?? [];
+    if (ppl.length === 0) continue;
+
+    if (!b.evacStarted) {
+      const near = b.status === 'burning' || (b.fireEtaMin >= 0 && b.fireEtaMin <= p.autoStartEtaMin);
+      if (!near) continue;
+      startEvacuationRows(b, ppl, sim.tick);
+      d.buildings.add(b);
+      for (const x of ppl) d.people.add(x);
+      d.events.push(b.status === 'burning' ? `${b.name} is on fire — evacuation started` : `Fire ${fmtMin(b.fireEtaMin)} from ${b.name} — evacuation started`);
+    }
+
+    // Minutes since this building's evacuation started.
+    let startTick = Infinity;
+    for (const x of ppl) if (x.status !== 'inside' && x.pingedAtTick < startTick) startTick = x.pingedAtTick;
+    if (!Number.isFinite(startTick)) startTick = sim.tick;
+    const elapsed = Math.max(0, (sim.tick - startTick) * mpt);
+    const capacity = (Math.max(0, elapsed - p.evacBaseMin) * helpRatePerHour(b, p, extraFor(b))) / 60;
+    const allowedFlow = Math.floor(elapsed * p.mobilePerMin);
+
+    if (mode === 'baseline') {
+      // No check-ins, no tasks: mobile people walk out; staff move assisted people at the raw rate,
+      // and residents who would never answer are only found after everyone else.
+      const mobile = ppl.filter((x) => !x.needsHelp);
+      const flowOut = mobile.filter((x) => x.status === 'out').length;
+      let k = allowedFlow - flowOut;
+      for (const x of mobile) {
+        if (k <= 0) break;
+        if (x.status === 'out' || x.status === 'left_behind') continue;
+        x.status = 'out';
+        d.people.add(x);
+        k--;
+      }
+      const assisted = ppl.filter((x) => x.needsHelp).sort((a, c) => Number(silent.has(a.id)) - Number(silent.has(c.id)) || a.id - c.id);
+      const helpOut = assisted.filter((x) => x.status === 'out').length;
+      let h = Math.floor(capacity) - helpOut;
+      for (const x of assisted) {
+        if (h <= 0) break;
+        if (x.status === 'out' || x.status === 'left_behind') continue;
+        x.status = 'out';
+        d.people.add(x);
+        h--;
+      }
+    } else {
+      // Lantern: simulated residents answer their check-in.
+      for (const x of ppl) {
+        if (x.status === 'pinged' && !x.needsHelp && !silent.has(x.id) && R.people() < replyP) {
+          x.status = 'safe';
+          d.people.add(x);
+        }
+      }
+      // Escalate anyone still silent after escalateMin.
+      const escalated              = [];
+      for (const x of ppl) {
+        if (x.status !== 'pinged') continue;
+        if ((sim.tick - x.pingedAtTick) * mpt < p.escalateMin) continue;
+        const existing = tasksByPerson.get(x.id) ?? [];
+        if (existing.some((t) => t.kind === 'help_person')) continue;
+        const t          = { id: 0n, kind: 'help_person', buildingId: b.id, personId: x.id, priority: taskPriority(x, b, p), claimedBy: '', done: false, createdTick: sim.tick };
+        world.tasks.push(t);
+        d.newTasks.push(t);
+        tasksByPerson.set(x.id, [...existing, t]);
+        escalated.push(x);
+      }
+      const who = (x           ) => `${x.name}${x.note ? ' (' + x.note + ')' : ''}`;
+      if (escalated.length <= 2) for (const x of escalated) d.events.push(`Escalated: ${who(x)} — no reply`);
+      else d.events.push(`Escalated ${escalated.length} in ${b.name} — no reply: ${escalated.slice(0, 3).map(who).join(', ')} +${escalated.length - 3} more`);
+      // Mobile flow: "I'm safe" first, then people who just haven't answered.
+      const served = new Set        ();
+      let servedCount = 0;
+      for (const x of ppl) {
+        for (const t of tasksByPerson.get(x.id) ?? []) {
+          if (t.kind === 'help_person' && t.done && t.claimedBy !== '' && x.status === 'out') {
+            served.add(x.id);
+            servedCount++;
+            break;
+          }
+        }
+      }
+      const flowOut = ppl.filter((x) => x.status === 'out' && !served.has(x.id)).length;
+      let k = allowedFlow - flowOut;
+      const flowCands = ppl
+        .filter((x) => x.status === 'safe' || (x.status === 'pinged' && !x.needsHelp))
+        .sort((a, c) => Number(c.status === 'safe') - Number(a.status === 'safe') || a.id - c.id);
+      for (const x of flowCands) {
+        if (k <= 0) break;
+        x.status = 'out';
+        d.people.add(x);
+        k--;
+        for (const t of tasksByPerson.get(x.id) ?? []) {
+          if (!t.done) {
+            t.done = true; // left on their own; close the check
+            d.tasks.add(t);
+          }
+        }
+        if (x.needsHelp) d.events.push(`${x.name} reached ${shelterName(world)}`);
+      }
+      // On-site staff: claim → complete, paced by staff/van capacity.
+      const bTasks = world.tasks.filter((t) => t.buildingId === b.id && t.kind === 'help_person' && !t.done);
+      const inProgress = bTasks.filter((t) => t.claimedBy.endsWith(AUTO_SUFFIX)).sort((a, c) => a.createdTick - c.createdTick);
+      let progress = capacity - servedCount;
+      if (inProgress.length > 0 && progress >= 1) {
+        const t = inProgress.shift()           ;
+        const x = byPerson.get(t.personId);
+        t.done = true;
+        d.tasks.add(t);
+        progress -= 1;
+        if (x && x.status !== 'out' && x.status !== 'left_behind') {
+          x.status = 'out';
+          d.people.add(x);
+          d.events.push(`${x.name} reached ${shelterName(world)} with ${t.claimedBy.replace(AUTO_SUFFIX, '')}`);
+        }
+      }
+      if (inProgress.length === 0) {
+        const open = bTasks
+          .filter((t) => t.claimedBy === '' && sim.tick - t.createdTick >= p.autoClaimDelayTicks)
+          .filter((t) => {
+            const x = byPerson.get(t.personId);
+            return !!x && (x.status === 'cant_move' || (x.status === 'pinged' && x.needsHelp));
+          })
+          .sort((a, c) => c.priority - a.priority || a.createdTick - c.createdTick || a.personId - c.personId);
+        const t = open[0];
+        if (t) {
+          const served2 = world.tasks.filter((u) => u.buildingId === b.id && u.claimedBy.endsWith(AUTO_SUFFIX)).length;
+          t.claimedBy = onSiteName(b.staff === 0 && aid.length > 0 ? aid[0] : b, served2);
+          d.tasks.add(t);
+          const x = byPerson.get(t.personId);
+          if (x) {
+            x.status = 'claimed';
+            d.people.add(x);
+          }
+        }
+      }
+      // Keep open-task priorities current (claimed tasks keep theirs; urgent never drops).
+      for (const t of bTasks) {
+        if (t.done || t.claimedBy !== '') continue;
+        const x = byPerson.get(t.personId);
+        if (!x) continue;
+        const pr = Math.max(taskPriority(x, b, p), t.priority === 3 && x.status === 'cant_move' ? 3 : 0);
+        if (pr !== t.priority) {
+          t.priority = pr;
+          d.tasks.add(t);
+        }
+      }
+    }
+  }
+
+  // 4. Building summaries.
+  for (const b of world.buildings) {
+    if (updateBuildingDerived(b, peopleOf.get(b.id) ?? [], p, d.events, extraFor(b))) d.buildings.add(b);
+  }
+
+  // 5. End?
+  const fireOut = g.burning.length === 0;
+  let ended = false;
+  if (fireOut || sim.simMinutes >= p.maxSimMinutes) {
+    sim.phase = 'ended';
+    sim.running = false;
+    ended = true;
+    d.events.push(fireOut ? 'The fire is out' : 'Simulation time limit reached');
+  }
+  return finish(world, d, ended);
+}
+
+function shelterName(world       )         {
+  const s = world.buildings.find((b) => b.kind === 'shelter');
+  return s ? s.name : 'the shelter';
+}
+
+function finish(world       , d       , ended         )             {
+  const isNew = new Set(d.newTasks);
+  return {
+    sim: world.sim,
+    cells: [...d.cells],
+    buildings: [...d.buildings],
+    people: [...d.people],
+    tasksUpdated: [...d.tasks].filter((t) => !isNew.has(t) && t.id !== 0n),
+    tasksNew: d.newTasks,
+    events: d.events,
+    ended,
+  };
+}
+
+/** Recompute peopleOut, evacNeededMin, status. Returns true if anything changed. */
+function updateBuildingDerived(b             , ppl             , p            , events          , extraPerHour = 0)          {
+  const before = `${b.peopleOut}|${b.evacNeededMin}|${b.status}|${b.prepared}`;
+  const prevStatus = b.status;
+  b.peopleOut = ppl.filter((x) => x.status === 'out').length;
+  b.evacNeededMin = Math.round(evacNeededMin(b, ppl, p, extraPerHour));
+  if (b.status !== 'burning' && b.status !== 'lost') {
+    const allOut = ppl.length > 0 && ppl.every((x) => x.status === 'out');
+    if (b.kind === 'shelter' || ppl.length === 0) b.status = 'ok';
+    else if (b.evacStarted && allOut) b.status = 'clear';
+    else if (b.fireEtaMin >= 0 && b.evacNeededMin > b.fireEtaMin + (b.evacStarted ? p.behindMarginMin : 0)) b.status = 'behind';
+    else if (b.evacStarted) b.status = 'evacuating';
+    else b.status = 'ok';
+    if (b.status !== prevStatus) {
+      if (b.status === 'behind') events.push(`${b.name} is behind: fire in ${fmtMin(b.fireEtaMin)}, evacuation needs ${fmtMin(b.evacNeededMin)}`);
+      if (b.status === 'clear') events.push(`${b.name} clear — everyone is out`);
+    }
+  }
+  return before !== `${b.peopleOut}|${b.evacNeededMin}|${b.status}|${b.prepared}`;
+}
+
+// ───────────────────────────── Actions (call from reducers) ─────────────────────────────
+
+/** Mutates building + its people. Only 'inside' residents are pinged (repliers keep their state). */
+function startEvacuationRows(b             , ppl             , tick        )       {
+  b.evacStarted = true;
+  if (b.status !== 'burning' && b.status !== 'lost') b.status = 'evacuating';
+  for (const x of ppl) {
+    if (x.status === 'inside') {
+      x.status = 'pinged';
+      x.pingedAtTick = tick;
+    }
+  }
+}
+
+/**
+ * start_evacuation(buildingId): returns changed rows + an event line, or an error string for SenderError.
+ */
+function startEvacuation(world       , buildingId        , p            )                                                                                    {
+  const b = world.buildings.find((x) => x.id === buildingId);
+  if (!b) return { error: 'unknown building', people: [], events: [] };
+  if (world.sim.phase !== 'fire') return { error: 'evacuations start during the fire phase', people: [], events: [] };
+  if (b.evacStarted) return { error: 'evacuation already started', people: [], events: [] };
+  if (b.status === 'lost') return { error: 'building already lost', people: [], events: [] };
+  const ppl = world.people.filter((x) => x.buildingId === b.id);
+  startEvacuationRows(b, ppl, world.sim.tick);
+  b.evacNeededMin = Math.round(evacNeededMin(b, ppl, p));
+  return { building: b, people: ppl, events: [`Evacuation started: ${b.name} (${ppl.length} residents pinged)`] };
+}
+
+/**
+ * reply_checkin / set_reply_class. choice: 'safe' | 'cant_move' | 'needs_medical' (treated as cant_move).
+ * Returns the person, an optional new urgent task (insert with id 0n; also pushed to world.tasks),
+ * any existing tasks bumped to urgent, and an event line. 'unclear' (Gemini) → no change, escalates normally.
+ */
+function applyReply(world       , personId        , choice        , _p             )                                                                                                    {
+  const x = world.people.find((q) => q.id === personId);
+  if (!x) return { error: 'unknown person', tasksUpdated: [], events: [] };
+  if (x.status === 'out' || x.status === 'left_behind') return { error: 'already resolved', tasksUpdated: [], events: [] };
+  const tasks = world.tasks.filter((t) => t.personId === x.id && t.kind === 'help_person' && !t.done);
+  if (choice === 'safe') {
+    if (x.status === 'claimed') return { person: x, tasksUpdated: [], events: [] }; // staff already on the way
+    x.status = 'safe';
+    return { person: x, tasksUpdated: [], events: [`${x.name}: "I'm safe"`] };
+  }
+  if (choice === 'cant_move' || choice === 'needs_medical') {
+    if (x.status === 'claimed') return { person: x, tasksUpdated: [], events: [] };
+    x.status = 'cant_move';
+    const label = choice === 'needs_medical' ? 'needs medical help' : "can't get out";
+    if (tasks.length > 0) {
+      for (const t of tasks) t.priority = 3;
+      return { person: x, tasksUpdated: tasks, events: [`${x.name} ${label} — task is now urgent`] };
+    }
+    const t          = { id: 0n, kind: 'help_person', buildingId: x.buildingId, personId: x.id, priority: 3, claimedBy: '', done: false, createdTick: world.sim.tick };
+    world.tasks.push(t);
+    return { person: x, task: t, tasksUpdated: [], events: [`${x.name} ${label}${x.note ? ' · ' + x.note : ''} — urgent task created`] };
+  }
+  if (choice === 'unclear') return { person: x, tasksUpdated: [], events: [`${x.name} replied — unclear, a person will follow up`] };
+  return { error: `unknown choice '${choice}'`, tasksUpdated: [], events: [] };
+}
+
+/** approve_fix: returns an error string (→ SenderError) or the event line. Mutates sim, building, fix. */
+function applyFix(sim        , b             , fix        , people                          , p            )                                     {
+  if (sim.phase !== 'prep') return { error: 'fixes can only be approved during prep' };
+  if (fix.approved) return { error: 'already approved' };
+  if (fix.buildingId !== b.id) return { error: 'fix belongs to another building' };
+  if (fix.costUsd > sim.budgetLeft + 1e-6) return { error: 'not enough budget left' };
+  fix.approved = true;
+  sim.budgetLeft -= fix.costUsd;
+  b.risk = Math.max(p.minRisk, Math.round((b.risk - fix.riskDrop) * 10) / 10);
+  b.vans += fix.addVans;
+  b.evacNeededMin = Math.round(evacNeededMin(b, people, p));
+  const wasPrepared = b.prepared;
+  b.prepared = isPrepared(b, p);
+  const parts = [`Approved ${fix.name} for ${b.name} ($${Math.round(fix.costUsd / 1000)}K)`];
+  if (fix.riskDrop > 0) parts.push(`risk ${Math.round(b.risk)}`);
+  if (fix.addVans > 0) parts.push(`evacuation ${fmtMin(b.evacNeededMin)}`);
+  if (b.prepared && !wasPrepared) parts.push('Prepared · better insurance rating');
+  return { event: parts.join(' · ') };
+}
+
+/** set_phase('fire'): reset the grid, light the ignition cells, start the clock. Mutates world. */
+function startFire(world       , p            , rngSrc           , opts                       = {})             {
+  const d = new Dirty();
+  const sim = world.sim;
+  sim.phase = 'fire';
+  sim.running = true;
+  sim.tick = 0;
+  sim.simMinutes = 0;
+  const w = windAt(p, 0, { dirDeg: sim.windDirDeg, mph: sim.windMph });
+  sim.windDirDeg = w.dirDeg;
+  sim.windMph = w.mph;
+  const ign = new Set(p.ignition);
+  for (const c of world.cells) {
+    const st = ign.has(c.id) && c.fuel > 0 ? 1 : 0;
+    if (c.state !== st || c.burnTicks !== 0) {
+      c.state = st;
+      c.burnTicks = 0;
+      d.cells.add(c);
+    }
+  }
+  const { fuel, byId } = cellArrays(world, p);
+  for (const b of world.buildings) if (b.status === 'burning' || b.status === 'lost') b.status = 'ok';
+  const eng = makeEngine(p, fuel, world.buildings);
+  const g = gridFromRows(byId, world.buildings, p.cols * p.rows);
+  const runs = opts.etaRuns ?? Math.max(p.etaRuns, 24);
+  const eta = mcArrival(eng, g, tickStreams(rngSrc, 0).eta, 0, runs, p.etaHorizonMin);
+  world.buildings.forEach((b, bi) => {
+    b.fireEtaMin = eta[bi] < 0 ? -1 : Math.round(eta[bi]);
+    d.buildings.add(b);
+  });
+  const peopleOf = groupPeople(world.people);
+  for (const b of world.buildings) updateBuildingDerived(b, peopleOf.get(b.id) ?? [], p, d.events);
+  d.events.push(`Fire started — wind ${Math.round(sim.windMph)} mph toward ${compass(sim.windDirDeg)}`);
+  return finish(world, d, false);
+}
+
+function groupPeople(people             )                           {
+  const m = new Map                     ();
+  for (const x of people) {
+    const a = m.get(x.buildingId);
+    if (a) a.push(x);
+    else m.set(x.buildingId, [x]);
+  }
+  return m;
+}
+
+function compass(deg        )         {
+  const names = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  return names[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
+}
+
+// ───────────────────────────── Seeding ─────────────────────────────
+
+                                            
+                  
+ 
+
+/** Rows for every table from the seed files (seed/buildings.json + people.json + fire_params.json). */
+function buildWorldFromSeed(seed      )              {
+  const p = seed.params;
+  const first = windAt(p, 0);
+  const sim         = {
+    id: 0,
+    phase: 'prep',
+    running: false,
+    tick: 0,
+    simMinutes: 0,
+    minutesPerTick: p.defaultMinutesPerTick,
+    budgetLeft: p.prepBudgetUsd,
+    windDirDeg: first.dirDeg,
+    windMph: first.mph,
+  };
+  const people              = seed.people.map((x) => ({
+    id: x.id,
+    name: x.name,
+    buildingId: x.buildingId,
+    floor: x.floor,
+    needsHelp: x.needsHelp,
+    note: x.note,
+    status: 'inside',
+    pingedAtTick: 0,
+    replyText: '',
+  }));
+  const buildings                = seed.buildings.map((b) => ({
+    id: b.id,
+    name: b.name,
+    kind: b.kind,
+    x: b.x,
+    y: b.y,
+    w: b.w,
+    h: b.h,
+    residents: b.residents,
+    needsHelp: b.needsHelp,
+    staff: b.staff,
+    vans: b.vans,
+    valueUsd: b.valueUsd,
+    risk: b.baseRisk,
+    baseRisk: b.baseRisk,
+    prepared: false,
+    status: 'ok',
+    fireEtaMin: b.referenceFireEtaMin ?? -1,
+    evacNeededMin: 0,
+    evacStarted: false,
+    peopleOut: 0,
+    explanation: b.explanation ?? '',
+  }));
+  if (seed.buildings.some((b) => b.referenceFireEtaMin === undefined)) {
+    const eta = referenceEtas(p, buildings, mulberry32(p.fireSeed), 48);
+    buildings.forEach((b, i) => {
+      if (seed.buildings[i].referenceFireEtaMin === undefined) b.fireEtaMin = eta[i];
+    });
+  }
+  const peopleOf = groupPeople(people);
+  for (const b of buildings) {
+    b.evacNeededMin = Math.round(evacNeededMin(b, peopleOf.get(b.id) ?? [], p));
+    b.prepared = isPrepared(b, p);
+  }
+  const fixes           = [];
+  for (const b of seed.buildings) {
+    for (const f of b.fixes) fixes.push({ id: f.id, buildingId: b.id, name: f.name, costUsd: f.costUsd, riskDrop: f.riskDrop, addVans: f.addVans, approved: false });
+  }
+  return { sim, buildings, people, tasks: [], cells: freshCells(p), fixes };
+}
+
+function freshCells(p            )                {
+  const cells                = [];
+  for (let y = 0; y < p.rows; y++) {
+    for (let x = 0; x < p.cols; x++) {
+      const id = y * p.cols + x;
+      cells.push({ id, x, y, fuel: p.fuel[id] ?? 0, state: 0, burnTicks: 0 });
+    }
+  }
+  return cells;
+}
+
+/** Prep-phase ETA: median arrival (minutes from ignition) in the simulated fires that reach the building. */
+function referenceEtas(p            , buildings                                                                                         , rng     , runs        )           {
+  const eng = makeEngine(p, p.fuel, buildings);
+  const n = p.cols * p.rows;
+  const g           = { state: new Uint8Array(n), burn: new Uint8Array(n), bstate: new Uint8Array(buildings.length), burning: [] };
+  for (const c of p.ignition) {
+    if (eng.fuel[c] > 0 && eng.owner[c] < 0) {
+      g.state[c] = 1;
+      g.burning.push(c);
+    }
+  }
+  return mcArrival(eng, g, rng, 0, runs, p.etaHorizonMin, 0.15).map((v) => (v < 0 ? -1 : Math.round(v)));
+}
+
+// ───────────────────────────── Results & baseline ─────────────────────────────
+
+/** End-screen numbers for the current world. */
+function computeResults(world       , p            , scenario        )            {
+  const n = p.cols * p.rows;
+  const { fuel, byId } = cellArrays(world, p);
+  const eng = makeEngine(p, fuel, world.buildings);
+  let lost = 0;
+  let damage = 0;
+  let claims = 0;
+  world.buildings.forEach((b, bi) => {
+    const units = b.kind === 'homes' ? p.homesUnits : 1;
+    if (b.status === 'lost') {
+      lost++;
+      damage += b.valueUsd;
+      claims += units;
+      return;
+    }
+    const touched = b.status === 'burning' || eng.ring[bi].some((c) => c < n && (byId[c]?.state ?? 0) !== 0);
+    if (touched) {
+      damage += b.valueUsd * p.touchedDamageFrac;
+      claims += units;
+    }
+  });
+  const total = world.people.length;
+  const left = world.people.filter((x) => x.status === 'left_behind').length;
+  return { scenario, peopleSafe: total - left, peopleTotal: total, buildingsLost: lost, damageUsd: Math.round(damage), claims };
+}
+
+/** Run the current world to the end instantly (e.g. an "End & compare" button). Mutates world. */
+function fastForward(world       , p            , rngSrc           , opts              = {})       {
+  const o              = { etaRuns: 6, ...opts };
+  for (let i = 0; i < 100000 && world.sim.phase === 'fire'; i++) {
+    world.sim.running = true;
+    stepSimulation(world, p, rngSrc, o);
+  }
+}
+
+/**
+ * The "without Lantern" run: the SAME fire (same seed, same wind), no fixes, nobody moves until the fire
+ * is autoStartEtaMin away, no check-ins / escalation / claims / mutual aid. Pass the same fireSeed the
+ * live run used (default p.fireSeed). runs > 1 averages over fireSeed, fireSeed+1, …
+ */
+function runBaseline(seed      , opts                                                                = {})            {
+  const p = seed.params;
+  const R = Math.max(1, opts.runs ?? p.baselineRuns ?? 1);
+  const s0 = opts.fireSeed ?? p.fireSeed;
+  const acc = { peopleSafe: 0, peopleTotal: 0, buildingsLost: 0, damageUsd: 0, claims: 0 };
+  for (let r = 0; r < R; r++) {
+    const world = buildWorldFromSeed(seed);
+    if (opts.minutesPerTick) world.sim.minutesPerTick = opts.minutesPerTick;
+    startFire(world, p, s0 + r, { etaRuns: 8 });
+    fastForward(world, p, s0 + r, { mode: 'baseline', etaRuns: 6 });
+    const res = computeResults(world, p, 'without_lantern');
+    acc.peopleSafe += res.peopleSafe;
+    acc.peopleTotal += res.peopleTotal;
+    acc.buildingsLost += res.buildingsLost;
+    acc.damageUsd += res.damageUsd;
+    acc.claims += res.claims;
+  }
+  return {
+    scenario: 'without_lantern',
+    peopleSafe: Math.round(acc.peopleSafe / R),
+    peopleTotal: Math.round(acc.peopleTotal / R),
+    buildingsLost: Math.round(acc.buildingsLost / R),
+    damageUsd: Math.round(acc.damageUsd / R),
+    claims: Math.round(acc.claims / R),
+  };
+}
+
+/**
+ * "Lantern recommends": unapproved fixes ranked by expected loss avoided per dollar, greedily within the
+ * remaining budget. Expected loss avoided = value × riskDrop/100 for buildings the fire is expected to reach
+ * (10% weight otherwise); a van counts as the people it protects (needs-help residents who would not get
+ * out before the fire), valued at $1M each for ranking only. Returns fix ids in order.
+ */
+function recommendFixes(world                                                                , fixes          , p            )           {
+  const byB = new Map(world.buildings.map((b) => [b.id, b]));
+  const scored = fixes
+    .filter((f) => !f.approved)
+    .map((f) => {
+      const b = byB.get(f.buildingId);
+      if (!b) return { f, score: 0 };
+      const reach = b.fireEtaMin >= 0 ? 1 : 0.1;
+      let value = (b.valueUsd * reach * f.riskDrop) / 100;
+      if (f.addVans > 0 && b.fireEtaMin >= 0) {
+        const ppl = world.people.filter((x) => x.buildingId === b.id);
+        const before = evacNeededMin(b, ppl, p);
+        const after = evacNeededMin({ ...b, vans: b.vans + f.addVans }, ppl, p);
+        if (before > b.fireEtaMin) value += 1_000_000 * b.needsHelp * Math.min(1, (before - Math.max(after, b.fireEtaMin)) / Math.max(1, before - after));
+      }
+      return { f, score: value / Math.max(1, f.costUsd) };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, c) => c.score - a.score);
+  const out           = [];
+  let budget = world.sim.budgetLeft;
+  for (const { f } of scored) {
+    if (f.costUsd <= budget + 1e-6) {
+      out.push(f.id);
+      budget -= f.costUsd;
+    }
+  }
+  return out;
+}
+
+/** Header counters for the dashboard. */
+function counters(world       )                                                                                           {
+  const started = new Set(world.buildings.filter((b) => b.evacStarted).map((b) => b.id));
+  let out = 0;
+  let unaccounted = 0;
+  for (const x of world.people) {
+    if (x.status === 'out') out++;
+    if (started.has(x.buildingId) && (x.status === 'pinged' || x.status === 'cant_move' || x.status === 'left_behind')) unaccounted++;
+  }
+  const atRisk = world.buildings.filter((b) => b.status === 'behind' || b.status === 'burning').length;
+  return { peopleOut: out, peopleTotal: world.people.length, unaccounted, buildingsAtRisk: atRisk };
+}
+
+return { tickStreams, fireStepStream, ON_SITE_STAFF, PHONE_STAFF, AUTO_SUFFIX, mulberry32, fmtMin, windAt, footprintCellIds, makeEngine, cloneGrid, fireSubstep, igniteProb, mcArrival, helpRatePerHour, evacNeededMin, isPrepared, stepSimulation, startEvacuation, applyReply, applyFix, startFire, compass, buildWorldFromSeed, freshCells, referenceEtas, computeResults, fastForward, runBaseline, recommendFixes, counters };
+})();
+const { SEED } = (() => {
+// GENERATED by data/sim/make_seed.ts — do not edit. Re-run the data pipeline instead.
+// SIMULATED neighbourhood; fire calibrated to the 2025 Eaton Fire; building risk from CAL FIRE DINS.
+                                  
+
+const SEED       = {"buildings":[{"id":12,"name":"Building 12","kind":"senior","x":570,"y":250,"w":150,"h":70,"residents":38,"needsHelp":9,"staff":4,"vans":1,"valueUsd":18500000,"baseRisk":78.7,"referenceFireEtaMin":104,"explanation":"Risk 79 if an Eaton-like fire reaches it — driven by roof: wood/combustible, vents: coarse mesh (>1/8in), year built: 1960-1989. Biggest single fix: Class A roof (−28).","features":{"roof":"Wood","eaves":"Unenclosed","vents":"Mesh Screen > 1/8\"","siding":"Wood","windows":"Single Pane","deckGrade":"Wood","deckElevated":"Wood","patio":"Combustible","fence":"Combustible","yearBuilt":1968,"floors":4},"fixes":[{"id":121,"name":"Second evacuation van","costUsd":48000,"riskDrop":0,"addVans":1},{"id":122,"name":"Clear brush to 30 ft","costUsd":12000,"riskDrop":26.9,"addVans":0},{"id":123,"name":"Ember-resistant vent screens","costUsd":9000,"riskDrop":6.9,"addVans":0},{"id":124,"name":"Class A roof","costUsd":140000,"riskDrop":28.3,"addVans":0}]},{"id":9,"name":"Building 9","kind":"senior","x":780,"y":300,"w":110,"h":60,"residents":22,"needsHelp":6,"staff":3,"vans":1,"valueUsd":12000000,"baseRisk":69.6,"referenceFireEtaMin":88,"explanation":"Risk 70 if an Eaton-like fire reaches it — driven by vents: coarse mesh (>1/8in), year built: 1960-1989, windows: single pane. Biggest single fix: Clear brush to 30 ft (−27).","features":{"roof":"Asphalt","eaves":"Unenclosed","vents":"Mesh Screen > 1/8\"","siding":"Stucco Brick Cement","windows":"Single Pane","deckGrade":"Wood","deckElevated":"No Deck/Porch","patio":"Combustible","fence":"Combustible","yearBuilt":1978,"floors":3},"fixes":[{"id":91,"name":"Second evacuation van","costUsd":48000,"riskDrop":0,"addVans":1},{"id":92,"name":"Clear brush to 30 ft","costUsd":12000,"riskDrop":27,"addVans":0},{"id":93,"name":"Ember-resistant vent screens","costUsd":9000,"riskDrop":8.4,"addVans":0},{"id":94,"name":"Class A roof","costUsd":140000,"riskDrop":11.9,"addVans":0}]},{"id":7,"name":"Building 7","kind":"apartments","x":420,"y":290,"w":120,"h":90,"residents":64,"needsHelp":3,"staff":2,"vans":0,"valueUsd":24000000,"baseRisk":63,"referenceFireEtaMin":120,"explanation":"Risk 63 if an Eaton-like fire reaches it — driven by vents: coarse mesh (>1/8in), year built: 1960-1989, windows: single pane. Biggest single fix: Clear brush to 30 ft (−16).","features":{"roof":"Asphalt","eaves":"Unenclosed","vents":"Mesh Screen > 1/8\"","siding":"Wood","windows":"Single Pane","deckGrade":"Masonry/Concrete","deckElevated":"Wood","patio":"No Patio Cover/Carport","fence":"Combustible","yearBuilt":1974,"floors":5},"fixes":[{"id":71,"name":"Second evacuation van","costUsd":48000,"riskDrop":0,"addVans":1},{"id":72,"name":"Clear brush to 30 ft","costUsd":12000,"riskDrop":15.9,"addVans":0},{"id":73,"name":"Ember-resistant vent screens","costUsd":9000,"riskDrop":9,"addVans":0},{"id":74,"name":"Class A roof","costUsd":140000,"riskDrop":12.6,"addVans":0}]},{"id":3,"name":"Building 3","kind":"apartments","x":170,"y":270,"w":140,"h":80,"residents":80,"needsHelp":4,"staff":2,"vans":0,"valueUsd":31000000,"baseRisk":14.2,"referenceFireEtaMin":-1,"explanation":"Risk 14 if an Eaton-like fire reaches it — driven by vents: fine mesh (<=1/8in), siding: stucco/brick/cement, windows: multi pane. Biggest single fix: Clear brush to 30 ft (−10).","features":{"roof":"Tile","eaves":"Enclosed","vents":"Mesh Screen <= 1/8\"","siding":"Stucco Brick Cement","windows":"Multi Pane","deckGrade":"Masonry/Concrete","deckElevated":"No Deck/Porch","patio":"No Patio Cover/Carport","fence":"Non Combustible","yearBuilt":2010,"floors":5},"fixes":[{"id":31,"name":"Second evacuation van","costUsd":48000,"riskDrop":0,"addVans":1},{"id":32,"name":"Clear brush to 30 ft","costUsd":12000,"riskDrop":10.1,"addVans":0}]},{"id":15,"name":"Building 15","kind":"office","x":140,"y":480,"w":130,"h":64,"residents":12,"needsHelp":0,"staff":1,"vans":0,"valueUsd":9500000,"baseRisk":28.9,"referenceFireEtaMin":-1,"explanation":"Risk 29 if an Eaton-like fire reaches it — driven by roof: metal, vents: fine mesh (<=1/8in), siding: metal. Biggest single fix: Class A roof (−13).","features":{"roof":"Metal","eaves":"Enclosed","vents":"Mesh Screen <= 1/8\"","siding":"Metal","windows":"Multi Pane","deckGrade":"No Deck/Porch","deckElevated":"No Deck/Porch","patio":"No Patio Cover/Carport","fence":"No Fence","yearBuilt":2014,"floors":2},"fixes":[{"id":154,"name":"Class A roof","costUsd":140000,"riskDrop":12.7,"addVans":0}]},{"id":10,"name":"Building 10","kind":"apartments","x":800,"y":470,"w":130,"h":70,"residents":30,"needsHelp":2,"staff":1,"vans":0,"valueUsd":13500000,"baseRisk":29.5,"referenceFireEtaMin":-1,"explanation":"Risk 30 if an Eaton-like fire reaches it — driven by vents: coarse mesh (>1/8in), year built: 1990-2007, siding: stucco/brick/cement. Biggest single fix: Ember-resistant vent screens (−7).","features":{"roof":"Tile","eaves":"Enclosed","vents":"Mesh Screen > 1/8\"","siding":"Stucco Brick Cement","windows":"Multi Pane","deckGrade":"Masonry/Concrete","deckElevated":"Wood","patio":"No Patio Cover/Carport","fence":"Non Combustible","yearBuilt":1996,"floors":3},"fixes":[{"id":101,"name":"Second evacuation van","costUsd":48000,"riskDrop":0,"addVans":1},{"id":103,"name":"Ember-resistant vent screens","costUsd":9000,"riskDrop":7.1,"addVans":0}]},{"id":20,"name":"Hillside homes","kind":"homes","x":430,"y":150,"w":280,"h":40,"residents":14,"needsHelp":2,"staff":0,"vans":0,"valueUsd":7500000,"baseRisk":75.6,"referenceFireEtaMin":86,"explanation":"Risk 76 if an Eaton-like fire reaches it — driven by roof: wood/combustible, vents: coarse mesh (>1/8in), year built: before 1960. Biggest single fix: Class A roof (−30).","features":{"roof":"Wood","eaves":"Unenclosed","vents":"Mesh Screen > 1/8\"","siding":"Wood","windows":"Single Pane","deckGrade":"Wood","deckElevated":"Wood","patio":"Combustible","fence":"Combustible","yearBuilt":1952,"floors":2},"fixes":[{"id":202,"name":"Clear brush to 30 ft","costUsd":12000,"riskDrop":6,"addVans":0},{"id":203,"name":"Ember-resistant vent screens","costUsd":9000,"riskDrop":7.5,"addVans":0},{"id":204,"name":"Class A roof","costUsd":140000,"riskDrop":29.6,"addVans":0}]},{"id":99,"name":"Shelter A","kind":"shelter","x":440,"y":505,"w":140,"h":60,"residents":0,"needsHelp":0,"staff":2,"vans":0,"valueUsd":6000000,"baseRisk":37.7,"referenceFireEtaMin":-1,"explanation":"Shelter A is the evacuation destination. Model risk 38.","features":{"roof":"Metal","eaves":"Enclosed","vents":"Mesh Screen <= 1/8\"","siding":"Stucco Brick Cement","windows":"Multi Pane","deckGrade":"No Deck/Porch","deckElevated":"No Deck/Porch","patio":"No Patio Cover/Carport","fence":"No Fence","yearBuilt":2005,"floors":1},"fixes":[{"id":994,"name":"Class A roof","costUsd":140000,"riskDrop":15.3,"addVans":0}]}],"people":[{"id":1201,"name":"Maria R.","buildingId":12,"floor":3,"needsHelp":true,"note":"wheelchair"},{"id":1202,"name":"Robert K.","buildingId":12,"floor":2,"needsHelp":true,"note":"oxygen"},{"id":1203,"name":"Raj D.","buildingId":12,"floor":4,"needsHelp":true,"note":"low vision"},{"id":1204,"name":"Ines W.","buildingId":12,"floor":2,"needsHelp":true,"note":"low vision"},{"id":1205,"name":"Andre S.","buildingId":12,"floor":1,"needsHelp":true,"note":"oxygen"},{"id":1206,"name":"Sofia R.","buildingId":12,"floor":1,"needsHelp":true,"note":"hearing impaired"},{"id":1207,"name":"Zara V.","buildingId":12,"floor":1,"needsHelp":true,"note":"wheelchair"},{"id":1208,"name":"Dorothy F.","buildingId":12,"floor":3,"needsHelp":true,"note":"wheelchair"},{"id":1209,"name":"Leila M.","buildingId":12,"floor":1,"needsHelp":true,"note":"wheelchair"},{"id":1210,"name":"Tariq L.","buildingId":12,"floor":1,"needsHelp":false,"note":""},{"id":1211,"name":"Henry B.","buildingId":12,"floor":2,"needsHelp":false,"note":""},{"id":1212,"name":"Theo E.","buildingId":12,"floor":1,"needsHelp":false,"note":""},{"id":1213,"name":"Sofia E.","buildingId":12,"floor":4,"needsHelp":false,"note":""},{"id":1214,"name":"Layla P.","buildingId":12,"floor":1,"needsHelp":false,"note":""},{"id":1215,"name":"Gabriel K.","buildingId":12,"floor":1,"needsHelp":false,"note":""},{"id":1216,"name":"Alma H.","buildingId":12,"floor":1,"needsHelp":false,"note":""},{"id":1217,"name":"Walter R.","buildingId":12,"floor":4,"needsHelp":false,"note":""},{"id":1218,"name":"Mei M.","buildingId":12,"floor":3,"needsHelp":false,"note":""},{"id":1219,"name":"Oscar Y.","buildingId":12,"floor":4,"needsHelp":false,"note":""},{"id":1220,"name":"Elena H.","buildingId":12,"floor":2,"needsHelp":false,"note":""},{"id":1221,"name":"Tariq R.","buildingId":12,"floor":2,"needsHelp":false,"note":""},{"id":1222,"name":"Amara G.","buildingId":12,"floor":2,"needsHelp":false,"note":"has a cat"},{"id":1223,"name":"Felix C.","buildingId":12,"floor":4,"needsHelp":false,"note":""},{"id":1224,"name":"Omar D.","buildingId":12,"floor":1,"needsHelp":false,"note":""},{"id":1225,"name":"Chloe D.","buildingId":12,"floor":1,"needsHelp":false,"note":""},{"id":1226,"name":"Leon T.","buildingId":12,"floor":1,"needsHelp":false,"note":""},{"id":1227,"name":"Fatima A.","buildingId":12,"floor":4,"needsHelp":false,"note":""},{"id":1228,"name":"Felix E.","buildingId":12,"floor":4,"needsHelp":false,"note":""},{"id":1229,"name":"Henry R.","buildingId":12,"floor":1,"needsHelp":false,"note":""},{"id":1230,"name":"Aiko A.","buildingId":12,"floor":2,"needsHelp":false,"note":""},{"id":1231,"name":"Vivian D.","buildingId":12,"floor":3,"needsHelp":false,"note":""},{"id":1232,"name":"Isaac K.","buildingId":12,"floor":2,"needsHelp":false,"note":""},{"id":1233,"name":"Aiko W.","buildingId":12,"floor":2,"needsHelp":false,"note":""},{"id":1234,"name":"Amara N.","buildingId":12,"floor":3,"needsHelp":false,"note":""},{"id":1235,"name":"Leon P.","buildingId":12,"floor":2,"needsHelp":false,"note":""},{"id":1236,"name":"Beatriz C.","buildingId":12,"floor":3,"needsHelp":false,"note":""},{"id":1237,"name":"Ruth L.","buildingId":12,"floor":3,"needsHelp":false,"note":""},{"id":1238,"name":"Caleb K.","buildingId":12,"floor":4,"needsHelp":false,"note":""},{"id":901,"name":"Tariq W.","buildingId":9,"floor":2,"needsHelp":true,"note":"low vision"},{"id":902,"name":"Ines T.","buildingId":9,"floor":1,"needsHelp":true,"note":"walker"},{"id":903,"name":"Amara Z.","buildingId":9,"floor":2,"needsHelp":true,"note":"low vision"},{"id":904,"name":"Tariq S.","buildingId":9,"floor":3,"needsHelp":true,"note":"wheelchair"},{"id":905,"name":"Raj S.","buildingId":9,"floor":1,"needsHelp":true,"note":"bedbound"},{"id":906,"name":"Ines V.","buildingId":9,"floor":3,"needsHelp":true,"note":"recent hip surgery"},{"id":907,"name":"Diego K.","buildingId":9,"floor":2,"needsHelp":false,"note":""},{"id":908,"name":"Gabriel O.","buildingId":9,"floor":2,"needsHelp":false,"note":""},{"id":909,"name":"Diego A.","buildingId":9,"floor":1,"needsHelp":false,"note":"has a dog"},{"id":910,"name":"Andre L.","buildingId":9,"floor":3,"needsHelp":false,"note":""},{"id":911,"name":"Lucia B.","buildingId":9,"floor":1,"needsHelp":false,"note":""},{"id":912,"name":"Victor T.","buildingId":9,"floor":2,"needsHelp":false,"note":""},{"id":913,"name":"Liam K.","buildingId":9,"floor":2,"needsHelp":false,"note":""},{"id":914,"name":"Leon G.","buildingId":9,"floor":2,"needsHelp":false,"note":""},{"id":915,"name":"Liam N.","buildingId":9,"floor":1,"needsHelp":false,"note":""},{"id":916,"name":"Alma D.","buildingId":9,"floor":1,"needsHelp":false,"note":""},{"id":917,"name":"Mateo M.","buildingId":9,"floor":3,"needsHelp":false,"note":"has a cat"},{"id":918,"name":"Jorge R.","buildingId":9,"floor":2,"needsHelp":false,"note":""},{"id":919,"name":"Ava P.","buildingId":9,"floor":3,"needsHelp":false,"note":""},{"id":920,"name":"Liam D.","buildingId":9,"floor":3,"needsHelp":false,"note":"Spanish speaker"},{"id":921,"name":"Raj P.","buildingId":9,"floor":1,"needsHelp":false,"note":""},{"id":922,"name":"Isaac H.","buildingId":9,"floor":1,"needsHelp":false,"note":""},{"id":701,"name":"Ruth Y.","buildingId":7,"floor":3,"needsHelp":true,"note":"bedbound"},{"id":702,"name":"Liam V.","buildingId":7,"floor":2,"needsHelp":true,"note":"bedbound"},{"id":703,"name":"Yuki T.","buildingId":7,"floor":4,"needsHelp":true,"note":"oxygen"},{"id":704,"name":"Ava N.","buildingId":7,"floor":3,"needsHelp":false,"note":""},{"id":705,"name":"Omar Z.","buildingId":7,"floor":3,"needsHelp":false,"note":""},{"id":706,"name":"Raj W.","buildingId":7,"floor":4,"needsHelp":false,"note":""},{"id":707,"name":"Andre K.","buildingId":7,"floor":2,"needsHelp":false,"note":""},{"id":708,"name":"Carmen D.","buildingId":7,"floor":5,"needsHelp":false,"note":""},{"id":709,"name":"Nadia O.","buildingId":7,"floor":3,"needsHelp":false,"note":""},{"id":710,"name":"Samuel V.","buildingId":7,"floor":4,"needsHelp":false,"note":""},{"id":711,"name":"Walter L.","buildingId":7,"floor":3,"needsHelp":false,"note":""},{"id":712,"name":"Hana O.","buildingId":7,"floor":3,"needsHelp":false,"note":""},{"id":713,"name":"Mei C.","buildingId":7,"floor":1,"needsHelp":false,"note":""},{"id":714,"name":"June A.","buildingId":7,"floor":5,"needsHelp":false,"note":""},{"id":715,"name":"Mila O.","buildingId":7,"floor":2,"needsHelp":false,"note":""},{"id":716,"name":"June O.","buildingId":7,"floor":2,"needsHelp":false,"note":""},{"id":717,"name":"Harold R.","buildingId":7,"floor":2,"needsHelp":false,"note":""},{"id":718,"name":"Eleanor T.","buildingId":7,"floor":3,"needsHelp":false,"note":""},{"id":719,"name":"Grace A.","buildingId":7,"floor":1,"needsHelp":false,"note":""},{"id":720,"name":"Vivian N.","buildingId":7,"floor":2,"needsHelp":false,"note":""},{"id":721,"name":"Dorothy S.","buildingId":7,"floor":4,"needsHelp":false,"note":""},{"id":722,"name":"Hugo K.","buildingId":7,"floor":2,"needsHelp":false,"note":""},{"id":723,"name":"Esther D.","buildingId":7,"floor":3,"needsHelp":false,"note":""},{"id":724,"name":"Ruth S.","buildingId":7,"floor":4,"needsHelp":false,"note":""},{"id":725,"name":"Kwame N.","buildingId":7,"floor":4,"needsHelp":false,"note":""},{"id":726,"name":"Malik B.","buildingId":7,"floor":3,"needsHelp":false,"note":""},{"id":727,"name":"Henry H.","buildingId":7,"floor":2,"needsHelp":false,"note":""},{"id":728,"name":"Mila L.","buildingId":7,"floor":2,"needsHelp":false,"note":""},{"id":729,"name":"June C.","buildingId":7,"floor":3,"needsHelp":false,"note":""},{"id":730,"name":"Sofia O.","buildingId":7,"floor":3,"needsHelp":false,"note":""},{"id":731,"name":"Omar V.","buildingId":7,"floor":1,"needsHelp":false,"note":""},{"id":732,"name":"Ava K.","buildingId":7,"floor":3,"needsHelp":false,"note":""},{"id":733,"name":"Henry V.","buildingId":7,"floor":3,"needsHelp":false,"note":""},{"id":734,"name":"Sofia A.","buildingId":7,"floor":2,"needsHelp":false,"note":""},{"id":735,"name":"Caleb B.","buildingId":7,"floor":5,"needsHelp":false,"note":""},{"id":736,"name":"Sofia L.","buildingId":7,"floor":3,"needsHelp":false,"note":""},{"id":737,"name":"Victor A.","buildingId":7,"floor":1,"needsHelp":false,"note":""},{"id":738,"name":"Nora Y.","buildingId":7,"floor":2,"needsHelp":false,"note":""},{"id":739,"name":"Ethan B.","buildingId":7,"floor":5,"needsHelp":false,"note":""},{"id":740,"name":"Zara S.","buildingId":7,"floor":3,"needsHelp":false,"note":""},{"id":741,"name":"Gabriel V.","buildingId":7,"floor":3,"needsHelp":false,"note":""},{"id":742,"name":"Grace M.","buildingId":7,"floor":5,"needsHelp":false,"note":""},{"id":743,"name":"Kwame V.","buildingId":7,"floor":3,"needsHelp":false,"note":""},{"id":744,"name":"Omar T.","buildingId":7,"floor":5,"needsHelp":false,"note":""},{"id":745,"name":"June Z.","buildingId":7,"floor":1,"needsHelp":false,"note":"Korean speaker"},{"id":746,"name":"Hugo H.","buildingId":7,"floor":4,"needsHelp":false,"note":""},{"id":747,"name":"Layla F.","buildingId":7,"floor":5,"needsHelp":false,"note":""},{"id":748,"name":"Grace D.","buildingId":7,"floor":4,"needsHelp":false,"note":""},{"id":749,"name":"Theo Z.","buildingId":7,"floor":2,"needsHelp":false,"note":""},{"id":750,"name":"Alma R.","buildingId":7,"floor":4,"needsHelp":false,"note":""},{"id":751,"name":"Priscilla L.","buildingId":7,"floor":3,"needsHelp":false,"note":""},{"id":752,"name":"Beatriz L.","buildingId":7,"floor":4,"needsHelp":false,"note":""},{"id":753,"name":"Elena B.","buildingId":7,"floor":1,"needsHelp":false,"note":""},{"id":754,"name":"Elena V.","buildingId":7,"floor":3,"needsHelp":false,"note":""},{"id":755,"name":"Raj R.","buildingId":7,"floor":1,"needsHelp":false,"note":""},{"id":756,"name":"Priscilla S.","buildingId":7,"floor":4,"needsHelp":false,"note":"Spanish speaker"},{"id":757,"name":"Alma A.","buildingId":7,"floor":5,"needsHelp":false,"note":""},{"id":758,"name":"Theo A.","buildingId":7,"floor":4,"needsHelp":false,"note":""},{"id":759,"name":"Samuel S.","buildingId":7,"floor":2,"needsHelp":false,"note":""},{"id":760,"name":"Yuki K.","buildingId":7,"floor":4,"needsHelp":false,"note":""},{"id":761,"name":"Samuel C.","buildingId":7,"floor":3,"needsHelp":false,"note":""},{"id":762,"name":"Lan Y.","buildingId":7,"floor":2,"needsHelp":false,"note":""},{"id":763,"name":"Layla Z.","buildingId":7,"floor":2,"needsHelp":false,"note":""},{"id":764,"name":"Felix M.","buildingId":7,"floor":2,"needsHelp":false,"note":""},{"id":301,"name":"Leon Z.","buildingId":3,"floor":1,"needsHelp":true,"note":"low vision"},{"id":302,"name":"Dorothy P.","buildingId":3,"floor":5,"needsHelp":true,"note":"hearing impaired"},{"id":303,"name":"Harold Z.","buildingId":3,"floor":5,"needsHelp":true,"note":"oxygen"},{"id":304,"name":"Beatriz M.","buildingId":3,"floor":5,"needsHelp":true,"note":"limited mobility"},{"id":305,"name":"Kofi Y.","buildingId":3,"floor":2,"needsHelp":false,"note":""},{"id":306,"name":"Mei N.","buildingId":3,"floor":3,"needsHelp":false,"note":""},{"id":307,"name":"Priscilla N.","buildingId":3,"floor":3,"needsHelp":false,"note":""},{"id":308,"name":"Ethan N.","buildingId":3,"floor":4,"needsHelp":false,"note":""},{"id":309,"name":"Mei A.","buildingId":3,"floor":3,"needsHelp":false,"note":""},{"id":310,"name":"Dorothy C.","buildingId":3,"floor":2,"needsHelp":false,"note":""},{"id":311,"name":"Ethan R.","buildingId":3,"floor":1,"needsHelp":false,"note":""},{"id":312,"name":"Aiko H.","buildingId":3,"floor":2,"needsHelp":false,"note":""},{"id":313,"name":"June E.","buildingId":3,"floor":5,"needsHelp":false,"note":""},{"id":314,"name":"Esther L.","buildingId":3,"floor":5,"needsHelp":false,"note":""},{"id":315,"name":"Ava Y.","buildingId":3,"floor":4,"needsHelp":false,"note":""},{"id":316,"name":"Felix N.","buildingId":3,"floor":1,"needsHelp":false,"note":""},{"id":317,"name":"June M.","buildingId":3,"floor":5,"needsHelp":false,"note":""},{"id":318,"name":"Liam P.","buildingId":3,"floor":5,"needsHelp":false,"note":""},{"id":319,"name":"Lan J.","buildingId":3,"floor":5,"needsHelp":false,"note":""},{"id":320,"name":"Leon J.","buildingId":3,"floor":3,"needsHelp":false,"note":""},{"id":321,"name":"Andre F.","buildingId":3,"floor":5,"needsHelp":false,"note":""},{"id":322,"name":"Nora N.","buildingId":3,"floor":3,"needsHelp":false,"note":""},{"id":323,"name":"Mateo A.","buildingId":3,"floor":2,"needsHelp":false,"note":""},{"id":324,"name":"Aiko S.","buildingId":3,"floor":1,"needsHelp":false,"note":""},{"id":325,"name":"Vivian R.","buildingId":3,"floor":2,"needsHelp":false,"note":""},{"id":326,"name":"Kofi N.","buildingId":3,"floor":4,"needsHelp":false,"note":""},{"id":327,"name":"Fatima C.","buildingId":3,"floor":5,"needsHelp":false,"note":""},{"id":328,"name":"Yuki B.","buildingId":3,"floor":4,"needsHelp":false,"note":""},{"id":329,"name":"Tariq E.","buildingId":3,"floor":1,"needsHelp":false,"note":""},{"id":330,"name":"Dorothy J.","buildingId":3,"floor":3,"needsHelp":false,"note":"Korean speaker"},{"id":331,"name":"Alma Z.","buildingId":3,"floor":3,"needsHelp":false,"note":""},{"id":332,"name":"Samuel R.","buildingId":3,"floor":1,"needsHelp":false,"note":""},{"id":333,"name":"Priscilla F.","buildingId":3,"floor":5,"needsHelp":false,"note":""},{"id":334,"name":"Ruth A.","buildingId":3,"floor":5,"needsHelp":false,"note":""},{"id":335,"name":"Jorge C.","buildingId":3,"floor":5,"needsHelp":false,"note":"no car"},{"id":336,"name":"Carmen T.","buildingId":3,"floor":4,"needsHelp":false,"note":"no car"},{"id":337,"name":"Fatima B.","buildingId":3,"floor":3,"needsHelp":false,"note":""},{"id":338,"name":"Oscar E.","buildingId":3,"floor":5,"needsHelp":false,"note":"has a cat"},{"id":339,"name":"Aiko Y.","buildingId":3,"floor":5,"needsHelp":false,"note":""},{"id":340,"name":"Diego G.","buildingId":3,"floor":1,"needsHelp":false,"note":"has a dog"},{"id":341,"name":"Layla N.","buildingId":3,"floor":4,"needsHelp":false,"note":"no car"},{"id":342,"name":"Mateo T.","buildingId":3,"floor":4,"needsHelp":false,"note":""},{"id":343,"name":"Gabriel E.","buildingId":3,"floor":1,"needsHelp":false,"note":""},{"id":344,"name":"Oscar K.","buildingId":3,"floor":4,"needsHelp":false,"note":""},{"id":345,"name":"Nora B.","buildingId":3,"floor":3,"needsHelp":false,"note":""},{"id":346,"name":"Andre V.","buildingId":3,"floor":4,"needsHelp":false,"note":""},{"id":347,"name":"Ethan P.","buildingId":3,"floor":1,"needsHelp":false,"note":""},{"id":348,"name":"Lan K.","buildingId":3,"floor":5,"needsHelp":false,"note":""},{"id":349,"name":"Noah W.","buildingId":3,"floor":1,"needsHelp":false,"note":""},{"id":350,"name":"Aiko R.","buildingId":3,"floor":4,"needsHelp":false,"note":""},{"id":351,"name":"Gabriel S.","buildingId":3,"floor":1,"needsHelp":false,"note":""},{"id":352,"name":"Fatima F.","buildingId":3,"floor":2,"needsHelp":false,"note":""},{"id":353,"name":"Arthur F.","buildingId":3,"floor":4,"needsHelp":false,"note":"has a cat"},{"id":354,"name":"Amara K.","buildingId":3,"floor":4,"needsHelp":false,"note":""},{"id":355,"name":"Beatriz T.","buildingId":3,"floor":3,"needsHelp":false,"note":""},{"id":356,"name":"Zara J.","buildingId":3,"floor":4,"needsHelp":false,"note":""},{"id":357,"name":"Chloe K.","buildingId":3,"floor":2,"needsHelp":false,"note":""},{"id":358,"name":"Samuel P.","buildingId":3,"floor":2,"needsHelp":false,"note":""},{"id":359,"name":"Andre W.","buildingId":3,"floor":5,"needsHelp":false,"note":""},{"id":360,"name":"Mila F.","buildingId":3,"floor":2,"needsHelp":false,"note":"has a dog"},{"id":361,"name":"Nora D.","buildingId":3,"floor":1,"needsHelp":false,"note":""},{"id":362,"name":"Omar L.","buildingId":3,"floor":2,"needsHelp":false,"note":""},{"id":363,"name":"Harold V.","buildingId":3,"floor":5,"needsHelp":false,"note":""},{"id":364,"name":"Nora S.","buildingId":3,"floor":1,"needsHelp":false,"note":""},{"id":365,"name":"Kwame O.","buildingId":3,"floor":2,"needsHelp":false,"note":""},{"id":366,"name":"Ines O.","buildingId":3,"floor":4,"needsHelp":false,"note":""},{"id":367,"name":"Esther V.","buildingId":3,"floor":3,"needsHelp":false,"note":"no car"},{"id":368,"name":"Irene C.","buildingId":3,"floor":5,"needsHelp":false,"note":""},{"id":369,"name":"Mila K.","buildingId":3,"floor":3,"needsHelp":false,"note":""},{"id":370,"name":"Kofi Z.","buildingId":3,"floor":1,"needsHelp":false,"note":""},{"id":371,"name":"Samuel B.","buildingId":3,"floor":3,"needsHelp":false,"note":""},{"id":372,"name":"Vivian P.","buildingId":3,"floor":2,"needsHelp":false,"note":""},{"id":373,"name":"Jorge W.","buildingId":3,"floor":2,"needsHelp":false,"note":""},{"id":374,"name":"Ava D.","buildingId":3,"floor":2,"needsHelp":false,"note":""},{"id":375,"name":"Diego L.","buildingId":3,"floor":3,"needsHelp":false,"note":""},{"id":376,"name":"Caleb O.","buildingId":3,"floor":4,"needsHelp":false,"note":""},{"id":377,"name":"Andre C.","buildingId":3,"floor":1,"needsHelp":false,"note":""},{"id":378,"name":"Dorothy L.","buildingId":3,"floor":2,"needsHelp":false,"note":"has a cat"},{"id":379,"name":"Ines N.","buildingId":3,"floor":2,"needsHelp":false,"note":""},{"id":380,"name":"Rina T.","buildingId":3,"floor":5,"needsHelp":false,"note":""},{"id":1501,"name":"Irene T.","buildingId":15,"floor":1,"needsHelp":false,"note":""},{"id":1502,"name":"Ines S.","buildingId":15,"floor":1,"needsHelp":false,"note":""},{"id":1503,"name":"Mila Y.","buildingId":15,"floor":1,"needsHelp":false,"note":""},{"id":1504,"name":"Nadia Z.","buildingId":15,"floor":1,"needsHelp":false,"note":""},{"id":1505,"name":"Walter G.","buildingId":15,"floor":2,"needsHelp":false,"note":""},{"id":1506,"name":"Ava S.","buildingId":15,"floor":2,"needsHelp":false,"note":""},{"id":1507,"name":"Felix J.","buildingId":15,"floor":2,"needsHelp":false,"note":""},{"id":1508,"name":"Ruth P.","buildingId":15,"floor":1,"needsHelp":false,"note":""},{"id":1509,"name":"Dorothy D.","buildingId":15,"floor":1,"needsHelp":false,"note":""},{"id":1510,"name":"Jorge H.","buildingId":15,"floor":2,"needsHelp":false,"note":""},{"id":1511,"name":"Nora F.","buildingId":15,"floor":2,"needsHelp":false,"note":""},{"id":1512,"name":"Oscar V.","buildingId":15,"floor":1,"needsHelp":false,"note":""},{"id":1001,"name":"Victor E.","buildingId":10,"floor":3,"needsHelp":true,"note":"walker"},{"id":1002,"name":"Priscilla J.","buildingId":10,"floor":2,"needsHelp":true,"note":"recent hip surgery"},{"id":1003,"name":"Henry O.","buildingId":10,"floor":1,"needsHelp":false,"note":""},{"id":1004,"name":"Andre E.","buildingId":10,"floor":2,"needsHelp":false,"note":"Spanish speaker"},{"id":1005,"name":"Gabriel W.","buildingId":10,"floor":1,"needsHelp":false,"note":""},{"id":1006,"name":"Sofia F.","buildingId":10,"floor":1,"needsHelp":false,"note":""},{"id":1007,"name":"Zara Z.","buildingId":10,"floor":2,"needsHelp":false,"note":""},{"id":1008,"name":"Sofia P.","buildingId":10,"floor":3,"needsHelp":false,"note":"Spanish speaker"},{"id":1009,"name":"Leon F.","buildingId":10,"floor":3,"needsHelp":false,"note":""},{"id":1010,"name":"Aiko M.","buildingId":10,"floor":2,"needsHelp":false,"note":""},{"id":1011,"name":"Malik C.","buildingId":10,"floor":2,"needsHelp":false,"note":"Mandarin speaker"},{"id":1012,"name":"Lan W.","buildingId":10,"floor":2,"needsHelp":false,"note":""},{"id":1013,"name":"Jorge Y.","buildingId":10,"floor":2,"needsHelp":false,"note":""},{"id":1014,"name":"Aiko P.","buildingId":10,"floor":3,"needsHelp":false,"note":""},{"id":1015,"name":"Jorge J.","buildingId":10,"floor":2,"needsHelp":false,"note":""},{"id":1016,"name":"Aiko F.","buildingId":10,"floor":2,"needsHelp":false,"note":""},{"id":1017,"name":"Hugo A.","buildingId":10,"floor":1,"needsHelp":false,"note":""},{"id":1018,"name":"Oscar C.","buildingId":10,"floor":2,"needsHelp":false,"note":""},{"id":1019,"name":"Oscar J.","buildingId":10,"floor":1,"needsHelp":false,"note":""},{"id":1020,"name":"Rina O.","buildingId":10,"floor":2,"needsHelp":false,"note":""},{"id":1021,"name":"Hugo T.","buildingId":10,"floor":3,"needsHelp":false,"note":""},{"id":1022,"name":"Frank Y.","buildingId":10,"floor":1,"needsHelp":false,"note":""},{"id":1023,"name":"Kofi O.","buildingId":10,"floor":2,"needsHelp":false,"note":""},{"id":1024,"name":"Vivian W.","buildingId":10,"floor":2,"needsHelp":false,"note":""},{"id":1025,"name":"Lan F.","buildingId":10,"floor":2,"needsHelp":false,"note":"Spanish speaker"},{"id":1026,"name":"Tariq V.","buildingId":10,"floor":1,"needsHelp":false,"note":""},{"id":1027,"name":"Aiko O.","buildingId":10,"floor":3,"needsHelp":false,"note":""},{"id":1028,"name":"Nora V.","buildingId":10,"floor":3,"needsHelp":false,"note":""},{"id":1029,"name":"Noah E.","buildingId":10,"floor":1,"needsHelp":false,"note":""},{"id":1030,"name":"Lan O.","buildingId":10,"floor":2,"needsHelp":false,"note":""},{"id":2001,"name":"Hugo B.","buildingId":20,"floor":1,"needsHelp":true,"note":"wheelchair"},{"id":2002,"name":"Kofi L.","buildingId":20,"floor":1,"needsHelp":true,"note":"low vision"},{"id":2003,"name":"Malik Z.","buildingId":20,"floor":1,"needsHelp":false,"note":""},{"id":2004,"name":"Arthur B.","buildingId":20,"floor":1,"needsHelp":false,"note":"Mandarin speaker"},{"id":2005,"name":"Fatima E.","buildingId":20,"floor":1,"needsHelp":false,"note":""},{"id":2006,"name":"Arthur K.","buildingId":20,"floor":1,"needsHelp":false,"note":""},{"id":2007,"name":"Eleanor Z.","buildingId":20,"floor":1,"needsHelp":false,"note":""},{"id":2008,"name":"Mateo K.","buildingId":20,"floor":1,"needsHelp":false,"note":"has a cat"},{"id":2009,"name":"Felix Y.","buildingId":20,"floor":1,"needsHelp":false,"note":""},{"id":2010,"name":"Carmen E.","buildingId":20,"floor":1,"needsHelp":false,"note":""},{"id":2011,"name":"Fatima Y.","buildingId":20,"floor":1,"needsHelp":false,"note":""},{"id":2012,"name":"Isaac J.","buildingId":20,"floor":1,"needsHelp":false,"note":""},{"id":2013,"name":"Henry D.","buildingId":20,"floor":1,"needsHelp":false,"note":"has a cat"},{"id":2014,"name":"Malik L.","buildingId":20,"floor":1,"needsHelp":false,"note":""}],"params":{"version":1,"cols":50,"rows":31,"cellSize":20,"metersPerUnit":6,"stepMinutes":2,"defaultMinutesPerTick":2,"baseSpread":0.0393,"windK":1.4,"refWindMph":40,"minWindFactor":0.15,"diagonalFactor":0.75,"spotP":0.008,"spotMinFuel":0.3,"spotMinCells":2,"spotMaxCells":4,"spotJitterDeg":30,"burnSteps":12,"buildingBurnSteps":19,"buildingIgniteK":0.096,"ignition":[48,49,98,99],"wind":[{"minute":0,"dirDeg":221.2,"mph":31.8,"gustMph":63.3},{"minute":42,"dirDeg":222.3,"mph":35.4,"gustMph":62.1},{"minute":102,"dirDeg":224.7,"mph":31.6,"gustMph":82.9},{"minute":162,"dirDeg":214.7,"mph":32.2,"gustMph":58.7},{"minute":222,"dirDeg":234.7,"mph":33.4,"gustMph":57.5},{"minute":282,"dirDeg":226.6,"mph":22.1,"gustMph":44.9},{"minute":342,"dirDeg":218.8,"mph":19.8,"gustMph":43.7},{"minute":402,"dirDeg":214.6,"mph":11.5,"gustMph":33.4},{"minute":462,"dirDeg":188.3,"mph":9.7,"gustMph":25.3},{"minute":522,"dirDeg":208.5,"mph":12.4,"gustMph":36.8},{"minute":582,"dirDeg":229.1,"mph":16.4,"gustMph":39.1},{"minute":642,"dirDeg":227.3,"mph":15.6,"gustMph":43.7},{"minute":702,"dirDeg":231.9,"mph":17.3,"gustMph":48.3},{"minute":762,"dirDeg":180.3,"mph":11.4,"gustMph":23}],"fuel":[0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.6,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.35,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,1,1,1,1,1,1,1,1,1,1,1,1,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,1,1,1,1,1,1,1,1,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,1,1,1,1,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0,0,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,1,1,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0,0,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0,0,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0,0,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.1,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.1,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.1,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.1,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.6,0.6,0.6,0.6,0.6,0.6,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.1,0.6,0.6,0.6,0.6,0.6,0.6,0.6,0.1,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0,0,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35,0.35],"etaEveryTicks":5,"etaRuns":12,"etaHorizonMin":600,"etaSmoothing":0.5,"autoStartEtaMin":10,"escalateMin":10,"autoClaimDelayTicks":15,"autoReplyPerMin":0.3,"silentPersonIds":[1202,1236,917,920,741,757,759,316,323,327,338,352,360,1507,1024,1026],"evacBaseMin":10,"mobilePerMin":4,"staffRatePerHour":3,"vanRatePerHour":3.176,"walkRatePerHour":1,"outsideHelpPerHour":0.5,"mutualAidPerHour":2,"behindMarginMin":5,"urgentEtaMin":60,"minRisk":5,"preparedRiskMax":70,"prepBudgetUsd":500000,"touchedDamageFrac":0.3,"homesUnits":5,"maxSimMinutes":720,"baselineRuns":1,"fireSeed":20250111,"calibration":{"note":"SIMULATED neighbourhood. Fire constants calibrated to the real 2025 Eaton Fire (NASA FIRMS + IEM wind); building risk from CAL FIRE DINS.","firms":{"targetFrontSpeedKmh":1.921,"firstPass":{"bucketUtc":"2025-01-08T04:00:00+00:00","bucketLocal":"2025-01-07T20:00:00-08:00","detections":17,"sensors":["MODIS"],"hoursSinceIgnition":2.38,"maxKmFromIgnition":4.58,"bearingOfFarthestDeg":224,"frontSpeedKmh":1.921,"totalFrpMw":4789.6},"ignitionLocal":"2025-01-07T18:18:00-08:00"},"wind":{"station":"BUR","rotationDeg":24.7},"riskModel":{"nStructuresTrained":35062,"nFires":41,"aucRandomHoldout":0.944,"eatonDestroyedRate":0.497},"calibrationReport":{"frontSpeedTargetKmh":1.921,"frontSpeedSimKmh":1.98,"firstPassHours":2.38,"mapKm":[6,3.72],"cellMeters":120,"fireOutMedianMin":250,"perBuilding":{"Building 12":{"risk":78.7,"reachedPct":82,"medianArrivalMin":106,"lostIfReachedPct":55,"brushRiskDrop":26.9},"Building 9":{"risk":69.6,"reachedPct":47,"medianArrivalMin":86,"lostIfReachedPct":69,"brushRiskDrop":27},"Building 7":{"risk":63,"reachedPct":67,"medianArrivalMin":122,"lostIfReachedPct":74,"brushRiskDrop":15.9},"Building 3":{"risk":14.2,"reachedPct":9,"medianArrivalMin":154,"lostIfReachedPct":22,"brushRiskDrop":10.1},"Building 15":{"risk":28.9,"reachedPct":1,"medianArrivalMin":178,"lostIfReachedPct":44,"brushRiskDrop":0},"Building 10":{"risk":29.5,"reachedPct":3,"medianArrivalMin":142,"lostIfReachedPct":6,"brushRiskDrop":0},"Hillside homes":{"risk":75.6,"reachedPct":100,"medianArrivalMin":84,"lostIfReachedPct":100,"brushRiskDrop":6},"Shelter A":{"risk":37.7,"reachedPct":5,"medianArrivalMin":152,"lostIfReachedPct":15,"brushRiskDrop":null}},"scalesTried":[{"metersPerUnit":4,"spotP":0.008,"burnSteps":5,"baseSpread":0.0787,"K":0.14,"b12MedianMin":64,"b12ReachPct":38},{"metersPerUnit":4,"spotP":0.008,"burnSteps":8,"baseSpread":0.0798,"K":0.079,"b12MedianMin":72,"b12ReachPct":68},{"metersPerUnit":4,"spotP":0.008,"burnSteps":12,"baseSpread":0.0748,"K":0.038,"b12MedianMin":78,"b12ReachPct":88},{"metersPerUnit":4,"spotP":0.015,"burnSteps":5,"baseSpread":0.0626,"K":0.184,"b12MedianMin":64,"b12ReachPct":48},{"metersPerUnit":4,"spotP":0.015,"burnSteps":8,"baseSpread":0.0521,"K":0.117,"b12MedianMin":74,"b12ReachPct":83},{"metersPerUnit":4,"spotP":0.015,"burnSteps":12,"baseSpread":0.0521,"K":0.045,"b12MedianMin":72,"b12ReachPct":95},{"metersPerUnit":4,"spotP":0.03,"burnSteps":5,"baseSpread":0.0411,"K":0.225,"b12MedianMin":64,"b12ReachPct":33},{"metersPerUnit":4,"spotP":0.03,"burnSteps":8,"baseSpread":0.0299,"K":0.15,"b12MedianMin":74,"b12ReachPct":74},{"metersPerUnit":4,"spotP":0.03,"burnSteps":12,"baseSpread":0.0245,"K":0.074,"b12MedianMin":80,"b12ReachPct":96},{"metersPerUnit":6,"spotP":0.008,"burnSteps":5,"baseSpread":0.0544,"K":0.22,"b12MedianMin":80,"b12ReachPct":18},{"metersPerUnit":6,"spotP":0.008,"burnSteps":8,"baseSpread":0.0421,"K":0.147,"b12MedianMin":104,"b12ReachPct":56},{"metersPerUnit":6,"spotP":0.008,"burnSteps":12,"baseSpread":0.0393,"K":0.096,"b12MedianMin":104,"b12ReachPct":85},{"metersPerUnit":6,"spotP":0.015,"burnSteps":5,"baseSpread":0.0456,"K":0.229,"b12MedianMin":84,"b12ReachPct":18},{"metersPerUnit":6,"spotP":0.015,"burnSteps":8,"baseSpread":0.0308,"K":0.252,"b12MedianMin":100,"b12ReachPct":46},{"metersPerUnit":6,"spotP":0.015,"burnSteps":12,"baseSpread":0.0264,"K":0.09,"b12MedianMin":106,"b12ReachPct":87},{"metersPerUnit":6,"spotP":0.03,"burnSteps":5,"baseSpread":0.0403,"K":0.279,"b12MedianMin":64,"b12ReachPct":27},{"metersPerUnit":6,"spotP":0.03,"burnSteps":8,"baseSpread":0.0187,"K":0.182,"b12MedianMin":72,"b12ReachPct":28},{"metersPerUnit":6,"spotP":0.03,"burnSteps":12,"baseSpread":0.0137,"K":0.139,"b12MedianMin":96,"b12ReachPct":63},{"metersPerUnit":8,"spotP":0.008,"burnSteps":5,"baseSpread":0.0434,"K":0.2,"b12MedianMin":92,"b12ReachPct":9},{"metersPerUnit":8,"spotP":0.008,"burnSteps":8,"baseSpread":0.0338,"K":0.175,"b12MedianMin":110,"b12ReachPct":39},{"metersPerUnit":8,"spotP":0.008,"burnSteps":12,"baseSpread":0.0258,"K":0.156,"b12MedianMin":124,"b12ReachPct":70},{"metersPerUnit":8,"spotP":0.015,"burnSteps":5,"baseSpread":0.0449,"K":0.185,"b12MedianMin":86,"b12ReachPct":17},{"metersPerUnit":8,"spotP":0.015,"burnSteps":8,"baseSpread":0.026,"K":0.232,"b12MedianMin":102,"b12ReachPct":27},{"metersPerUnit":8,"spotP":0.015,"burnSteps":12,"baseSpread":0.0216,"K":0.127,"b12MedianMin":114,"b12ReachPct":78},{"metersPerUnit":8,"spotP":0.03,"burnSteps":5,"baseSpread":0.0403,"K":0.279,"b12MedianMin":64,"b12ReachPct":27},{"metersPerUnit":8,"spotP":0.03,"burnSteps":8,"baseSpread":0.0183,"K":0.25,"b12MedianMin":76,"b12ReachPct":25},{"metersPerUnit":8,"spotP":0.03,"burnSteps":12,"baseSpread":0.0117,"K":0.137,"b12MedianMin":100,"b12ReachPct":55}]},"demoSeed":{"rule":"fire closest to the 40-fire average with-vs-without difference","seed":20250111,"average":{"dSafe":7.3,"dLost":0.75,"dDmg":12.832500000000001},"chosen":{"s":20250111,"dSafe":7,"dLost":1,"dDmg":8.4}}}}};
+
+return { SEED };
+})();
+const NB = {"_note":"Fictional neighborhood (SIMULATED). Positions match the 1000x620 design map. Construction features use Cal Fire DINS vocabulary so the risk model (data/risk_model.py) can score them. Dollar values are simulated placeholders.","map":{"width":1000,"height":620,"hillsPath":"M560,0 L1000,0 L1000,285 C930,255 880,218 820,206 C760,196 700,152 640,122 C608,102 584,62 560,0 Z","roads":[{"name":"Main St","x":0,"y":430,"w":1000,"h":36},{"name":"Canyon Rd","x":360,"y":0,"w":32,"h":620},{"name":"Ridge Rd","x":392,"y":214,"w":608,"h":22}],"shelterLotPad":20,"ignitionCells":[[48,0],[49,0],[48,1],[49,1]]},"buildings":[{"id":12,"name":"Building 12","kind":"senior","x":570,"y":250,"w":150,"h":70,"residents":38,"needsHelp":9,"staff":4,"vans":1,"valueUsd":18500000,"floors":4,"features":{"roof":"Wood","eaves":"Unenclosed","vents":"Mesh Screen > 1/8\"","siding":"Wood","windows":"Single Pane","deckGrade":"Wood","deckElevated":"Wood","patio":"Combustible","fence":"Combustible","yearBuilt":1968}},{"id":9,"name":"Building 9","kind":"senior","x":780,"y":300,"w":110,"h":60,"residents":22,"needsHelp":6,"staff":3,"vans":1,"valueUsd":12000000,"floors":3,"features":{"roof":"Asphalt","eaves":"Unenclosed","vents":"Mesh Screen > 1/8\"","siding":"Stucco Brick Cement","windows":"Single Pane","deckGrade":"Wood","deckElevated":"No Deck/Porch","patio":"Combustible","fence":"Combustible","yearBuilt":1978}},{"id":7,"name":"Building 7","kind":"apartments","x":420,"y":290,"w":120,"h":90,"residents":64,"needsHelp":3,"staff":2,"vans":0,"valueUsd":24000000,"floors":5,"features":{"roof":"Asphalt","eaves":"Unenclosed","vents":"Mesh Screen > 1/8\"","siding":"Wood","windows":"Single Pane","deckGrade":"Masonry/Concrete","deckElevated":"Wood","patio":"No Patio Cover/Carport","fence":"Combustible","yearBuilt":1974}},{"id":3,"name":"Building 3","kind":"apartments","x":170,"y":270,"w":140,"h":80,"residents":80,"needsHelp":4,"staff":2,"vans":0,"valueUsd":31000000,"floors":5,"features":{"roof":"Tile","eaves":"Enclosed","vents":"Mesh Screen <= 1/8\"","siding":"Stucco Brick Cement","windows":"Multi Pane","deckGrade":"Masonry/Concrete","deckElevated":"No Deck/Porch","patio":"No Patio Cover/Carport","fence":"Non Combustible","yearBuilt":2010}},{"id":15,"name":"Building 15","kind":"office","x":140,"y":480,"w":130,"h":64,"residents":12,"needsHelp":0,"staff":1,"vans":0,"valueUsd":9500000,"floors":2,"features":{"roof":"Metal","eaves":"Enclosed","vents":"Mesh Screen <= 1/8\"","siding":"Metal","windows":"Multi Pane","deckGrade":"No Deck/Porch","deckElevated":"No Deck/Porch","patio":"No Patio Cover/Carport","fence":"No Fence","yearBuilt":2014}},{"id":10,"name":"Building 10","kind":"apartments","x":800,"y":470,"w":130,"h":70,"residents":30,"needsHelp":2,"staff":1,"vans":0,"valueUsd":13500000,"floors":3,"features":{"roof":"Tile","eaves":"Enclosed","vents":"Mesh Screen > 1/8\"","siding":"Stucco Brick Cement","windows":"Multi Pane","deckGrade":"Masonry/Concrete","deckElevated":"Wood","patio":"No Patio Cover/Carport","fence":"Non Combustible","yearBuilt":1996}},{"id":20,"name":"Hillside homes","kind":"homes","x":430,"y":150,"w":280,"h":40,"residents":14,"needsHelp":2,"staff":0,"vans":0,"valueUsd":7500000,"floors":2,"features":{"roof":"Wood","eaves":"Unenclosed","vents":"Mesh Screen > 1/8\"","siding":"Wood","windows":"Single Pane","deckGrade":"Wood","deckElevated":"Wood","patio":"Combustible","fence":"Combustible","yearBuilt":1952}},{"id":99,"name":"Shelter A","kind":"shelter","x":440,"y":505,"w":140,"h":60,"residents":0,"needsHelp":0,"staff":2,"vans":0,"valueUsd":6000000,"floors":1,"features":{"roof":"Metal","eaves":"Enclosed","vents":"Mesh Screen <= 1/8\"","siding":"Stucco Brick Cement","windows":"Multi Pane","deckGrade":"No Deck/Porch","deckElevated":"No Deck/Porch","patio":"No Patio Cover/Carport","fence":"No Fence","yearBuilt":2005}}],"fixes":[{"key":"van","name":"Second evacuation van","costUsd":48000,"addVans":1,"changes":{},"source":"evacuation"},{"key":"brush","name":"Clear brush to 30 ft","costUsd":12000,"addVans":0,"changes":{},"source":"simulation","_note":"Defensible space is not recorded in DINS; riskDrop comes from the fire sim (ring cells around the footprint: lawn fuel 0.35 -> 0.08)."},{"key":"vents","name":"Ember-resistant vent screens","costUsd":9000,"addVans":0,"changes":{"vents":"Mesh Screen <= 1/8\""},"source":"dins"},{"key":"roof","name":"Class A roof","costUsd":140000,"addVans":0,"changes":{"roof":"Tile"},"source":"dins"}],"prepBudgetUsd":500000};
+// Lantern sim preview — runs the real engine (spacetimedb/src/sim.ts) in the browser, no Spacetime needed.
+// Two parts: Controller (no DOM, tested in Node by preview/test_preview.ts) and the view (SVG + panels).
+// `node --experimental-strip-types preview/build.ts` inlines this file + the engine into preview/index.html.
+
+
+
+
+const MAP = NB.map;
+const IGNITION_LOCAL_MIN = 18 * 60 + 18; // Tue Jan 7 2025, 18:18 PST
+
+// ───────────────────────────── Controller ─────────────────────────────
+
+class Controller {
+  constructor(opts = {}) {
+    this.seed = SEED;
+    this.P = SEED.params;
+    this.fireSeed = Number.isFinite(opts.fireSeed) ? opts.fireSeed : this.P.fireSeed;
+    this.reset();
+  }
+
+  reset(approvedFixIds = []) {
+    const w = S.buildWorldFromSeed(this.seed);
+    this.world = w;
+    this.fixes = w.fixes;
+    this.events = [];
+    this.nextTaskId = 1n;
+    this.results = null;
+    for (const id of approvedFixIds) this.approveFix(id, true);
+    this.log(0, ['World seeded — prep phase (simulated neighbourhood, Eaton-calibrated fire)']);
+  }
+
+  log(tick, lines) {
+    for (const text of lines) if (text) this.events.push({ tick, text });
+    if (this.events.length > 400) this.events.splice(0, this.events.length - 400);
+  }
+
+  get sim() {
+    return this.world.sim;
+  }
+
+  building(id) {
+    return this.world.buildings.find((b) => b.id === id);
+  }
+
+  assignIds() {
+    for (const t of this.world.tasks) if (t.id === 0n) t.id = this.nextTaskId++;
+  }
+
+  approveFix(id, quiet = false) {
+    const f = this.fixes.find((x) => x.id === id);
+    if (!f) return 'unknown fix';
+    const b = this.building(f.buildingId);
+    const r = S.applyFix(this.sim, b, f, this.world.people.filter((x) => x.buildingId === b.id), this.P);
+    if (r.error) return r.error;
+    if (!quiet) this.log(this.sim.tick, [r.event]);
+    return null;
+  }
+
+  approveRecommended() {
+    const ids = S.recommendFixes(this.world, this.fixes, this.P);
+    for (const id of ids) this.approveFix(id);
+    return ids;
+  }
+
+  startFire() {
+    if (this.sim.phase !== 'prep') return 'reset to prep first';
+    const r = S.startFire(this.world, this.P, this.fireSeed);
+    this.log(0, r.events);
+    return null;
+  }
+
+  backToPrep() {
+    this.reset(this.fixes.filter((f) => f.approved).map((f) => f.id));
+  }
+
+  setSpeed(m) {
+    this.sim.minutesPerTick = Math.max(1, Math.min(10, Math.round(m)));
+  }
+
+  step() {
+    if (this.sim.phase !== 'fire') return null;
+    this.sim.running = true;
+    const r = S.stepSimulation(this.world, this.P, this.fireSeed);
+    this.assignIds();
+    this.log(this.sim.tick, r.events);
+    if (r.ended) this.finish();
+    return r;
+  }
+
+  finish() {
+    this.results = {
+      with: S.computeResults(this.world, this.P, 'with_lantern'),
+      without: S.runBaseline(this.seed, { fireSeed: this.fireSeed }),
+    };
+  }
+
+  endAndCompare() {
+    if (this.sim.phase !== 'fire') return 'no fire running';
+    S.fastForward(this.world, this.P, this.fireSeed);
+    this.assignIds();
+    this.log(this.sim.tick, ['Fast-forwarded to the end of the fire']);
+    this.finish();
+    return null;
+  }
+
+  startEvacuation(id) {
+    const r = S.startEvacuation(this.world, id, this.P);
+    if (r.error) return r.error;
+    this.log(this.sim.tick, r.events);
+    return null;
+  }
+
+  reply(personId, choice) {
+    const r = S.applyReply(this.world, personId, choice, this.P);
+    if (r.error) return r.error;
+    this.assignIds();
+    this.log(this.sim.tick, r.events);
+    return null;
+  }
+
+  claim(taskId, staffName) {
+    const t = this.world.tasks.find((x) => x.id === taskId);
+    if (!t) return 'unknown task';
+    if (t.done) return 'task already done';
+    if (t.claimedBy !== '') return `already claimed by ${t.claimedBy}`;
+    t.claimedBy = staffName;
+    const p = this.world.people.find((x) => x.id === t.personId);
+    if (p && p.status !== 'out' && p.status !== 'left_behind') p.status = 'claimed';
+    this.log(this.sim.tick, [`${staffName} claimed ${p ? p.name : 'a task'}`]);
+    return null;
+  }
+
+  complete(taskId) {
+    const t = this.world.tasks.find((x) => x.id === taskId);
+    if (!t) return 'unknown task';
+    if (t.done) return 'task already done';
+    if (t.claimedBy === '') return 'claim it first';
+    t.done = true;
+    const p = this.world.people.find((x) => x.id === t.personId);
+    if (p && p.status !== 'left_behind') p.status = 'out';
+    this.log(this.sim.tick, [`${p ? p.name : 'Someone'} reached safety with ${t.claimedBy}`]);
+    return null;
+  }
+
+  openTasks() {
+    return this.world.tasks
+      .filter((t) => !t.done)
+      .slice()
+      .sort((a, c) => c.priority - a.priority || a.createdTick - c.createdTick || a.personId - c.personId);
+  }
+
+  counters() {
+    return S.counters(this.world);
+  }
+
+  clock() {
+    const m = this.sim.simMinutes;
+    const local = IGNITION_LOCAL_MIN + m;
+    const day = ['Tue', 'Wed', 'Thu'][Math.floor(local / 1440)] ?? 'Thu';
+    const hh = Math.floor((local % 1440) / 60);
+    const mm = local % 60;
+    return { sinceIgnition: this.sim.phase === 'prep' ? 'T−0' : `T+${S.fmtMin(m)}`, local: `${day} ${hh}:${mm < 10 ? '0' : ''}${mm}` };
+  }
+
+  /** The scripted demo from LANTERN_SPEC §8 (used by ?demo=1 and by the tests). */
+  demoActions() {
+    return {
+      prep: () => {
+        this.approveFix(121);
+        this.approveFix(122);
+        this.approveFix(91);
+      },
+      onTick: (tick) => {
+        if (tick === 2) for (const id of [12, 9, 20, 7]) this.startEvacuation(id);
+        if (tick === 4) this.reply(1201, 'cant_move');
+        const maria = this.world.tasks.find((t) => t.personId === 1201);
+        if (tick === 8 && maria && maria.claimedBy === '') this.claim(maria.id, 'Alex');
+        if (tick === 14 && maria && maria.claimedBy === 'Alex' && !maria.done) this.complete(maria.id);
+      },
+    };
+  }
+}
+
+// ───────────────────────────── View ─────────────────────────────
+
+const NS = 'http://www.w3.org/2000/svg';
+const STATUS_COLOR = { ok: '#8b95a7', behind: '#F2A93B', evacuating: '#5aa9ff', clear: '#3DD68C', burning: '#FF5A4E', lost: '#5c2a2a' };
+const STATUS_LABEL = { ok: 'OK', behind: 'Behind', evacuating: 'Evacuating', clear: 'Clear', burning: 'Burning', lost: 'Lost' };
+
+function svg(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function html(tag, attrs = {}, parent, text) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, String(v));
+  }
+  if (text !== undefined) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const $ = (id) => document.getElementById(id);
+const money = (usd) => (usd >= 1e6 ? `$${(usd / 1e6).toFixed(1)}M` : `$${Math.round(usd / 1000)}K`);
+const riskBand = (raw) => {
+  const r = Math.round(raw); // same rounding as the number shown and as S.isPrepared
+  return r >= 70 ? ['High', '#FF5A4E'] : r >= 40 ? ['Elevated', '#F2A93B'] : ['Low', '#3DD68C'];
+};
+
+function mountView(ctl, params) {
+  const P = ctl.P;
+  const state = { selected: Number(params.get('select')) || 12, playing: false, rate: Number(params.get('rate')) || 1, timer: 0, staff: S.PHONE_STAFF[0], resident: 1201, until: Number(params.get('until')) || 0, demo: params.get('demo') === '1', showResults: true };
+  const demo = ctl.demoActions();
+  window.__lantern = { ctl, state };
+
+  // ── map base layer ──
+  const map = $('map');
+  const base = svg('g', {}, map);
+  svg('rect', { x: 0, y: 0, width: 1000, height: 620, fill: '#18211c' }, base);
+  svg('path', { d: MAP.hillsPath, fill: '#3b3322', stroke: '#4a4029', 'stroke-width': 2 }, base);
+  for (let i = 0; i < 70; i++) {
+    // dry brush tufts on the hills (deterministic positions)
+    const x = 600 + ((i * 97) % 400);
+    const y = 8 + ((i * 53) % 230);
+    svg('circle', { cx: x, cy: y, r: 3 + (i % 3), fill: '#52472c', opacity: 0.7, class: 'tuft' }, base);
+  }
+  const shelter = ctl.world.buildings.find((b) => b.kind === 'shelter');
+  if (shelter) svg('rect', { x: shelter.x - MAP.shelterLotPad, y: shelter.y - MAP.shelterLotPad, width: shelter.w + 2 * MAP.shelterLotPad, height: shelter.h + 2 * MAP.shelterLotPad, fill: '#20262b', rx: 6 }, base);
+  for (const r of MAP.roads) {
+    svg('rect', { x: r.x, y: r.y, width: r.w, height: r.h, fill: '#2a303b' }, base);
+    const horizontal = r.w > r.h;
+    svg('line', horizontal ? { x1: r.x, y1: r.y + r.h / 2, x2: r.x + r.w, y2: r.y + r.h / 2 } : { x1: r.x + r.w / 2, y1: r.y, x2: r.x + r.w / 2, y2: r.y + r.h }, base).setAttribute('class', 'roadline');
+  }
+  // hide tufts that fall outside the hills polygon by clipping
+  const clip = svg('clipPath', { id: 'hillsclip' }, svg('defs', {}, map));
+  svg('path', { d: MAP.hillsPath }, clip);
+  base.querySelectorAll('.tuft').forEach((t) => t.setAttribute('clip-path', 'url(#hillsclip)'));
+
+  // ── fire layer ──
+  const fireG = svg('g', { id: 'fire' }, map);
+  const cellEls = new Array(P.cols * P.rows);
+  const owner = new Set();
+  for (const b of ctl.world.buildings) for (const c of S.footprintCellIds(b, P)) owner.add(c);
+  for (const c of ctl.world.cells) {
+    const r = svg('rect', { x: c.x * P.cellSize, y: c.y * P.cellSize, width: P.cellSize, height: P.cellSize, fill: 'none', 'data-s': '' }, fireG);
+    r.style.animationDelay = `${-((c.id * 137) % 900)}ms`;
+    cellEls[c.id] = r;
+  }
+  const smokeG = svg('g', { id: 'smoke' }, map);
+
+  // ── routes + buildings ──
+  const routeG = svg('g', { id: 'routes' }, map);
+  const bG = svg('g', { id: 'buildings' }, map);
+  const bEls = new Map();
+  for (const b of ctl.world.buildings) {
+    const g = svg('g', { class: 'bldg', 'data-id': b.id }, bG);
+    const body = svg('rect', { x: b.x, y: b.y, width: b.w, height: b.h, rx: 4, class: 'body' }, g);
+    if (b.kind === 'homes') {
+      const n = 5;
+      for (let i = 0; i < n; i++) svg('rect', { x: b.x + 4 + (i * (b.w - 8)) / n, y: b.y + 6, width: (b.w - 8) / n - 8, height: b.h - 12, rx: 3, class: 'house' }, g);
+    } else if (b.kind !== 'shelter') {
+      for (let wy = b.y + 10; wy < b.y + b.h - 8; wy += 14) for (let wx = b.x + 10; wx < b.x + b.w - 8; wx += 16) svg('rect', { x: wx, y: wy, width: 7, height: 6, class: 'win' }, g);
+    }
+    const name = svg('text', { x: b.x + b.w / 2, y: b.y - 22, class: 'bname' }, g);
+    name.textContent = b.name;
+    const tagBg = svg('rect', { x: b.x + b.w / 2 - 58, y: b.y - 17, width: 116, height: 15, rx: 7.5, class: 'tagbg' }, g);
+    const tag = svg('text', { x: b.x + b.w / 2, y: b.y - 6, class: 'tag' }, g);
+    if (b.kind === 'shelter') {
+      const s = svg('text', { x: b.x + b.w / 2, y: b.y + b.h / 2 + 5, class: 'shelterlabel' }, g);
+      s.textContent = 'SHELTER';
+    }
+    g.addEventListener('click', () => {
+      state.selected = b.id;
+      const ppl = ctl.world.people.filter((x) => x.buildingId === b.id);
+      if (ppl.length) state.resident = (ppl.find((x) => x.needsHelp) ?? ppl[0]).id;
+      render();
+    });
+    bEls.set(b.id, { g, body, tag, tagBg });
+  }
+
+  // ── wind chip ──
+  const windG = svg('g', { id: 'wind', transform: 'translate(20,20)' }, map);
+  svg('rect', { x: 0, y: 0, width: 150, height: 40, rx: 10, class: 'chip' }, windG);
+  const arrow = svg('g', { transform: 'translate(22,20)' }, windG);
+  svg('path', { d: 'M0,-12 L6,6 L0,2 L-6,6 Z', fill: '#F2A93B' }, arrow);
+  const windText = svg('text', { x: 42, y: 25, class: 'chiptext' }, windG);
+
+  // ── controls ──
+  $('btnPhase').addEventListener('click', () => {
+    if (ctl.sim.phase === 'prep') ctl.startFire();
+    else {
+      stop();
+      ctl.backToPrep();
+      state.showResults = true;
+    }
+    render();
+  });
+  $('btnPlay').addEventListener('click', () => (state.playing ? stop() : play()));
+  $('btnStep').addEventListener('click', () => {
+    doTick();
+    render();
+  });
+  $('btnEnd').addEventListener('click', () => {
+    stop();
+    toast(ctl.endAndCompare());
+    render();
+  });
+  const speedSel = $('speed');
+  speedSel.value = String(Number(params.get('speed')) || P.defaultMinutesPerTick);
+  ctl.setSpeed(Number(speedSel.value));
+  speedSel.addEventListener('change', () => ctl.setSpeed(Number(speedSel.value)));
+  const rateSel = $('rate');
+  rateSel.value = String(state.rate);
+  rateSel.addEventListener('change', () => {
+    state.rate = Number(rateSel.value);
+    if (state.playing) {
+      stop();
+      play();
+    }
+  });
+  $('seed').value = String(ctl.fireSeed);
+  $('btnSeed').addEventListener('click', () => {
+    const v = Number($('seed').value);
+    if (!Number.isFinite(v)) return toast('seed must be a number');
+    stop();
+    ctl.fireSeed = v;
+    ctl.backToPrep();
+    render();
+  });
+  $('closeResults').addEventListener('click', () => {
+    state.showResults = false;
+    render();
+  });
+
+  function toast(msg) {
+    if (!msg) return;
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._h);
+    t._h = setTimeout(() => t.classList.remove('show'), 2600);
+  }
+
+  function doTick() {
+    if (ctl.sim.phase !== 'fire') return;
+    if (state.demo) demo.onTick(ctl.sim.tick);
+    ctl.step();
+    if (state.until && ctl.sim.tick >= state.until) stop();
+    if (ctl.sim.phase === 'ended') stop();
+  }
+  function play() {
+    if (ctl.sim.phase === 'prep') ctl.startFire();
+    if (ctl.sim.phase !== 'fire') return;
+    state.playing = true;
+    state.timer = setInterval(() => {
+      doTick();
+      render();
+    }, 1000 / state.rate);
+    render();
+  }
+  function stop() {
+    state.playing = false;
+    clearInterval(state.timer);
+  }
+
+  // ── render ──
+  const lastCell = new Array(P.cols * P.rows).fill('');
+  function cellStyle(c) {
+    if (c.state === 1) {
+      const lim = owner.has(c.id) ? P.buildingBurnSteps : P.burnSteps;
+      const f = c.burnTicks / lim;
+      return ['flame', f < 0.2 ? '#ffd166' : f < 0.55 ? '#ff9f43' : f < 0.8 ? '#ff5a4e' : '#c0392b'];
+    }
+    if (c.state === 2) return ['ash', owner.has(c.id) ? '#140f0e' : '#1d1714'];
+    return ['', 'none'];
+  }
+
+  function render() {
+    const sim = ctl.sim;
+    const phase = sim.phase;
+    document.body.dataset.phase = phase;
+    // fire cells
+    let burning = 0;
+    const smokeSrc = [];
+    for (const c of ctl.world.cells) {
+      const [cls, fill] = cellStyle(c);
+      if (c.state === 1) {
+        burning++;
+        if (c.id % 7 === 0) smokeSrc.push(c);
+      }
+      const key = cls + fill;
+      if (lastCell[c.id] !== key) {
+        const e = cellEls[c.id];
+        e.setAttribute('fill', fill);
+        e.setAttribute('class', cls);
+        lastCell[c.id] = key;
+      }
+    }
+    // smoke plumes drift downwind
+    smokeG.replaceChildren();
+    const wx = Math.sin((sim.windDirDeg * Math.PI) / 180);
+    const wy = -Math.cos((sim.windDirDeg * Math.PI) / 180);
+    for (const c of smokeSrc.slice(0, 60)) {
+      const cx = (c.x + 0.5) * P.cellSize;
+      const cy = (c.y + 0.5) * P.cellSize;
+      for (let k = 1; k <= 3; k++) svg('circle', { cx: cx + wx * 26 * k, cy: cy + wy * 26 * k, r: 8 + 7 * k, class: 'smoke', opacity: 0.16 / k }, smokeG);
+    }
+    // buildings
+    routeG.replaceChildren();
+    const sh = ctl.world.buildings.find((b) => b.kind === 'shelter');
+    for (const b of ctl.world.buildings) {
+      const el = bEls.get(b.id);
+      const color = b.kind === 'shelter' && b.status === 'ok' ? '#3DD68C' : STATUS_COLOR[b.status] ?? '#8b95a7';
+      el.body.setAttribute('stroke', color);
+      el.g.setAttribute('class', `bldg ${b.kind} st-${b.status}${b.id === state.selected ? ' selected' : ''}`);
+      let text = '';
+      let tagColor = color;
+      if (b.kind === 'shelter') text = phase === 'prep' ? 'Evacuation point' : `${ctl.world.people.filter((x) => x.status === 'out').length} arrived`;
+      else if (phase === 'prep') {
+        if (b.prepared) {
+          text = 'Prepared ✓';
+          tagColor = '#3DD68C';
+        } else {
+          const [band, bc] = riskBand(b.risk);
+          text = `Risk ${Math.round(b.risk)} · ${band}`;
+          tagColor = bc;
+        }
+      } else {
+        const eta = b.fireEtaMin >= 0 && b.status !== 'burning' && b.status !== 'lost' && b.status !== 'clear' ? ` · 🔥 ${S.fmtMin(b.fireEtaMin)}` : '';
+        text = `${STATUS_LABEL[b.status] ?? b.status}${eta}`;
+      }
+      el.tag.textContent = text;
+      el.tag.setAttribute('fill', tagColor);
+      el.tagBg.setAttribute('stroke', tagColor);
+      if (sh && b.evacStarted && b.status !== 'lost' && b.status !== 'clear' && b.kind !== 'shelter') {
+        const x1 = b.x + b.w / 2;
+        const y1 = b.y + b.h;
+        const x2 = sh.x + sh.w / 2;
+        const y2 = sh.y;
+        svg('path', { d: `M${x1},${y1} C${x1},${(y1 + y2) / 2} ${x2},${(y1 + y2) / 2} ${x2},${y2}`, class: 'route' }, routeG);
+      }
+    }
+    // wind
+    arrow.setAttribute('transform', `translate(22,20) rotate(${sim.windDirDeg})`);
+    windText.textContent = `${Math.round(sim.windMph)} mph → ${S.compass(sim.windDirDeg)}`;
+
+    // header
+    const cnt = ctl.counters();
+    const clock = ctl.clock();
+    $('phasePill').textContent = phase === 'prep' ? 'Prep' : phase === 'fire' ? 'Fire' : 'Ended';
+    $('phasePill').className = `pill ${phase}`;
+    $('clock').textContent = `${clock.sinceIgnition} · ${clock.local}`;
+    $('cOut').textContent = `${cnt.peopleOut}/${cnt.peopleTotal}`;
+    $('cUnacc').textContent = String(cnt.unaccounted);
+    $('cRisk').textContent = String(cnt.buildingsAtRisk);
+    $('cBurning').textContent = String(burning);
+    $('btnPhase').textContent = phase === 'prep' ? 'Start fire' : 'Back to prep';
+    $('btnPlay').textContent = state.playing ? 'Pause' : 'Play';
+    $('btnPlay').disabled = phase === 'ended';
+    $('btnStep').disabled = phase !== 'fire';
+    $('btnEnd').disabled = phase !== 'fire';
+    $('budget').textContent = money(sim.budgetLeft);
+
+    renderCard();
+    renderPhone();
+    renderFeed();
+    renderResults();
+  }
+
+  function renderCard() {
+    const b = ctl.building(state.selected) ?? ctl.world.buildings[0];
+    const card = $('card');
+    card.replaceChildren();
+    const head = html('div', { class: 'cardhead' }, card);
+    html('div', { class: 'cardtitle' }, head, b.name);
+    html('div', { class: 'cardkind' }, head, `${b.kind} · ${b.residents} residents · ${b.needsHelp} need help · ${b.staff} staff · ${b.vans} van${b.vans === 1 ? '' : 's'}`);
+    const phase = ctl.sim.phase;
+    const [band, bc] = riskBand(b.risk);
+    const row = html('div', { class: 'stats' }, card);
+    const s1 = html('div', { class: 'stat' }, row);
+    html('div', { class: 'statlabel' }, s1, 'Fire risk');
+    const v1 = html('div', { class: 'statval' }, s1, `${Math.round(b.risk)}`);
+    v1.style.color = bc;
+    html('div', { class: 'statsub' }, s1, b.risk !== b.baseRisk ? `${band} · was ${Math.round(b.baseRisk)}` : band);
+    const s2 = html('div', { class: 'stat' }, row);
+    html('div', { class: 'statlabel' }, s2, phase === 'prep' ? 'A fire like Eaton arrives in' : 'Fire arrives in');
+    const v2 = html('div', { class: 'statval' }, s2, b.status === 'burning' || b.status === 'lost' ? 'now' : S.fmtMin(b.fireEtaMin));
+    v2.style.color = '#FF5A4E';
+    const s3 = html('div', { class: 'stat' }, row);
+    html('div', { class: 'statlabel' }, s3, 'Evacuation needs');
+    const late = b.fireEtaMin >= 0 && b.evacNeededMin > b.fireEtaMin;
+    const v3 = html('div', { class: 'statval' }, s3, S.fmtMin(b.evacNeededMin));
+    v3.style.color = late ? '#F2A93B' : '#3DD68C';
+    if (b.prepared && phase === 'prep') html('div', { class: 'badge good' }, card, 'Prepared · better insurance rating');
+    else if (late && b.kind !== 'shelter') html('div', { class: 'badge warn' }, card, 'Evacuation would not finish before the fire');
+    if (b.explanation) html('p', { class: 'explain' }, card, b.explanation);
+
+    if (phase === 'prep') {
+      const fixes = ctl.fixes.filter((f) => f.buildingId === b.id);
+      if (fixes.length) html('div', { class: 'section' }, card, 'Fixes');
+      for (const f of fixes) {
+        const r = html('div', { class: 'fix' }, card);
+        const info = html('div', { class: 'fixinfo' }, r);
+        html('div', { class: 'fixname' }, info, f.name);
+        const effect = f.addVans ? `+${f.addVans} van → evac ${S.fmtMin(S.evacNeededMin({ ...b, vans: b.vans + (f.approved ? 0 : f.addVans) }, ctl.world.people.filter((x) => x.buildingId === b.id), P))}` : `risk −${f.riskDrop}${f.name.startsWith('Clear brush') ? ' (simulated)' : ''}`;
+        html('div', { class: 'fixsub' }, info, `${money(f.costUsd)} · ${effect}`);
+        if (f.approved) html('span', { class: 'done' }, r, 'Approved ✓');
+        else
+          html('button', { class: 'btn small', onclick: () => {
+            toast(ctl.approveFix(f.id));
+            render();
+          } }, r, 'Approve');
+      }
+      html('button', { class: 'btn ghost wide', onclick: () => {
+        const ids = ctl.approveRecommended();
+        toast(ids.length ? `Approved ${ids.length} recommended fixes` : 'Nothing left that fits the budget');
+        render();
+      } }, card, 'Approve recommended (all buildings)');
+    } else if (b.kind !== 'shelter') {
+      const ppl = ctl.world.people.filter((x) => x.buildingId === b.id);
+      const out = ppl.filter((x) => x.status === 'out').length;
+      const bar = html('div', { class: 'bar' }, card);
+      const fill = html('div', { class: 'barfill' }, bar);
+      fill.style.width = `${ppl.length ? (100 * out) / ppl.length : 0}%`;
+      html('div', { class: 'barlabel' }, card, `${out} of ${ppl.length} out`);
+      if (!b.evacStarted && b.status !== 'lost' && phase === 'fire')
+        html('button', { class: 'btn danger wide', onclick: () => {
+          toast(ctl.startEvacuation(b.id));
+          render();
+        } }, card, 'Start evacuation');
+      const missing = ppl.filter((x) => x.status === 'pinged' || x.status === 'cant_move' || x.status === 'claimed' || x.status === 'left_behind');
+      if (missing.length) {
+        html('div', { class: 'section' }, card, b.evacStarted ? 'Not out yet' : 'Residents');
+        const list = html('div', { class: 'names' }, card);
+        for (const x of missing.slice(0, 14)) html('span', { class: `name st-${x.status}` }, list, `${x.name}${x.note ? ' · ' + x.note : ''}`);
+        if (missing.length > 14) html('span', { class: 'name' }, list, `+${missing.length - 14} more`);
+      }
+    }
+  }
+
+  function renderPhone() {
+    const phone = $('phone');
+    phone.replaceChildren();
+    const tabs = html('div', { class: 'tabs' }, phone);
+    const tab = phone.dataset.tab || 'resident';
+    for (const [k, label] of [['resident', 'Resident'], ['staff', 'Staff']]) html('button', { class: `tab${tab === k ? ' on' : ''}`, onclick: () => {
+      phone.dataset.tab = k;
+      renderPhone();
+    } }, tabs, label);
+    if (tab === 'resident') {
+      const ppl = ctl.world.people.filter((x) => x.buildingId === state.selected);
+      if (!ppl.length) {
+        html('p', { class: 'muted' }, phone, 'Pick a residential building on the map.');
+        return;
+      }
+      const sel = html('select', { class: 'select', onchange: (e) => {
+        state.resident = Number(e.target.value);
+        renderPhone();
+      } }, phone);
+      for (const x of [...ppl].sort((a, c) => Number(c.needsHelp) - Number(a.needsHelp) || a.id - c.id).slice(0, 80)) {
+        const o = html('option', { value: x.id }, sel, `${x.name}${x.note ? ' · ' + x.note : ''}`);
+        if (x.id === state.resident) o.selected = true;
+      }
+      const p = ppl.find((x) => x.id === state.resident) ?? ppl[0];
+      const b = ctl.building(p.buildingId);
+      const msgs = html('div', { class: 'msgs' }, phone);
+      if (p.status === 'inside') html('div', { class: 'bubble lantern' }, msgs, ctl.sim.phase === 'prep' ? `Lantern: ${b.name} has an evacuation plan on file.` : 'Lantern: no evacuation order for your building yet.');
+      else {
+        const eta = b.fireEtaMin > 0 ? ` Fire is ${S.fmtMin(b.fireEtaMin)} away.` : '';
+        html('div', { class: 'bubble lantern' }, msgs, `Lantern: Evacuation order for ${b.name}.${eta} Are you safe?`);
+        const reply = { safe: 'I’m safe', cant_move: 'I can’t get out', claimed: 'I can’t get out', out: 'I’m out', left_behind: '…' }[p.status];
+        if (reply && p.status !== 'pinged') html('div', { class: 'bubble me' }, msgs, reply);
+        const task = ctl.world.tasks.find((t) => t.personId === p.id && t.kind === 'help_person');
+        if (p.status === 'claimed' && task) html('div', { class: 'bubble lantern' }, msgs, `Lantern: Help is on the way — ${task.claimedBy.replace(S.AUTO_SUFFIX, '')} is coming to floor ${p.floor}.`);
+        if (p.status === 'out') html('div', { class: 'bubble lantern' }, msgs, 'Lantern: You are checked in at the shelter. ✓');
+        if (p.status === 'left_behind') html('div', { class: 'bubble alert' }, msgs, 'Building lost before this resident got out.');
+        if (p.status === 'pinged' && task) html('div', { class: 'bubble alert' }, msgs, 'No reply — escalated to staff.');
+      }
+      const can = ctl.sim.phase === 'fire' && (p.status === 'pinged' || p.status === 'safe' || p.status === 'cant_move');
+      const btns = html('div', { class: 'row' }, phone);
+      html('button', { class: 'btn good', onclick: () => {
+        toast(ctl.reply(p.id, 'safe'));
+        render();
+      } }, btns, 'I’m safe');
+      html('button', { class: 'btn danger', onclick: () => {
+        toast(ctl.reply(p.id, 'cant_move'));
+        render();
+      } }, btns, 'I can’t get out');
+      if (!can) btns.querySelectorAll('button').forEach((x) => (x.disabled = true));
+    } else {
+      const sel = html('select', { class: 'select', onchange: (e) => {
+        state.staff = e.target.value;
+        renderPhone();
+      } }, phone);
+      for (const n of S.PHONE_STAFF) {
+        const o = html('option', { value: n }, sel, `${n} (staff phone)`);
+        if (n === state.staff) o.selected = true;
+      }
+      const tasks = ctl.openTasks();
+      if (!tasks.length) html('p', { class: 'muted' }, phone, ctl.sim.phase === 'fire' ? 'No open tasks.' : 'Tasks appear when residents need help.');
+      for (const t of tasks.slice(0, 7)) {
+        const p = ctl.world.people.find((x) => x.id === t.personId);
+        const b = ctl.building(t.buildingId);
+        const r = html('div', { class: `task p${t.priority}` }, phone);
+        const info = html('div', { class: 'fixinfo' }, r);
+        html('div', { class: 'fixname' }, info, `${t.priority === 3 ? 'URGENT · ' : ''}${p ? p.name : '?'} — ${b ? b.name : ''}`);
+        html('div', { class: 'fixsub' }, info, `${p && p.note ? p.note + ' · ' : ''}floor ${p ? p.floor : '?'}${t.claimedBy ? ' · claimed by ' + t.claimedBy.replace(S.AUTO_SUFFIX, ' (on-site)') : ''}`);
+        if (t.claimedBy === '')
+          html('button', { class: 'btn small', onclick: () => {
+            toast(ctl.claim(t.id, state.staff));
+            render();
+          } }, r, 'Claim');
+        else if (t.claimedBy === state.staff)
+          html('button', { class: 'btn small good', onclick: () => {
+            toast(ctl.complete(t.id));
+            render();
+          } }, r, 'Done');
+      }
+      if (tasks.length > 7) html('p', { class: 'muted' }, phone, `+${tasks.length - 7} more open tasks`);
+    }
+  }
+
+  function renderFeed() {
+    const feed = $('feed');
+    feed.replaceChildren();
+    for (const e of ctl.events.slice(-9).reverse()) {
+      const r = html('div', { class: 'ev' }, feed);
+      html('span', { class: 'evt' }, r, ctl.sim.phase === 'prep' && e.tick === 0 ? 'prep' : `t${e.tick}`);
+      html('span', {}, r, e.text);
+    }
+  }
+
+  function renderResults() {
+    const ov = $('results');
+    const res = ctl.results;
+    if (!res || !state.showResults) {
+      ov.classList.remove('show');
+      return;
+    }
+    ov.classList.add('show');
+    // [label, with, without, which side is better: +1 higher is better, -1 lower is better]
+    const rows = [
+      ['People safe', `${res.with.peopleSafe}/${res.with.peopleTotal}`, `${res.without.peopleSafe}/${res.without.peopleTotal}`, Math.sign(res.with.peopleSafe - res.without.peopleSafe)],
+      ['Buildings lost', res.with.buildingsLost, res.without.buildingsLost, Math.sign(res.without.buildingsLost - res.with.buildingsLost)],
+      ['Damage', money(res.with.damageUsd), money(res.without.damageUsd), Math.sign(res.without.damageUsd - res.with.damageUsd)],
+      ['Insurance claims', res.with.claims, res.without.claims, Math.sign(res.without.claims - res.with.claims)],
+    ];
+    const tb = $('resTable');
+    tb.replaceChildren();
+    const h = html('div', { class: 'rrow head' }, tb);
+    html('div', {}, h, '');
+    html('div', {}, h, 'With Lantern');
+    html('div', {}, h, 'Without');
+    for (const [k, a, b2, better] of rows) {
+      const r = html('div', { class: 'rrow' }, tb);
+      html('div', { class: 'rk' }, r, k);
+      html('div', { class: `rv ${better > 0 ? 'win' : better < 0 ? 'lose' : ''}` }, r, String(a));
+      html('div', { class: `rv ${better < 0 ? 'win' : better > 0 ? 'lose' : ''}` }, r, String(b2));
+    }
+  }
+
+  // ── boot ──
+  if (params.get('tab') === 'staff') $('phone').dataset.tab = 'staff';
+  if (state.demo) demo.prep();
+  if (params.get('recommend') === '1') ctl.approveRecommended();
+  if (params.get('fire') === '1' || params.get('play') === '1') ctl.startFire();
+  render();
+  if (params.get('play') === '1') play();
+  if (params.get('selftest') === '1') setTimeout(() => selfTest(ctl), 300);
+  if (params.get('layoutcheck') === '1')
+    setTimeout(() => {
+      // Debug aid: list elements that stick out past the viewport (horizontal scroll).
+      const vw = document.documentElement.clientWidth;
+      const wide = [...document.querySelectorAll('body *')]
+        .filter((e) => e.getBoundingClientRect().right > vw + 1)
+        .slice(0, 12)
+        .map((e) => `${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}${typeof e.className === 'string' && e.className ? '.' + e.className.split(' ').join('.') : ''}:${Math.round(e.getBoundingClientRect().right)}`);
+      document.body.dataset.layout = `vw=${vw} scroll=${document.documentElement.scrollWidth} wide=${wide.join(' ')}`;
+    }, 500);
+  return { render, play, stop };
+}
+
+/** ?selftest=1 — clicks through the UI like a presenter would and records results in body[data-selftest]. */
+function selfTest(ctl) {
+  const results = [];
+  const check = (ok, msg) => results.push(`${ok ? 'PASS' : 'FAIL'} ${msg}`);
+  const click = (el) => el && el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const btn = (root, text) => [...root.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith(text));
+  try {
+    click(document.querySelector('g.bldg[data-id="12"]'));
+    check(document.querySelector('#card .cardtitle')?.textContent === 'Building 12', 'clicking Building 12 selects it');
+    click(btn($('card'), 'Approve'));
+    check(ctl.fixes.find((f) => f.id === 121)?.approved === true, 'Approve on the card approves the van');
+    click(btn($('card'), 'Approve recommended'));
+    check(ctl.fixes.filter((f) => f.approved).length > 1, 'Approve recommended approves more fixes');
+    check(/Prepared/.test($('card').textContent), 'card shows the Prepared badge');
+    click($('btnPhase'));
+    check(ctl.sim.phase === 'fire' && $('phasePill').textContent === 'Fire', 'Start fire switches to the fire phase');
+    click(btn($('card'), 'Start evacuation'));
+    check(ctl.building(12).evacStarted, 'Start evacuation button starts Building 12');
+    click(btn($('phone'), 'I can’t get out'));
+    const maria = ctl.world.tasks.find((t) => t.personId === 1201);
+    check(!!maria && maria.priority === 3, 'resident phone “I can’t get out” creates an urgent task');
+    click(btn($('phone'), 'Staff'));
+    const row = [...$('phone').querySelectorAll('.task')].find((r) => r.textContent.includes('Maria R.'));
+    check(!!row && /URGENT/.test(row.textContent), 'staff phone lists Maria as URGENT');
+    click(row && btn(row, 'Claim'));
+    check(maria?.claimedBy === 'Alex', 'Claim on the staff phone claims as Alex');
+    const row2 = [...$('phone').querySelectorAll('.task')].find((r) => r.textContent.includes('Maria R.'));
+    click(row2 && btn(row2, 'Done'));
+    check(ctl.world.people.find((x) => x.id === 1201)?.status === 'out', 'Done gets Maria out');
+    for (let i = 0; i < 3; i++) click($('btnStep'));
+    check(ctl.sim.tick === 3, 'Step advances one tick at a time');
+    check($('feed').textContent.includes('Maria R. reached safety with Alex'), 'feed shows Maria reaching safety');
+    click($('btnEnd'));
+    check(ctl.sim.phase === 'ended' && $('results').classList.contains('show'), 'End & compare shows the results');
+    check($('resTable').textContent.includes('/260'), 'results table is filled in');
+    click($('closeResults'));
+    check(!$('results').classList.contains('show'), 'Close hides the results');
+    const approved = ctl.fixes.filter((f) => f.approved).length;
+    click($('btnPhase'));
+    check(ctl.sim.phase === 'prep' && ctl.fixes.filter((f) => f.approved).length === approved, 'Back to prep keeps approved fixes');
+  } catch (e) {
+    results.push(`FAIL crashed: ${e && e.message}`);
+  }
+  document.body.dataset.selftest = results.join(' | ');
+}
+
+// Browser entry.
+if (typeof document !== 'undefined') {
+  window.addEventListener('error', (e) => {
+    document.body.dataset.error = String(e.message);
+    const b = document.getElementById('errbar');
+    if (b) {
+      b.textContent = `Error: ${e.message}`;
+      b.style.display = 'block';
+    }
+  });
+  const params = new URLSearchParams(location.search);
+  const ctl = new Controller({ fireSeed: params.has('seed') ? Number(params.get('seed')) : undefined });
+  mountView(ctl, params);
+}
+
+</script>
+</body>
+</html>

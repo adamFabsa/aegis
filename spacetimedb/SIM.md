@@ -3,7 +3,12 @@
 `spacetimedb/src/sim.ts` is the whole simulation as **pure functions** (no `ctx`, no `Date`, no
 `Math.random`, no I/O). `spacetimedb/src/seed_data.ts` is generated from `seed/*.json` and exports `SEED`
 (buildings, people, fire params), so reducers can seed/reset without an admin script.
-Tests: `node --experimental-strip-types --test spacetimedb/tests/sim.test.ts` (12 tests, ~0.5 s).
+Tests: `node --experimental-strip-types --test spacetimedb/tests/sim.test.ts` (14 tests, ~0.6 s).
+
+**A complete module that already does all of this, tested on a local SpacetimeDB 2.14.1 server, is in
+[`docs/spacetime-reference/`](../docs/spacetime-reference/README.md)** (every reducer, 1 s scheduled tick at
+~0.9 ms/tick, atomic claims under a 10-way race, two live clients in sync). Copy it or crib from it.
+`preview/index.html` runs the same engine in a browser (see `preview/README.md`).
 
 The row interfaces in `sim.ts` (`SimRow`, `BuildingRow`, `PersonRow`, `TaskRow`, `FixRow`, `FireCellRow`,
 `ResultRow`) match the tables in LANTERN_SPEC §4 field-for-field. **Rows from `ctx.db` are readonly —
@@ -50,15 +55,18 @@ function save(ctx, r: S.StepResult) {
 | `set_reply_class(pid, choice)` | Same as above; choice ∈ `safe` \| `cant_move` \| `needs_medical` \| `unclear` (unclear = no change, escalates normally). |
 | `claim_task(id, name)` | Yours (atomic): throw `SenderError('already claimed')` if `claimedBy !== ''`; set `claimedBy`; person → `claimed`. |
 | `complete_task(id)` | Yours: `done = true`; person → `out`. (The tick recomputes `peopleOut` anyway.) |
-| `tick` (scheduled, 1 s) | `const w = loadWorld(ctx); const r = S.stepSimulation(w, P, P.fireSeed); save(ctx, r);` if `r.ended`: upsert `S.computeResults(w, P, 'with_lantern')` and `S.runBaseline(SEED)` (~0.2 s). |
+| `tick` (scheduled, 1 s) | `export const tick = spacetimedb.reducer({ onSchedule: simTick }, { timer: simTick.rowType }, (ctx) => { … })` (2.14 syntax). Return early unless `phase === 'fire' && running`; then `const w = loadWorld(ctx); const r = S.stepSimulation(w, P, P.fireSeed); save(ctx, r);` if `r.ended`: upsert `S.computeResults(w, P, 'with_lantern')` and `S.runBaseline(SEED)`. Schedule it in `init`: `ctx.db.simTick.insert({ scheduledId: 0n, scheduledAt: ScheduleAt.interval(1_000_000n) })`. |
 | `run_baseline` | `S.runBaseline(SEED)` → upsert result `'without_lantern'`. Same fire seed ⇒ the end screen compares **the same fire**. |
 | optional "End & compare" | `S.fastForward(w, P, P.fireSeed)` then save everything + results. |
 | optional "Approve recommended" | `S.recommendFixes(w, fixes, P)` → fix ids to approve in order (fits the budget). |
 
 Notes
-- Use `P.fireSeed` (a number) as the RNG source, not `ctx.random()`: each tick derives its own streams
-  from (seed, tick), so the live run and the baseline see the same fire and rehearsals are repeatable.
-- A tick costs ~2–12 ms in Node (Monte Carlo ETA every 5 ticks). It writes ~50–200 changed cells.
+- Use `P.fireSeed` (a number) as the RNG source, not `ctx.random()`: fire randomness is keyed to the
+  absolute fire step, so the live run and the baseline burn **the same fire at any speed** (tested at 1, 2,
+  5, 10 min/tick and with a mid-fire speed change), and rehearsals are repeatable.
+- A tick costs ~0.9 ms inside SpacetimeDB (2–12 ms cold in Node). It writes ~50–200 changed cells.
+- Exports are camelCase (`claimTask`) but reducer names on the wire / CLI are snake_case (`claim_task`).
+  The entry file may only export SpacetimeDB values — import `sim.ts`, don't re-export it.
 - `pingedAtTick` is a tick; elapsed minutes are `(tick − pingedAtTick) × minutesPerTick`, so changing speed
   mid-evacuation slightly re-times progress. Fine for the demo.
 
@@ -72,8 +80,8 @@ it" (median of 400 simulated fires). Fire phase: live Monte Carlo median, smooth
 to reach.** `0` when burning/lost. Show with `S.fmtMin()` → `1h50m`.
 
 **building.risk** (0–100) — chance the building is destroyed *if* the fire reaches it, from the CAL FIRE
-DINS model. Suggested bands: High ≥ 70, Elevated 40–70, Low < 40. **prepared** = not High risk
-(`< preparedRiskMax = 70`) **and** evacuation beats the fire ETA → "Prepared · better insurance rating".
+DINS model. Show it rounded. Bands on the rounded value: High ≥ 70, Elevated 40–69, Low < 40. **prepared** =
+rounded risk < `preparedRiskMax` (70) **and** evacuation beats the fire ETA → "Prepared · better insurance rating".
 
 **fix.riskDrop** — from the DINS model (vents, roof) or from the fire simulation ("Clear brush to 30 ft":
 defensible space isn't recorded in DINS — label it "simulated"). Vans: 0 risk, `addVans = 1`.
@@ -86,7 +94,9 @@ buildings (`S.counters(world)` gives header numbers). Maria R. = 1201, Robert K.
 silence (priority 1–3 by need + fire distance). Humans get a 15-tick window to claim; then simulated
 on-site staff take it: their `claimedBy` ends with `' · on-site'` (e.g. `Priya · on-site`). Human staff
 names for the phone: `S.PHONE_STAFF` (`Alex`, `Sam`, `Jordan`, `Taylor`); roster in `seed/staff.json`.
-Show open tasks = `!done`, sorted by `priority` desc then `createdTick`.
+Show open tasks = `!done`, sorted by `priority` desc then `createdTick`. Client SDK: `u64` ids and
+`table.count()` are **bigint** (wrap with `Number()`); reducer calls return a Promise that rejects with the
+`SenderError` text (e.g. `already claimed by Alex`) — show it as a toast.
 
 **fire_cell** — `state` 0/1/2; `burnTicks` = steps burning (vegetation burns 12 steps, buildings 19) — use
 it for flame intensity / fade. `fuel`: 0 road, 0.1 shelter lot, 0.35 lawn/town, 0.6 building, 1.0 dry brush.

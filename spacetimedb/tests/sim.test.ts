@@ -215,6 +215,38 @@ test('a full live run ends, is deterministic per seed, and results add up', () =
   for (const x of a.w.people) if (a.w.buildings.find((q) => q.id === x.buildingId)!.status === 'lost') assert.ok(x.status === 'out' || x.status === 'left_behind');
 });
 
+test('same seed = same fire at any speed (so the baseline really is the same fire)', () => {
+  const burnAt = (mpt: number) => {
+    const w = buildWorldFromSeed(SEED);
+    w.sim.minutesPerTick = mpt;
+    startFire(w, P, P.fireSeed);
+    let guard = 0;
+    while (w.sim.phase === 'fire' && guard++ < 5000) {
+      if (w.sim.tick === 3 && mpt === 2) w.sim.minutesPerTick = 7; // change speed mid-fire too
+      stepSimulation(w, P, P.fireSeed);
+    }
+    return {
+      cells: w.cells.map((c) => c.state).join(''),
+      lost: w.buildings.filter((b) => b.status === 'lost').map((b) => b.id).join(','),
+    };
+  };
+  const ref = burnAt(1);
+  for (const mpt of [2, 5, 10]) assert.deepEqual(burnAt(mpt), ref, `fire differs at ${mpt} min/tick`);
+});
+
+test('an urgent task stays urgent after someone claims it', () => {
+  const w = buildWorldFromSeed(SEED);
+  startFire(w, P, 4);
+  startEvacuation(w, 12, P);
+  applyReply(w, 1201, 'cant_move', P);
+  const t = w.tasks.find((x) => x.personId === 1201)!;
+  t.claimedBy = 'Alex';
+  w.people.find((x) => x.id === 1201)!.status = 'claimed';
+  for (let i = 0; i < 8; i++) stepSimulation(w, P, 4);
+  assert.equal(t.priority, 3);
+  assert.equal(t.claimedBy, 'Alex', 'on-site staff never take over a human claim');
+});
+
 test('baseline is the same fire, deterministic, and never better on people than an early evacuation', () => {
   const b1 = runBaseline(SEED);
   const b2 = runBaseline(SEED);

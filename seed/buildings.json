@@ -15,7 +15,7 @@
       "vans": 1,
       "valueUsd": 18500000,
       "baseRisk": 78.7,
-      "referenceFireEtaMin": 106,
+      "referenceFireEtaMin": 104,
       "explanation": "Risk 79 if an Eaton-like fire reaches it — driven by roof: wood/combustible, vents: coarse mesh (>1/8in), year built: 1960-1989. Biggest single fix: Class A roof (−28).",
       "features": {
         "roof": "Wood",
@@ -42,7 +42,7 @@
           "id": 122,
           "name": "Clear brush to 30 ft",
           "costUsd": 12000,
-          "riskDrop": 18,
+          "riskDrop": 26.9,
           "addVans": 0
         },
         {
@@ -75,8 +75,8 @@
       "vans": 1,
       "valueUsd": 12000000,
       "baseRisk": 69.6,
-      "referenceFireEtaMin": 94,
-      "explanation": "Risk 70 if an Eaton-like fire reaches it — driven by vents: coarse mesh (>1/8in), year built: 1960-1989, windows: single pane. Biggest single fix: Clear brush to 30 ft (−35).",
+      "referenceFireEtaMin": 88,
+      "explanation": "Risk 70 if an Eaton-like fire reaches it — driven by vents: coarse mesh (>1/8in), year built: 1960-1989, windows: single pane. Biggest single fix: Clear brush to 30 ft (−27).",
       "features": {
         "roof": "Asphalt",
         "eaves": "Unenclosed",
@@ -102,7 +102,7 @@
           "id": 92,
           "name": "Clear brush to 30 ft",
           "costUsd": 12000,
-          "riskDrop": 35,
+          "riskDrop": 27,
           "addVans": 0
         },
         {
@@ -135,8 +135,8 @@
       "vans": 0,
       "valueUsd": 24000000,
       "baseRisk": 63,
-      "referenceFireEtaMin": 124,
-      "explanation": "Risk 63 if an Eaton-like fire reaches it — driven by vents: coarse mesh (>1/8in), year built: 1960-1989, windows: single pane. Biggest single fix: Clear brush to 30 ft (−14).",
+      "referenceFireEtaMin": 120,
+      "explanation": "Risk 63 if an Eaton-like fire reaches it — driven by vents: coarse mesh (>1/8in), year built: 1960-1989, windows: single pane. Biggest single fix: Clear brush to 30 ft (−16).",
       "features": {
         "roof": "Asphalt",
         "eaves": "Unenclosed",
@@ -162,7 +162,7 @@
           "id": 72,
           "name": "Clear brush to 30 ft",
           "costUsd": 12000,
-          "riskDrop": 14.3,
+          "riskDrop": 15.9,
           "addVans": 0
         },
         {
@@ -196,7 +196,7 @@
       "valueUsd": 31000000,
       "baseRisk": 14.2,
       "referenceFireEtaMin": -1,
-      "explanation": "Risk 14 if an Eaton-like fire reaches it — driven by vents: fine mesh (<=1/8in), siding: stucco/brick/cement, windows: multi pane.",
+      "explanation": "Risk 14 if an Eaton-like fire reaches it — driven by vents: fine mesh (<=1/8in), siding: stucco/brick/cement, windows: multi pane. Biggest single fix: Clear brush to 30 ft (−10).",
       "features": {
         "roof": "Tile",
         "eaves": "Enclosed",
@@ -217,6 +217,13 @@
           "costUsd": 48000,
           "riskDrop": 0,
           "addVans": 1
+        },
+        {
+          "id": 32,
+          "name": "Clear brush to 30 ft",
+          "costUsd": 12000,
+          "riskDrop": 10.1,
+          "addVans": 0
         }
       ]
     },
@@ -319,7 +326,7 @@
       "vans": 0,
       "valueUsd": 7500000,
       "baseRisk": 75.6,
-      "referenceFireEtaMin": 94,
+      "referenceFireEtaMin": 86,
       "explanation": "Risk 76 if an Eaton-like fire reaches it — driven by roof: wood/combustible, vents: coarse mesh (>1/8in), year built: before 1960. Biggest single fix: Class A roof (−30).",
       "features": {
         "roof": "Wood",
@@ -339,7 +346,7 @@
           "id": 202,
           "name": "Clear brush to 30 ft",
           "costUsd": 12000,
-          "riskDrop": 16.9,
+          "riskDrop": 6,
           "addVans": 0
         },
         {

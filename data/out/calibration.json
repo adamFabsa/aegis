@@ -1,98 +1,98 @@
 {
   "params": {
     "metersPerUnit": 6,
-    "spotP": 0.015,
+    "spotP": 0.008,
     "burnSteps": 12,
     "buildingBurnSteps": 19,
-    "baseSpread": 0.0271,
+    "baseSpread": 0.0393,
     "buildingIgniteK": 0.096,
-    "fireSeed": 20250135
+    "fireSeed": 20250111
   },
   "brushRiskDrop": {
-    "3": 0,
-    "7": 14.3,
-    "9": 35,
+    "3": 10.1,
+    "7": 15.9,
+    "9": 27,
     "10": 0,
-    "12": 18,
+    "12": 26.9,
     "15": 0,
-    "20": 16.9
+    "20": 6
   },
   "referenceFireEtaMin": {
     "3": -1,
-    "7": 124,
-    "9": 94,
+    "7": 120,
+    "9": 88,
     "10": -1,
-    "12": 106,
+    "12": 104,
     "15": -1,
-    "20": 94,
+    "20": 86,
     "99": -1
   },
   "report": {
     "calibrationReport": {
       "frontSpeedTargetKmh": 1.921,
-      "frontSpeedSimKmh": 1.95,
+      "frontSpeedSimKmh": 1.98,
       "firstPassHours": 2.38,
       "mapKm": [
         6,
         3.72
       ],
       "cellMeters": 120,
-      "fireOutMedianMin": 232,
+      "fireOutMedianMin": 250,
       "perBuilding": {
         "Building 12": {
           "risk": 78.7,
-          "reachedPct": 87,
+          "reachedPct": 82,
           "medianArrivalMin": 106,
-          "lostIfReachedPct": 58,
-          "brushRiskDrop": 18
+          "lostIfReachedPct": 55,
+          "brushRiskDrop": 26.9
         },
         "Building 9": {
           "risk": 69.6,
-          "reachedPct": 53,
-          "medianArrivalMin": 96,
-          "lostIfReachedPct": 61,
-          "brushRiskDrop": 35
+          "reachedPct": 47,
+          "medianArrivalMin": 86,
+          "lostIfReachedPct": 69,
+          "brushRiskDrop": 27
         },
         "Building 7": {
           "risk": 63,
-          "reachedPct": 73,
+          "reachedPct": 67,
           "medianArrivalMin": 122,
-          "lostIfReachedPct": 72,
-          "brushRiskDrop": 14.3
+          "lostIfReachedPct": 74,
+          "brushRiskDrop": 15.9
         },
         "Building 3": {
           "risk": 14.2,
-          "reachedPct": 10,
-          "medianArrivalMin": 152,
-          "lostIfReachedPct": 26,
-          "brushRiskDrop": 0
+          "reachedPct": 9,
+          "medianArrivalMin": 154,
+          "lostIfReachedPct": 22,
+          "brushRiskDrop": 10.1
         },
         "Building 15": {
           "risk": 28.9,
           "reachedPct": 1,
-          "medianArrivalMin": 154,
-          "lostIfReachedPct": 31,
+          "medianArrivalMin": 178,
+          "lostIfReachedPct": 44,
           "brushRiskDrop": 0
         },
         "Building 10": {
           "risk": 29.5,
-          "reachedPct": 5,
-          "medianArrivalMin": 138,
-          "lostIfReachedPct": 16,
+          "reachedPct": 3,
+          "medianArrivalMin": 142,
+          "lostIfReachedPct": 6,
           "brushRiskDrop": 0
         },
         "Hillside homes": {
           "risk": 75.6,
-          "reachedPct": 92,
-          "medianArrivalMin": 96,
-          "lostIfReachedPct": 97,
-          "brushRiskDrop": 16.9
+          "reachedPct": 100,
+          "medianArrivalMin": 84,
+          "lostIfReachedPct": 100,
+          "brushRiskDrop": 6
         },
         "Shelter A": {
           "risk": 37.7,
-          "reachedPct": 8,
+          "reachedPct": 5,
           "medianArrivalMin": 152,
-          "lostIfReachedPct": 23,
+          "lostIfReachedPct": 15,
           "brushRiskDrop": null
         }
       },
@@ -101,260 +101,260 @@
           "metersPerUnit": 4,
           "spotP": 0.008,
           "burnSteps": 5,
-          "baseSpread": 0.0828,
-          "K": 0.121,
-          "b12MedianMin": 66,
+          "baseSpread": 0.0787,
+          "K": 0.14,
+          "b12MedianMin": 64,
           "b12ReachPct": 38
         },
         {
           "metersPerUnit": 4,
           "spotP": 0.008,
           "burnSteps": 8,
-          "baseSpread": 0.0747,
-          "K": 0.076,
-          "b12MedianMin": 74,
-          "b12ReachPct": 69
+          "baseSpread": 0.0798,
+          "K": 0.079,
+          "b12MedianMin": 72,
+          "b12ReachPct": 68
         },
         {
           "metersPerUnit": 4,
           "spotP": 0.008,
           "burnSteps": 12,
-          "baseSpread": 0.0727,
-          "K": 0.04,
+          "baseSpread": 0.0748,
+          "K": 0.038,
           "b12MedianMin": 78,
-          "b12ReachPct": 86
+          "b12ReachPct": 88
         },
         {
           "metersPerUnit": 4,
           "spotP": 0.015,
           "burnSteps": 5,
-          "baseSpread": 0.0603,
-          "K": 0.218,
-          "b12MedianMin": 68,
-          "b12ReachPct": 40
+          "baseSpread": 0.0626,
+          "K": 0.184,
+          "b12MedianMin": 64,
+          "b12ReachPct": 48
         },
         {
           "metersPerUnit": 4,
           "spotP": 0.015,
           "burnSteps": 8,
-          "baseSpread": 0.0539,
-          "K": 0.104,
-          "b12MedianMin": 76,
-          "b12ReachPct": 74
+          "baseSpread": 0.0521,
+          "K": 0.117,
+          "b12MedianMin": 74,
+          "b12ReachPct": 83
         },
         {
           "metersPerUnit": 4,
           "spotP": 0.015,
           "burnSteps": 12,
-          "baseSpread": 0.0507,
-          "K": 0.054,
-          "b12MedianMin": 78,
+          "baseSpread": 0.0521,
+          "K": 0.045,
+          "b12MedianMin": 72,
           "b12ReachPct": 95
         },
         {
           "metersPerUnit": 4,
           "spotP": 0.03,
           "burnSteps": 5,
-          "baseSpread": 0.0391,
-          "K": 0.28,
-          "b12MedianMin": 58,
+          "baseSpread": 0.0411,
+          "K": 0.225,
+          "b12MedianMin": 64,
+          "b12ReachPct": 33
+        },
+        {
+          "metersPerUnit": 4,
+          "spotP": 0.03,
+          "burnSteps": 8,
+          "baseSpread": 0.0299,
+          "K": 0.15,
+          "b12MedianMin": 74,
+          "b12ReachPct": 74
+        },
+        {
+          "metersPerUnit": 4,
+          "spotP": 0.03,
+          "burnSteps": 12,
+          "baseSpread": 0.0245,
+          "K": 0.074,
+          "b12MedianMin": 80,
+          "b12ReachPct": 96
+        },
+        {
+          "metersPerUnit": 6,
+          "spotP": 0.008,
+          "burnSteps": 5,
+          "baseSpread": 0.0544,
+          "K": 0.22,
+          "b12MedianMin": 80,
+          "b12ReachPct": 18
+        },
+        {
+          "metersPerUnit": 6,
+          "spotP": 0.008,
+          "burnSteps": 8,
+          "baseSpread": 0.0421,
+          "K": 0.147,
+          "b12MedianMin": 104,
+          "b12ReachPct": 56
+        },
+        {
+          "metersPerUnit": 6,
+          "spotP": 0.008,
+          "burnSteps": 12,
+          "baseSpread": 0.0393,
+          "K": 0.096,
+          "b12MedianMin": 104,
+          "b12ReachPct": 85
+        },
+        {
+          "metersPerUnit": 6,
+          "spotP": 0.015,
+          "burnSteps": 5,
+          "baseSpread": 0.0456,
+          "K": 0.229,
+          "b12MedianMin": 84,
+          "b12ReachPct": 18
+        },
+        {
+          "metersPerUnit": 6,
+          "spotP": 0.015,
+          "burnSteps": 8,
+          "baseSpread": 0.0308,
+          "K": 0.252,
+          "b12MedianMin": 100,
+          "b12ReachPct": 46
+        },
+        {
+          "metersPerUnit": 6,
+          "spotP": 0.015,
+          "burnSteps": 12,
+          "baseSpread": 0.0264,
+          "K": 0.09,
+          "b12MedianMin": 106,
+          "b12ReachPct": 87
+        },
+        {
+          "metersPerUnit": 6,
+          "spotP": 0.03,
+          "burnSteps": 5,
+          "baseSpread": 0.0403,
+          "K": 0.279,
+          "b12MedianMin": 64,
+          "b12ReachPct": 27
+        },
+        {
+          "metersPerUnit": 6,
+          "spotP": 0.03,
+          "burnSteps": 8,
+          "baseSpread": 0.0187,
+          "K": 0.182,
+          "b12MedianMin": 72,
           "b12ReachPct": 28
         },
         {
-          "metersPerUnit": 4,
-          "spotP": 0.03,
-          "burnSteps": 8,
-          "baseSpread": 0.0298,
-          "K": 0.162,
-          "b12MedianMin": 74,
-          "b12ReachPct": 71
-        },
-        {
-          "metersPerUnit": 4,
-          "spotP": 0.03,
-          "burnSteps": 12,
-          "baseSpread": 0.027,
-          "K": 0.067,
-          "b12MedianMin": 76,
-          "b12ReachPct": 97
-        },
-        {
-          "metersPerUnit": 6,
-          "spotP": 0.008,
-          "burnSteps": 5,
-          "baseSpread": 0.0526,
-          "K": 0.217,
-          "b12MedianMin": 80,
-          "b12ReachPct": 17
-        },
-        {
-          "metersPerUnit": 6,
-          "spotP": 0.008,
-          "burnSteps": 8,
-          "baseSpread": 0.0408,
-          "K": 0.136,
-          "b12MedianMin": 106,
-          "b12ReachPct": 61
-        },
-        {
-          "metersPerUnit": 6,
-          "spotP": 0.008,
-          "burnSteps": 12,
-          "baseSpread": 0.037,
-          "K": 0.077,
-          "b12MedianMin": 108,
-          "b12ReachPct": 81
-        },
-        {
-          "metersPerUnit": 6,
-          "spotP": 0.015,
-          "burnSteps": 5,
-          "baseSpread": 0.0472,
-          "K": 0.236,
-          "b12MedianMin": 70,
-          "b12ReachPct": 25
-        },
-        {
-          "metersPerUnit": 6,
-          "spotP": 0.015,
-          "burnSteps": 8,
-          "baseSpread": 0.0302,
-          "K": 0.19,
-          "b12MedianMin": 100,
-          "b12ReachPct": 45
-        },
-        {
-          "metersPerUnit": 6,
-          "spotP": 0.015,
-          "burnSteps": 12,
-          "baseSpread": 0.0271,
-          "K": 0.096,
-          "b12MedianMin": 106,
-          "b12ReachPct": 89
-        },
-        {
-          "metersPerUnit": 6,
-          "spotP": 0.03,
-          "burnSteps": 5,
-          "baseSpread": 0.0371,
-          "K": 0.297,
-          "b12MedianMin": 58,
-          "b12ReachPct": 20
-        },
-        {
-          "metersPerUnit": 6,
-          "spotP": 0.03,
-          "burnSteps": 8,
-          "baseSpread": 0.0216,
-          "K": 0.15,
-          "b12MedianMin": 90,
-          "b12ReachPct": 35
-        },
-        {
           "metersPerUnit": 6,
           "spotP": 0.03,
           "burnSteps": 12,
-          "baseSpread": 0.0138,
-          "K": 0.127,
-          "b12MedianMin": 102,
-          "b12ReachPct": 65
-        },
-        {
-          "metersPerUnit": 8,
-          "spotP": 0.008,
-          "burnSteps": 5,
-          "baseSpread": 0.0471,
-          "K": 0.226,
-          "b12MedianMin": 86,
-          "b12ReachPct": 14
-        },
-        {
-          "metersPerUnit": 8,
-          "spotP": 0.008,
-          "burnSteps": 8,
-          "baseSpread": 0.0321,
-          "K": 0.204,
-          "b12MedianMin": 110,
-          "b12ReachPct": 35
-        },
-        {
-          "metersPerUnit": 8,
-          "spotP": 0.008,
-          "burnSteps": 12,
-          "baseSpread": 0.025,
-          "K": 0.143,
-          "b12MedianMin": 124,
+          "baseSpread": 0.0137,
+          "K": 0.139,
+          "b12MedianMin": 96,
           "b12ReachPct": 63
         },
         {
           "metersPerUnit": 8,
-          "spotP": 0.015,
+          "spotP": 0.008,
           "burnSteps": 5,
-          "baseSpread": 0.0398,
-          "K": 0.278,
-          "b12MedianMin": 78,
-          "b12ReachPct": 13
+          "baseSpread": 0.0434,
+          "K": 0.2,
+          "b12MedianMin": 92,
+          "b12ReachPct": 9
         },
         {
           "metersPerUnit": 8,
-          "spotP": 0.015,
+          "spotP": 0.008,
           "burnSteps": 8,
-          "baseSpread": 0.0244,
-          "K": 0.203,
-          "b12MedianMin": 102,
-          "b12ReachPct": 23
+          "baseSpread": 0.0338,
+          "K": 0.175,
+          "b12MedianMin": 110,
+          "b12ReachPct": 39
         },
         {
           "metersPerUnit": 8,
-          "spotP": 0.015,
+          "spotP": 0.008,
           "burnSteps": 12,
-          "baseSpread": 0.0188,
-          "K": 0.129,
-          "b12MedianMin": 118,
-          "b12ReachPct": 62
-        },
-        {
-          "metersPerUnit": 8,
-          "spotP": 0.03,
-          "burnSteps": 5,
-          "baseSpread": 0.0369,
-          "K": 0.265,
-          "b12MedianMin": 54,
-          "b12ReachPct": 21
-        },
-        {
-          "metersPerUnit": 8,
-          "spotP": 0.03,
-          "burnSteps": 8,
-          "baseSpread": 0.0209,
-          "K": 0.183,
-          "b12MedianMin": 88,
-          "b12ReachPct": 35
-        },
-        {
-          "metersPerUnit": 8,
-          "spotP": 0.03,
-          "burnSteps": 12,
-          "baseSpread": 0.0109,
+          "baseSpread": 0.0258,
           "K": 0.156,
-          "b12MedianMin": 104,
-          "b12ReachPct": 44
+          "b12MedianMin": 124,
+          "b12ReachPct": 70
+        },
+        {
+          "metersPerUnit": 8,
+          "spotP": 0.015,
+          "burnSteps": 5,
+          "baseSpread": 0.0449,
+          "K": 0.185,
+          "b12MedianMin": 86,
+          "b12ReachPct": 17
+        },
+        {
+          "metersPerUnit": 8,
+          "spotP": 0.015,
+          "burnSteps": 8,
+          "baseSpread": 0.026,
+          "K": 0.232,
+          "b12MedianMin": 102,
+          "b12ReachPct": 27
+        },
+        {
+          "metersPerUnit": 8,
+          "spotP": 0.015,
+          "burnSteps": 12,
+          "baseSpread": 0.0216,
+          "K": 0.127,
+          "b12MedianMin": 114,
+          "b12ReachPct": 78
+        },
+        {
+          "metersPerUnit": 8,
+          "spotP": 0.03,
+          "burnSteps": 5,
+          "baseSpread": 0.0403,
+          "K": 0.279,
+          "b12MedianMin": 64,
+          "b12ReachPct": 27
+        },
+        {
+          "metersPerUnit": 8,
+          "spotP": 0.03,
+          "burnSteps": 8,
+          "baseSpread": 0.0183,
+          "K": 0.25,
+          "b12MedianMin": 76,
+          "b12ReachPct": 25
+        },
+        {
+          "metersPerUnit": 8,
+          "spotP": 0.03,
+          "burnSteps": 12,
+          "baseSpread": 0.0117,
+          "K": 0.137,
+          "b12MedianMin": 100,
+          "b12ReachPct": 55
         }
       ]
     },
     "demoSeed": {
       "rule": "fire closest to the 40-fire average with-vs-without difference",
-      "seed": 20250135,
+      "seed": 20250111,
       "average": {
-        "dSafe": 7.825,
-        "dLost": 0.975,
-        "dDmg": 16.579999999999995
+        "dSafe": 7.3,
+        "dLost": 0.75,
+        "dDmg": 12.832500000000001
       },
       "chosen": {
-        "s": 20250135,
+        "s": 20250111,
         "dSafe": 7,
         "dLost": 1,
-        "dDmg": 12
+        "dDmg": 8.4
       }
     }
   }

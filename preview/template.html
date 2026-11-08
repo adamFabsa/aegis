@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lantern Sim Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0B0F17; --panel: #121826; --panel2: #0f1420; --border: #232B3B; --text: #e6e9ef; --muted: #8b95a7;
+    --amber: #F2A93B; --red: #FF5A4E; --green: #3DD68C; --blue: #5aa9ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 Inter, system-ui, -apple-system, Segoe UI, sans-serif; }
+  button, select, input { font: inherit; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--panel2); }
+  .brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+  .logo { font: 700 20px 'Space Grotesk', Inter, sans-serif; color: var(--amber); letter-spacing: .3px; }
+  .sub { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pill { padding: 3px 10px; border-radius: 999px; font-weight: 600; font-size: 12px; border: 1px solid var(--border); }
+  .pill.prep { color: var(--green); border-color: #1f4d37; }
+  .pill.fire { color: var(--red); border-color: #5a2522; }
+  .pill.ended { color: var(--muted); }
+  #clock { font: 500 15px 'Space Grotesk', Inter, sans-serif; color: var(--text); white-space: nowrap; }
+  .counters { display: flex; gap: 14px; flex-wrap: wrap; }
+  .counter { display: flex; flex-direction: column; line-height: 1.1; }
+  .counter b { font: 700 17px 'Space Grotesk', Inter, sans-serif; }
+  .counter span { color: var(--muted); font-size: 11px; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; align-items: center; }
+  .btn { background: #1b2232; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+  .btn:hover:not(:disabled) { border-color: #3a465e; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.primary { background: var(--amber); color: #1a1205; border-color: var(--amber); font-weight: 600; }
+  .btn.danger { background: #3a1716; border-color: #6b2a27; color: #ffd9d5; }
+  .btn.good { background: #123524; border-color: #1f5a3c; color: #c9f5de; }
+  .btn.ghost { background: transparent; }
+  .btn.small { padding: 4px 10px; font-size: 12.5px; }
+  .btn.wide { width: 100%; margin-top: 10px; }
+  select, input { background: #0f1420; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; }
+  label.ctl { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px; padding: 14px 16px; }
+  .mapwrap { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; position: relative; }
+  #map { width: 100%; height: auto; display: block; aspect-ratio: 1000 / 620; }
+  aside { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+  .cardtitle { font: 700 18px 'Space Grotesk', Inter, sans-serif; }
+  .cardkind { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0 8px; }
+  .stat { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 8px; min-width: 0; }
+  .statlabel { color: var(--muted); font-size: 11px; line-height: 1.2; min-height: 26px; }
+  .statval { font: 700 20px 'Space Grotesk', Inter, sans-serif; }
+  .statsub { color: var(--muted); font-size: 11px; }
+  .badge { border-radius: 8px; padding: 6px 10px; font-weight: 600; font-size: 12.5px; margin: 6px 0; }
+  .badge.good { background: #123524; color: var(--green); border: 1px solid #1f5a3c; }
+  .badge.warn { background: #33250d; color: var(--amber); border: 1px solid #5c4316; }
+  .explain { color: #c3c9d4; font-size: 12.5px; margin: 8px 0; }
+  .section { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; margin: 12px 0 6px; }
+  .fix, .task { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); }
+  .fixinfo { flex: 1; min-width: 0; }
+  .fixname { font-weight: 600; font-size: 13px; }
+  .fixsub { color: var(--muted); font-size: 12px; }
+  .done { color: var(--green); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+  .task.p3 .fixname { color: #ffb4ad; }
+  .bar { height: 8px; background: var(--panel2); border-radius: 99px; overflow: hidden; border: 1px solid var(--border); margin-top: 10px; }
+  .barfill { height: 100%; background: var(--green); transition: width .3s; }
+  .barlabel { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .names { display: flex; flex-wrap: wrap; gap: 6px; }
+  .name { font-size: 11.5px; padding: 2px 8px; border-radius: 99px; background: var(--panel2); border: 1px solid var(--border); }
+  .name.st-cant_move { border-color: #6b2a27; color: #ffb4ad; }
+  .name.st-claimed { border-color: #1f4a6b; color: #b6dbff; }
+  .name.st-left_behind { border-color: #6b2a27; color: var(--red); text-decoration: line-through; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+  .tab { flex: 1; background: var(--panel2); border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 6px; cursor: pointer; }
+  .tab.on { color: var(--text); border-color: var(--amber); }
+  .select { width: 100%; margin-bottom: 8px; }
+  .msgs { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+  .bubble { padding: 7px 10px; border-radius: 12px; max-width: 92%; font-size: 12.5px; }
+  .bubble.lantern { background: #1b2232; align-self: flex-start; }
+  .bubble.me { background: #33250d; color: #ffe2b0; align-self: flex-end; }
+  .bubble.alert { background: #3a1716; color: #ffd9d5; align-self: flex-start; }
+  .row { display: flex; gap: 8px; }
+  .row .btn { flex: 1; }
+  .muted { color: var(--muted); font-size: 12.5px; }
+  #feed .ev { display: flex; gap: 8px; font-size: 12.5px; padding: 3px 0; border-top: 1px solid var(--border); }
+  #feed .ev:first-child { border-top: 0; color: var(--text); }
+  #feed .ev { color: #aab2c0; }
+  .evt { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 34px; }
+  footer { color: var(--muted); font-size: 11.5px; padding: 0 16px 16px; }
+  /* map */
+  .roadline { stroke: #59627a; stroke-width: 1.5; stroke-dasharray: 10 10; }
+  #fire rect.flame { animation: flicker 0.9s ease-in-out infinite alternate; filter: drop-shadow(0 0 4px rgba(255, 120, 40, .7)); }
+  #fire rect.ash { opacity: .88; }
+  @keyframes flicker { from { opacity: .72; } to { opacity: 1; } }
+  .smoke { fill: #9aa3b3; pointer-events: none; }
+  .route { fill: none; stroke: var(--green); stroke-width: 2.5; stroke-dasharray: 7 7; animation: march 1s linear infinite; opacity: .85; }
+  @keyframes march { to { stroke-dashoffset: -14; } }
+  .bldg { cursor: pointer; }
+  .bldg .body { fill: #1b2433; stroke-width: 2.5; }
+  .bldg.shelter .body { fill: #12382a; }
+  .bldg.st-burning .body { fill: #4a1c17; }
+  .bldg.st-lost .body { fill: #120d0c; stroke-dasharray: 4 3; }
+  .bldg .win { fill: #f2d48a; opacity: .55; }
+  .bldg.st-lost .win, .bldg.st-burning .win { fill: #ff7a3c; opacity: .8; }
+  .bldg .house { fill: #222c3d; stroke: #3a465e; }
+  .bldg.selected .body { stroke-width: 4.5; }
+  .bname { fill: #e6e9ef; font: 600 12px Inter, sans-serif; text-anchor: middle; paint-order: stroke; stroke: #0B0F17; stroke-width: 3px; }
+  .tagbg { fill: #0B0F17; stroke-width: 1; opacity: .92; }
+  .tag { font: 600 10.5px Inter, sans-serif; text-anchor: middle; }
+  .shelterlabel { fill: var(--green); font: 700 13px 'Space Grotesk', Inter, sans-serif; text-anchor: middle; letter-spacing: 2px; }
+  .chip { fill: #0B0F17; stroke: var(--border); opacity: .92; }
+  .chiptext { fill: var(--text); font: 600 13px Inter, sans-serif; }
+  /* overlays */
+  #results { position: fixed; inset: 0; background: rgba(5, 8, 13, .78); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+  #results.show { display: flex; }
+  .resbox { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 22px; width: min(560px, 100%); }
+  .resbox h2 { font: 700 22px 'Space Grotesk', Inter, sans-serif; margin: 0 0 14px; }
+  .rrow { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 8px; padding: 9px 0; border-top: 1px solid var(--border); align-items: center; }
+  .rrow.head { color: var(--muted); font-size: 12px; border-top: 0; }
+  .rk { color: #c3c9d4; }
+  .rv { font: 700 20px 'Space Grotesk', Inter, sans-serif; color: var(--text); }
+  .rv.win { color: var(--green); }
+  .rv.lose { color: var(--red); }
+  .quote { color: var(--amber); font-weight: 600; margin: 16px 0 4px; }
+  #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%) translateY(30px); background: #33250d; color: #ffe2b0; border: 1px solid #5c4316; padding: 8px 14px; border-radius: 10px; opacity: 0; transition: .2s; pointer-events: none; z-index: 20; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  #errbar { display: none; background: #3a1716; color: #ffd9d5; padding: 8px 16px; }
+  .panel, .mapwrap, .stat, .fixinfo, .bubble { min-width: 0; overflow-wrap: anywhere; }
+  @media (max-width: 980px) {
+    main { grid-template-columns: minmax(0, 1fr); }
+    .controls { margin-left: 0; }
+  }
+  @media (max-width: 520px) {
+    header { padding: 10px 16px; }
+    main { padding: 12px 16px; }
+    .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+    .statval { font-size: 17px; }
+    .statlabel { font-size: 10.5px; }
+    .sub { display: none; }
+    .controls { width: 100%; }
+    #seed { width: 92px; }
+    .counters { gap: 10px; }
+  }
+</style>
+</head>
+<body>
+<div id="errbar"></div>
+<header>
+  <div class="brand"><span class="logo">Lantern</span><span class="sub">Eaton Fire replay · simulated neighborhood · sim preview</span></div>
+  <span id="phasePill" class="pill prep">Prep</span>
+  <span id="clock">T−0</span>
+  <div class="counters">
+    <div class="counter"><b id="cOut">0/0</b><span>People out</span></div>
+    <div class="counter"><b id="cUnacc">0</b><span>Unaccounted</span></div>
+    <div class="counter"><b id="cRisk">0</b><span>At risk</span></div>
+    <div class="counter"><b id="cBurning">0</b><span>Cells burning</span></div>
+    <div class="counter"><b id="budget">$0</b><span>Prep budget</span></div>
+  </div>
+  <div class="controls">
+    <button id="btnPhase" class="btn primary">Start fire</button>
+    <button id="btnPlay" class="btn">Play</button>
+    <button id="btnStep" class="btn">Step</button>
+    <button id="btnEnd" class="btn">End &amp; compare</button>
+    <label class="ctl">Sim min/tick <select id="speed"><option>1</option><option>2</option><option>5</option><option>10</option></select></label>
+    <label class="ctl">Ticks/s <select id="rate"><option>1</option><option>2</option><option>5</option><option>20</option></select></label>
+    <label class="ctl">Fire seed <input id="seed" size="9"><button id="btnSeed" class="btn small">Load</button></label>
+  </div>
+</header>
+<main>
+  <div class="mapwrap"><svg id="map" viewBox="0 0 1000 620" role="img" aria-label="Simulated neighborhood map with fire spread"></svg></div>
+  <aside>
+    <div class="panel" id="card"></div>
+    <div class="panel" id="phone"></div>
+    <div class="panel"><div class="section" style="margin-top:0">Live feed</div><div id="feed"></div></div>
+  </aside>
+</main>
+<footer>Simulated neighborhood, residents and dollar values. Fire calibrated to the real 2025 Eaton Fire (NASA FIRMS, IEM wind); building risk from CAL FIRE damage inspections. Same engine as the Spacetime module (spacetimedb/src/sim.ts).</footer>
+<div id="results"><div class="resbox">
+  <h2>Same fire, with vs without Lantern</h2>
+  <div id="resTable"></div>
+  <div class="quote">“The best claim is the one that never happens.”</div>
+  <div class="muted">Simulated neighborhood; fire calibrated to the real Eaton Fire. “Without” = no prep fixes, evacuation only when the fire is 10 minutes away, no check-ins or escalation.</div>
+  <div class="row" style="margin-top:14px"><button id="closeResults" class="btn">Close</button></div>
+</div></div>
+<div id="toast"></div>
+<script type="module">
+/*__BUNDLE__*/
+</script>
+</body>
+</html>

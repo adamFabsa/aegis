@@ -263,6 +263,17 @@ export function tickStreams(src: RngSource, tick: number): Streams {
   return { fire: mix(0x51ed27), eta: mix(0x2c1b3a), people: mix(0x7a3f91) };
 }
 
+/**
+ * Fire randomness for one absolute fire step (step s covers sim-minute s·stepMinutes). Keyed to the step,
+ * not the tick, so the same seed gives the same fire whatever minutesPerTick the presenter picks.
+ */
+export function fireStepStream(seed: number, step: number): Rng {
+  let h = (Math.imul(seed | 0, 0x27d4eb2f) ^ Math.imul(step + 1, 0x165667b1) ^ 0x3c6ef372) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x7feb352d) >>> 0;
+  h = Math.imul(h ^ (h >>> 15), 0x846ca68b) >>> 0;
+  return mulberry32((h ^ (h >>> 16)) >>> 0);
+}
+
 // ───────────────────────────── Constants ─────────────────────────────
 
 /** On-site staff the simulation dispatches by itself. Humans on /phone use PHONE_STAFF names. */
@@ -433,6 +444,8 @@ export function fireSubstep(eng: Engine, g: FireGrid, rng: Rng, wind: WindSample
 
   const exposedFlag = new Uint8Array(nb);
   const ignite: number[] = [];
+  // Canonical order: random draws must go to the same cells however the steps were batched into ticks.
+  g.burning.sort((a, c) => a - c);
 
   for (let bi = 0; bi < g.burning.length; bi++) {
     const i = g.burning[bi];
@@ -668,7 +681,8 @@ export function evacNeededMin(b: BuildingRow, people: ReadonlyArray<PersonRow>, 
 export function isPrepared(b: BuildingRow, p: FireParams): boolean {
   if (b.kind === 'shelter') return false;
   const evacOk = b.fireEtaMin < 0 || b.evacNeededMin < b.fireEtaMin;
-  return b.risk < p.preparedRiskMax && evacOk;
+  // Compare the risk as displayed (rounded), so a building shown as "Risk 70" is never also "Prepared".
+  return Math.round(b.risk) < p.preparedRiskMax && evacOk;
 }
 
 function taskPriority(person: PersonRow, b: BuildingRow, p: FireParams): number {
@@ -734,7 +748,9 @@ export function stepSimulation(world: World, p: FireParams, rngSrc: RngSource, o
   const ignitedB = new Set<number>();
   const lostB = new Set<number>();
   for (let s = first; s <= last; s++) {
-    const res = fireSubstep(eng, g, R.fire, windAt(p, s * p.stepMinutes, { dirDeg: sim.windDirDeg, mph: sim.windMph }));
+    // Fire randomness is keyed to the absolute fire step, so the fire is the same at any speed.
+    const fireRng = typeof rngSrc === 'number' ? fireStepStream(rngSrc, s) : R.fire;
+    const res = fireSubstep(eng, g, fireRng, windAt(p, s * p.stepMinutes, { dirDeg: sim.windDirDeg, mph: sim.windMph }));
     for (const b of res.ignited) ignitedB.add(b);
     for (const b of res.lost) lostB.add(b);
   }
@@ -968,12 +984,12 @@ export function stepSimulation(world: World, p: FireParams, rngSrc: RngSource, o
           }
         }
       }
-      // Keep open-task priorities current.
+      // Keep open-task priorities current (claimed tasks keep theirs; urgent never drops).
       for (const t of bTasks) {
-        if (t.done) continue;
+        if (t.done || t.claimedBy !== '') continue;
         const x = byPerson.get(t.personId);
         if (!x) continue;
-        const pr = taskPriority(x, b, p);
+        const pr = Math.max(taskPriority(x, b, p), t.priority === 3 && x.status === 'cant_move' ? 3 : 0);
         if (pr !== t.priority) {
           t.priority = pr;
           d.tasks.add(t);

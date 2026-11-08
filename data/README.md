@@ -26,9 +26,9 @@ TIGER_DATABASE_URL=... data/.venv/bin/python data/tiger_load.py   # load + query
   inside the database.
 - Wind first 6 h: from 20° (NNE) at 28 mph, gusts to 71 mph. The replay is rotated +25° so the real wind
   axis lines up with our drawn canyon (the real fire ran toward 224°; our map's canyon axis is 225°).
-- Calibrated so the simulated front on dry brush moves at **1.95 km/h** at our map scale (6 m per map unit,
+- Calibrated so the simulated front on dry brush moves at **1.98 km/h** at our map scale (6 m per map unit,
   map ≈ 6 km × 3.7 km, so canyon → town ≈ Eaton Canyon → Altadena). Embers (spotting) scale with gusts and are
-  the only way across roads. Building 12: fire arrives in ~1h46m (median of 400 simulated fires).
+  the only way across roads. Building 12: fire arrives in ~1h44m (median of 400 simulated fires).
 - `buildingIgniteK` is fitted so a building the fire reaches is lost with probability ≈ its model risk.
 
 ## Building risk model (`risk_model.py`)
@@ -54,9 +54,9 @@ Caveat to say out loud: DINS covers structures inside fire perimeters; this is a
 ## Simulated results (same fire, with vs without Lantern)
 
 Averaged over 40 simulated Eaton-calibrated fires, playing the demo (van + brush on Building 12, van on
-Building 9, recommended fixes, evacuate the four threatened buildings at once): **+7.8 people safe, ~1 fewer
-building lost, $16.6M less damage** vs the same fire with no prep, late evacuation and no check-ins. The demo
-fire (`fireSeed` 20250135) is the one closest to that average (+7 people, 1 building, $12M), not the best one.
+Building 9, recommended fixes, evacuate the four threatened buildings at once): **+7.3 people safe, 0.75 fewer
+buildings lost, $12.8M less damage** vs the same fire with no prep, late evacuation and no check-ins. The demo
+fire (`fireSeed` 20250111) is the one closest to that average (+7 people, 1 building, $8.4M), not the best one.
 
 ## Files
 
