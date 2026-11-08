@@ -11,6 +11,7 @@ import type { BuildingKind, Pack } from './town/types';
 import { TopBar, type Look } from './ui/TopBar';
 import { Dock } from './ui/Dock';
 import { Phone } from './ui/Phone';
+import { BuildingCard } from './ui/BuildingCard';
 import { sound } from './audio/sound';
 
 // Live SpacetimeDB world by default; ?mock=1 runs B's offline stand-in (no server needed).
@@ -87,6 +88,7 @@ export default function App() {
   const [rotation, setRotation] = useState(() => Number(new URLSearchParams(window.location.search).get('rot') ?? 0) % 4);
   setViewRotation(rotation);
   const onRotate = useCallback((dir: 1 | -1) => setRotation((r) => (r + dir + 4) % 4), []);
+  const closeCard = useCallback(() => setSelectedId(null), []);
   // the turn buttons appear only once the turned renders exist for this look
   useAssetVersion();
 
@@ -176,6 +178,10 @@ export default function App() {
       {world.live && (
         <LiveChip tick={sim.tick} phase={sim.phase} devices={world.live.devices} worker={world.live.workerOnline}
           style={phoneLayout ? { right: 8, top: 'calc(180px + env(safe-area-inset-top))' } : { left: insets.left + 4, bottom: 16 }} />
+      )}
+      {/* wide screens: the selected building's card on the map, pointing at it (phones: the panel sheet) */}
+      {selected && !phoneLayout && (
+        <BuildingCard b={selected} world={world} left={insets.left} right={showFrame ? 336 : 0} top={insets.top} onClose={closeCard} />
       )}
       {showFrame && <Phone {...phoneProps} framed onClose={() => setPhoneOpen(false)} />}
         <Dock

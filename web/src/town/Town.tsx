@@ -340,9 +340,12 @@ function BuildingSprite({ b, pack, selected, onSelect, lite, ghost, wind }: { b:
         strokeDasharray="5 4"
         style={{ cursor: 'pointer', pointerEvents: 'all' }}
         onClick={(e) => { e.stopPropagation(); onSelect(b.id); }}
+        data-bid={b.id}
         role="button"
         aria-label={label}
       />
+      {/* where the on-map building card points (ui/BuildingCard reads it as the camera moves) */}
+      {selected && <circle data-building-anchor={b.id} cx={rx} cy={ry} r="0.01" fill="none" style={{ pointerEvents: 'none' }} />}
     </g>
   );
 }
@@ -354,6 +357,20 @@ const jitter = (id: number) => ((id * 2654435761) % 1000) / 1000;
 
 export const Town = memo(function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, svgRef, tagScale = 1, lite = false, units = [], rotation = 0, assets = 0, ghost = null, tickSeconds = TICK_SECONDS }: TownProps) {
   const P = PALETTES[pack];
+  // MapView captures the pointer to pan, so the browser hands the click to the map element, not to the building
+  // under it: remember what the press landed on and act on the click that follows (MapView swallows drags).
+  const press = useRef<{ id: number | null; x: number; y: number } | null>(null);
+  useEffect(() => {
+    const clear = () => { press.current = null; };
+    const click = (e: MouseEvent) => {
+      const p = press.current;
+      press.current = null;
+      if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) < 10) onSelect(p.id);
+    };
+    window.addEventListener('pointerdown', clear, true);
+    window.addEventListener('click', click);
+    return () => { window.removeEventListener('pointerdown', clear, true); window.removeEventListener('click', click); };
+  }, [onSelect]);
   // what the map looked like a moment ago, while it dissolves (look change, fire start, reset)
   const ghostPack = ghost && ghost.pack !== pack ? ghost.pack : null;
   const ghostCells = useMemo(() => (ghost ? stateMap(ghost.cells) : null), [ghost]);
@@ -487,6 +504,10 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
       role="img"
       aria-label="Simulated neighborhood map"
       onClick={() => onSelect(null)}
+      onPointerDown={(e) => {
+        const hit = (e.target as Element).closest('[data-bid]');
+        press.current = { id: hit ? Number(hit.getAttribute('data-bid')) : null, x: e.clientX, y: e.clientY };
+      }}
     >
       <Defs P={P} />
       <StaticGround P={P} pack={pack} lite={lite} rotation={rotation} assets={assets} from={ghostPack} epoch={ghost?.epoch ?? 0} />
