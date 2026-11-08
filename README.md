@@ -17,6 +17,25 @@ Wildfire preparedness and evacuation simulation for property managers (HackUTD 2
 The fire is calibrated to the real 2025 Eaton Fire (NASA FIRMS front speed 1.92 km/h, Burbank wind replay), and
 building risk comes from a model trained on 35,062 CAL FIRE damage inspections. See [`data/README.md`](data/README.md).
 
+## What the demo shows
+
+- **Lantern AI coach (the phone).** Before the fire it ranks fixes like the server's `approve_recommended`: residents
+  who need help first, then expected insurance claims avoided per dollar (value × chance the fire reaches the building
+  × the CAL FIRE model's risk). During the fire it answers State Farm's question: who has the most urgent need (send
+  staff in one tap), which buildings to evacuate before the fire arrives, where to send engines ahead of it, and who
+  has not answered yet. Every number comes from the model and the simulation; the language model (Gemini, or Claude
+  with `AI_PROVIDER=claude`) reads residents' free-text replies and writes the per-building notes, never numbers.
+- **Random scenarios (`new_scenario`).** Same town, new world: wind, where the fire starts (or click to pick it,
+  `set_ignition`), every building's construction re-scored by the bundled CAL FIRE model (`risk_model.ts`), residents'
+  needs, and fire arrival / reach re-simulated (160 runs). Same number → same world; 0 = the Eaton demo map.
+- **A fair comparison.** "With Lantern" and "without Lantern" burn the same fire: every spread link and building has
+  one fixed random threshold for the whole fire, so a fix, a lower risk or an engine on scene can only delay or prevent
+  a burn. Across 40 worlds Lantern's plan is never worse on damage, buildings lost or people
+  (`spacetimedb/tests/scenario.test.ts`). The demo fire is the *representative* one, not the most flattering
+  (`data/sim/pick_demo_seed.ts`).
+- **Fire engines (`unit` table).** Auto-dispatched to burning buildings (one held in reserve); the coach can send one
+  ahead of the fire, where it stands by and lowers that building's ignition odds; hoses only on burning buildings.
+
 ## Local setup
 
 Use SpacetimeDB **2.14.1** and a Node version supported by its SDK: `^22.23.4`, `^24.22.1`, or `>=26.12.1`.
