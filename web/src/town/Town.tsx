@@ -624,7 +624,7 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
       {/* cars, strolling residents, evacuation columns and vans; engines on the road */}
       <StreetLife buildings={buildings} phase={sim.phase} pack={pack} fadeFrom={ghost} />
       {/* engines: one persistent sprite per unit, driven frame by frame along its route */}
-      <FireUnits units={units} buildings={buildings} tickSeconds={tickSeconds} pack={pack} layer="under" rotation={rotation} />
+      <FireUnits units={units} buildings={buildings} tickSeconds={tickSeconds} pack={pack} layer="under" rotation={rotation} phase={sim.phase} />
 
       {/* depth-sorted world */}
       {items.map((it) => <g key={it.key}>{it.node}</g>)}
