@@ -1,7 +1,7 @@
 import type { BuildingKind } from '../town/types';
 
 export function fmtMin(m: number): string {
-  if (m < 0 || !Number.isFinite(m)) return '—';
+  if (m < 0 || !Number.isFinite(m)) return 'No path';
   const h = Math.floor(m / 60);
   const mm = Math.round(m % 60);
   return h ? `${h}h ${String(mm).padStart(2, '0')}m` : `${mm}m`;

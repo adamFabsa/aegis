@@ -1,9 +1,9 @@
-import { memo, useMemo, type ReactNode, type Ref } from 'react';
+import { memo, useMemo, type CSSProperties, type ReactNode, type Ref } from 'react';
 import type { Building, FireCell, Pack, Sim } from './types';
 import { CELL, GROUND_MATRIX, MAP_H, MAP_W, OX, OY, VIEW_H, VIEW_W, pointsAttr, project, projectVec, windVector } from './iso';
 import {
   HILLS_EDGE, HILLS_PATH, LAMPS, LOTS, PARK, PROP_BOX, ROAD_LINES, ROADS, SIDEWALKS, SPRITE, SPRITE_BOX, propUrl,
-  evacRoute, generatePlants, spriteScale, spriteUrl, spriteVariant,
+  evacRoute, generatePlants, previousVariant, spriteScale, spriteUrl, spriteVariant,
 } from './scene';
 import { PALETTES, STATUS_COLORS, type GroundPalette } from './palettes';
 import { FireUnits, Markers, StreetLife } from './markers';
@@ -226,51 +226,60 @@ function BuildingSprite({ b, pack, selected, onSelect, lite }: { b: Building; pa
   const cy = b.y + b.h / 2;
   const [sx, sy] = project(cx, cy);
   const roof = SPRITE[b.kind].roof * s;
-  const variant = spriteVariant(pack, b.status);
+  const damage = b.damage ?? 0;
+  const variant = spriteVariant(pack, b.status, damage);
+  const prev = previousVariant(pack, variant);
   const hull: [number, number][] = [
     project(b.x, b.y, roof), project(b.x + b.w, b.y, roof), project(b.x + b.w, b.y, 0),
     project(b.x + b.w, b.y + b.h, 0), project(b.x, b.y + b.h, 0), project(b.x, b.y + b.h, roof),
   ];
   const roofPts = [[0.2, 0.3], [0.45, 0.62], [0.72, 0.35], [0.86, 0.72], [0.3, 0.82], [0.6, 0.14], [0.52, 0.45], [0.12, 0.62]]
     .map(([fx, fy]) => project(b.x + fx * b.w, b.y + fy * b.h, roof));
+  // fire breaking out of the windows on the two visible faces once the building is gutted
+  const facePts = [[0.18, 0.62], [0.42, 0.42], [0.7, 0.7], [0.88, 0.5]].map(([fx, fz]) => project(b.x + fx * b.w, b.y + b.h, roof * fz))
+    .concat([[0.3, 0.55], [0.75, 0.75]].map(([fy, fz]) => project(b.x + b.w, b.y + fy * b.h, roof * fz)));
   const [rx, ry] = project(cx, cy, roof);
   const label = `${b.name}, ${b.kind}, ${b.status}`;
+  const box = { x: sx - SPRITE_BOX.ax * s, y: sy - SPRITE_BOX.ay * s, width: SPRITE_BOX.w * s, height: SPRITE_BOX.h * s };
+  const heavy = b.status === 'burning' && damage >= 2;
 
   return (
     <g>
-      <image
-        href={spriteUrl(b.kind, variant)}
-        x={sx - SPRITE_BOX.ax * s}
-        y={sy - SPRITE_BOX.ay * s}
-        width={SPRITE_BOX.w * s}
-        height={SPRITE_BOX.h * s}
-        preserveAspectRatio="none"
-        style={{ pointerEvents: 'none' }}
-      />
+      {/* the previous damage stage fades out underneath while the new one fades in */}
+      {prev && <image key={`prev-${prev}`} className="sprite-out" href={spriteUrl(b.kind, prev)} {...box} preserveAspectRatio="none" style={{ pointerEvents: 'none' }} />}
+      <image key={`cur-${variant}`} className={prev ? 'sprite-in' : undefined} href={spriteUrl(b.kind, variant)} {...box} preserveAspectRatio="none" style={{ pointerEvents: 'none' }} />
       {b.status === 'burning' && (
         <g style={{ pointerEvents: 'none' }}>
-          <ellipse cx={rx} cy={ry} rx={0.433 * (b.w + b.h) + 24} ry={0.25 * (b.w + b.h) + 30} fill="url(#roofGlow)" style={lite ? undefined : { mixBlendMode: 'screen' }}>
+          <ellipse cx={rx} cy={ry} rx={(0.433 * (b.w + b.h) + 24) * (heavy ? 1.35 : 1)} ry={(0.25 * (b.w + b.h) + 30) * (heavy ? 1.35 : 1)} fill="url(#roofGlow)" style={lite ? undefined : { mixBlendMode: 'screen' }}>
             <animate attributeName="opacity" values="0.8;1;0.85;1;0.8" dur="1.3s" repeatCount="indefinite" />
           </ellipse>
           {roofPts.map(([px, py], i) => (
-            <use key={i} href={`#${FLAMES[i % 3]}`} transform={`translate(${px} ${py}) scale(${i % 4 === 0 ? 1.5 : 1.1})`} />
+            <use key={i} href={`#${FLAMES[i % 3]}`} transform={`translate(${px} ${py}) scale(${(i % 4 === 0 ? 1.5 : 1.1) * (heavy ? 1.6 : 1)})`} />
           ))}
-          {[0, 1, 2].map((i) => (
-            <circle key={i} cx={roofPts[i * 2][0]} cy={ry - 12} r="10" fill="url(#smokeDark)">
-              <animate attributeName="r" values="8;38" dur="5s" begin={`${-i * 1.6}s`} repeatCount="indefinite" />
-              <animate attributeName="opacity" values="0;0.75;0" dur="5s" begin={`${-i * 1.6}s`} repeatCount="indefinite" />
-              <animateMotion path="M0 0 C -30 -40 -80 -70 -150 -95" dur="5s" begin={`${-i * 1.6}s`} repeatCount="indefinite" />
+          {heavy && facePts.map(([px, py], i) => (
+            <use key={`w${i}`} href={`#${FLAMES[(i + 1) % 3]}`} transform={`translate(${px} ${py}) scale(${0.8 + (i % 3) * 0.2})`} />
+          ))}
+          {[0, 1, 2, ...(heavy ? [3, 4] : [])].map((i) => (
+            <circle key={i} cx={roofPts[(i * 2) % 8][0]} cy={ry - 12} r="10" fill="url(#smokeDark)">
+              <animate attributeName="r" values={heavy ? '12;56' : '8;38'} dur="5s" begin={`${-i * 1.2}s`} repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0;0.8;0" dur="5s" begin={`${-i * 1.2}s`} repeatCount="indefinite" />
+              <animateMotion path="M0 0 C -30 -40 -80 -70 -150 -95" dur="5s" begin={`${-i * 1.2}s`} repeatCount="indefinite" />
             </circle>
           ))}
         </g>
       )}
       {b.status === 'lost' && (
         <g style={{ pointerEvents: 'none' }}>
-          {[0, 1].map((i) => (
-            <circle key={i} cx={roofPts[i * 3][0]} cy={ry - 10} r="8" fill="url(#smokeGray)">
-              <animate attributeName="r" values="6;26" dur="8s" begin={`${-i * 4}s`} repeatCount="indefinite" />
-              <animate attributeName="opacity" values="0;0.45;0" dur="8s" begin={`${-i * 4}s`} repeatCount="indefinite" />
-              <animateMotion path="M0 0 C -20 -40 -50 -70 -100 -100" dur="8s" begin={`${-i * 4}s`} repeatCount="indefinite" />
+          {/* the collapse itself: a dust cloud rolls out and sparks jump, once */}
+          <circle className="dust-burst" cx={sx} cy={sy - roof * 0.25} r={0.3 * (b.w + b.h)} fill="url(#smokeGray)" />
+          {[[-60, -70], [40, -90], [-20, -110], [70, -60], [-80, -40], [10, -80], [55, -100], [-45, -95]].map(([dx, dy], i) => (
+            <circle key={`sp${i}`} className="spark" cx={sx + (i - 4) * 6} cy={sy - roof * 0.3} r="1.6" fill="#FFC46B" style={{ '--dx': `${dx}px`, '--dy': `${dy}px`, animationDelay: `${i * 0.05}s` } as CSSProperties} />
+          ))}
+          {[0, 1, 2].map((i) => (
+            <circle key={i} cx={roofPts[i * 3][0]} cy={sy - roof * 0.3} r="8" fill="url(#smokeGray)">
+              <animate attributeName="r" values="6;30" dur="8s" begin={`${-i * 2.6}s`} repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0;0.5;0" dur="8s" begin={`${-i * 2.6}s`} repeatCount="indefinite" />
+              <animateMotion path="M0 0 C -20 -40 -50 -70 -100 -100" dur="8s" begin={`${-i * 2.6}s`} repeatCount="indefinite" />
             </circle>
           ))}
         </g>

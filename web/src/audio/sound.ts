@@ -168,6 +168,36 @@ class SoundEngine {
     lfo.stop(t + seconds + 0.1);
   }
 
+  /** Structural failure: a deep thud and a rolling rumble of debris. Strength 0..1. */
+  crash(strength = 1) {
+    const ctx = this.ctx;
+    if (!ctx || this.muted || !this.noise) return;
+    const t = ctx.currentTime + 0.01;
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(70, t);
+    o.frequency.exponentialRampToValueAtTime(32, t + 0.9);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.6 * strength, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
+    o.connect(g).connect(this.master!);
+    o.start(t);
+    o.stop(t + 1.4);
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(900, t);
+    lp.frequency.exponentialRampToValueAtTime(140, t + 2.2);
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.0001, t);
+    ng.gain.exponentialRampToValueAtTime(0.35 * strength, t + 0.08);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 2.4);
+    src.connect(lp).connect(ng).connect(this.master!);
+    src.start(t, Math.random(), 2.5);
+  }
+
   setMuted(m: boolean) {
     this.muted = m;
     try { localStorage.setItem(STORE_KEY, m ? '1' : '0'); } catch { /* storage blocked: preference lasts this session */ }

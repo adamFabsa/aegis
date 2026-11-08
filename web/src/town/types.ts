@@ -1,6 +1,6 @@
 // Row shapes that mirror the Spacetime tables in LANTERN_SPEC.md §4.
 // When the generated bindings exist, swap these for the generated types
-// (u64 columns arrive as bigint there — wrap with Number() before rendering).
+// (u64 columns arrive as bigint there, so wrap them with Number() before rendering).
 
 export type Phase = 'prep' | 'fire' | 'ended';
 export type BuildingKind = 'senior' | 'apartments' | 'office' | 'homes' | 'shelter';
@@ -40,6 +40,8 @@ export interface Building {
   evacStarted: boolean;
   peopleOut: number;
   explanation: string;
+  /** Client-side fire damage stage: 0 intact, 1 burning, 2 gutted (roof caved in), 3 collapsed. */
+  damage?: number;
 }
 
 export interface FireCell {

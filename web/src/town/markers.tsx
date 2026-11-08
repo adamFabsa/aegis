@@ -20,7 +20,7 @@ const ICON_PATHS: Record<IconName, string> = {
 };
 
 function fmtMin(m: number): string {
-  if (m < 0 || !Number.isFinite(m)) return '—';
+  if (m < 0 || !Number.isFinite(m)) return 'no path';
   const h = Math.floor(m / 60);
   const mm = Math.round(m % 60);
   return h ? `${h}h ${String(mm).padStart(2, '0')}m` : `${mm}m`;
@@ -32,8 +32,8 @@ function markerInfo(b: Building, phase: Sim['phase']): MarkerInfo {
   const badge = b.kind === 'shelter' ? 'A' : b.kind === 'homes' ? 'H' : (b.name.match(/\d+/) ?? [''])[0];
   if (b.kind === 'shelter') return { badge, color: STATUS_COLORS.green, line: 'Shelter', icon: 'house' };
   switch (b.status) {
-    case 'burning': return { badge, color: STATUS_COLORS.red, line: 'Burning', icon: 'flame' };
-    case 'lost': return { badge, color: STATUS_COLORS.gray, line: 'Lost', icon: 'x' };
+    case 'burning': return { badge, color: STATUS_COLORS.red, line: (b.damage ?? 0) >= 2 ? 'Gutted' : 'Burning', icon: 'flame' };
+    case 'lost': return { badge, color: STATUS_COLORS.gray, line: 'Collapsed', icon: 'x' };
     case 'clear': return { badge, color: STATUS_COLORS.green, line: 'All out', icon: 'check' };
     case 'evacuating': return { badge, color: STATUS_COLORS.amber, line: `${b.peopleOut}/${b.residents} out`, icon: 'walk' };
     case 'behind': return { badge, color: STATUS_COLORS.red, line: `Behind · fire ${fmtMin(b.fireEtaMin)}`, icon: 'alert' };

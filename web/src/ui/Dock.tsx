@@ -92,7 +92,7 @@ function PrepList({ sim, buildings, onSelect, onStartFire }: DockProps) {
                 ) : Math.round(b.risk)}
               </span>
               <span className="bcard-name">{b.name}</span>
-              <span className="bcard-meta">{b.prepared ? 'Prepared' : `Risk · evac ${fmtMin(b.evacNeededMin)}`}</span>
+              <span className="bcard-meta">{b.prepared ? 'Prepared' : `Evacuation ${fmtMin(b.evacNeededMin)}`}</span>
             </button>
           </li>
         ))}
@@ -166,7 +166,7 @@ function Race({ b }: { b: Building }) {
 }
 
 function RowAction({ b, sim, onEvacuate }: { b: Building; sim: Sim; onEvacuate: (id: number) => void }) {
-  if (b.status === 'lost') return <span className="row-state muted">Lost</span>;
+  if (b.status === 'lost') return <span className="row-state muted">Collapsed</span>;
   if (b.status === 'clear') return <span className="row-state ok">All out</span>;
   if (b.evacStarted) {
     const pct = (100 * b.peopleOut) / Math.max(1, b.residents);
@@ -177,12 +177,46 @@ function RowAction({ b, sim, onEvacuate }: { b: Building; sim: Sim; onEvacuate: 
       </span>
     );
   }
-  if (b.status === 'burning') return <span className="row-state bad">Burning</span>;
+  if (b.status === 'burning') return <span className="row-state bad">{(b.damage ?? 0) >= 2 ? 'Gutted' : 'Burning'}</span>;
   if (sim.phase !== 'fire') return null;
   return (
     <button type="button" className={`btn small ${b.status === 'behind' ? 'urgent' : ''}`} onClick={(e) => { e.stopPropagation(); onEvacuate(b.id); }}>
       Evacuate
     </button>
+  );
+}
+
+const STAGES = ['Intact', 'Burning', 'Gutted', 'Collapsed'];
+
+/** Fire damage as four steps, so a glance tells you how far the building has gone. */
+function Structure({ b }: { b: Building }) {
+  const stage = b.status === 'lost' ? 3 : b.status === 'burning' ? Math.max(1, b.damage ?? 1) : 0;
+  return (
+    <div className="structure" aria-label={`Structure: ${STAGES[stage]}`}>
+      <span className="structure-lbl">Structure</span>
+      <ol>
+        {STAGES.map((s, i) => (
+          <li key={s} className={i < stage ? 'past' : i === stage ? `now s${i}` : ''}>{s}</li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function Log({ events }: { events: LogEvent[] }) {
+  if (!events.length) return null;
+  return (
+    <>
+      <h3 className="mini-title">Incident log</h3>
+      <ol className="log" aria-label="Incident log">
+        {events.slice(0, 6).map((e) => (
+          <li key={e.id} className={e.tone}>
+            <time>{`T+${Math.floor((e.tick * 2) / 60)}:${String((e.tick * 2) % 60).padStart(2, '0')}`}</time>
+            <span>{e.text}</span>
+          </li>
+        ))}
+      </ol>
+    </>
   );
 }
 
@@ -207,7 +241,9 @@ function FireList(p: DockProps) {
           const tag = statusTag(b, sim.phase);
           const detail = b.evacStarted || b.status === 'lost' || b.status === 'clear'
             ? `${b.residents} residents · ${b.needsHelp} need help`
-            : `${b.fireEtaMin >= 0 ? `Fire in ${fmtMin(b.fireEtaMin)}` : 'No fire path yet'} · evacuation ${fmtMin(b.evacNeededMin)}`;
+            : b.status === 'burning'
+              ? `On fire · ${b.residents - b.peopleOut} still inside`
+              : `${b.fireEtaMin >= 0 ? `Fire in ${fmtMin(b.fireEtaMin)}` : 'No fire path yet'} · evacuation ${fmtMin(b.evacNeededMin)}`;
           return (
             <li key={b.id}>
               <div className="row" role="button" tabIndex={0} onClick={() => onSelect(b.id)} onKeyDown={(e) => { if (e.key === 'Enter') onSelect(b.id); }}>
@@ -240,6 +276,7 @@ function FireDetail(p: DockProps & { selected: Building }) {
         </div>
         <span className="chip" style={{ color: tag.color, borderColor: tag.color }}>{tag.text}</span>
       </div>
+      {b.kind !== 'shelter' && <Structure b={b} />}
       {b.kind !== 'shelter' && b.status !== 'lost' && b.status !== 'clear' && (
         <>
           <div className="kpis wide">
@@ -266,7 +303,7 @@ function FireDetail(p: DockProps & { selected: Building }) {
           <div className="meter"><div style={{ width: `${(100 * b.peopleOut) / Math.max(1, b.residents)}%` }} /></div>
         </div>
       )}
-      {b.status === 'lost' && <p className="hint">Building lost. {b.residents - b.peopleOut} residents were still inside.</p>}
+      {b.status === 'lost' && <p className="hint">The building collapsed. {b.residents - b.peopleOut > 0 ? `${b.residents - b.peopleOut} residents were still inside.` : 'Everyone was already out.'}</p>}
       {b.status === 'clear' && <p className="hint">Everyone is out and accounted for.</p>}
       {b.kind === 'shelter' && <p className="hint">Destination for every evacuation.</p>}
     </>
@@ -325,6 +362,7 @@ function Incident(p: DockProps) {
           </ul>
         </>
       )}
+      <Log events={p.events} />
     </>
   );
 }

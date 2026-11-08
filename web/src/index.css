@@ -254,6 +254,25 @@ h2, p { margin: 0; }
 .btn.secondary:hover:not(:disabled) { background: #24375A; }
 .unit-line { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #9DC0FF; }
 
+/* structure stage strip + incident log */
+.structure { display: flex; flex-direction: column; gap: 6px; }
+.structure-lbl { font-size: 11px; color: var(--muted); }
+.structure ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.structure li { font-size: 12px; font-weight: 600; color: #6F7A8E; text-align: center; padding: 6px 4px; background: var(--panel); border: 1px solid var(--border); border-top: 3px solid var(--border-2); border-radius: 8px; }
+.structure li.past { color: var(--muted); border-top-color: #6B4A3A; }
+.structure li.now { color: var(--text); }
+.structure li.now.s0 { border-top-color: var(--green); }
+.structure li.now.s1 { border-top-color: var(--amber); color: var(--amber); }
+.structure li.now.s2 { border-top-color: var(--red); color: var(--red); }
+.structure li.now.s3 { border-top-color: #8A94A8; }
+.log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.log li { display: grid; grid-template-columns: 48px 1fr; gap: 10px; padding: 8px 12px; font-size: 13px; background: var(--panel); border-left: 3px solid transparent; }
+.log li + li { border-top: 1px solid var(--border); }
+.log li.bad { border-left-color: var(--red); }
+.log li.warn { border-left-color: var(--amber); }
+.log li.good { border-left-color: var(--green); }
+.log time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
+
 /* ------------------------------------------------------------------ phone */
 @media (max-width: 760px) {
   .top-slot { top: 8px; left: 8px; right: 8px; }
@@ -319,3 +338,13 @@ h2, p { margin: 0; }
   .status-pill { padding-left: 8px; }
   .pill-val { font-size: 15px; padding-right: 4px; }
 }
+
+/* fire damage: stage cross-fade, collapse dust and sparks */
+.sprite-in { animation: sprite-in 1.4s ease forwards; }
+.sprite-out { animation: sprite-out 1.4s ease forwards; }
+@keyframes sprite-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sprite-out { from { opacity: 1; } to { opacity: 0; } }
+.dust-burst { transform-box: fill-box; transform-origin: center; animation: dust-burst 3s ease-out forwards; }
+@keyframes dust-burst { 0% { transform: scale(0.3); opacity: 0.95; } 100% { transform: scale(2.6); opacity: 0; } }
+.spark { animation: spark 1.8s ease-out forwards; }
+@keyframes spark { from { transform: translate(0, 0); opacity: 1; } to { transform: translate(var(--dx), var(--dy)); opacity: 0; } }

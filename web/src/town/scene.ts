@@ -70,10 +70,19 @@ export function spriteScale(b: Pick<Building, 'kind' | 'w' | 'h'>): number {
   return Math.min(1.15, Math.max(0.7, Math.sqrt((b.w * b.h) / (s.W * s.D))));
 }
 
-export function spriteVariant(pack: Pack, status: BuildingStatus): string {
-  if (status === 'burning') return 'burning';
+/** Which render to show: the look, or a fire damage stage (burning, gutted, collapsed). */
+export function spriteVariant(pack: Pack, status: BuildingStatus, damage = 0): string {
   if (status === 'lost') return 'lost';
+  if (status === 'burning') return damage >= 2 ? 'gutted' : 'burning';
   return pack;
+}
+
+/** The stage a building was in just before this one, so the map can cross-fade between them. */
+export function previousVariant(pack: Pack, variant: string): string | null {
+  if (variant === 'burning') return pack;
+  if (variant === 'gutted') return 'burning';
+  if (variant === 'lost') return 'gutted';
+  return null;
 }
 
 export function spriteUrl(kind: BuildingKind, variant: string): string {

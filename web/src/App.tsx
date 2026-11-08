@@ -23,7 +23,7 @@ export default function App() {
   // Warm the image cache so switching look or status never flashes an empty building.
   useEffect(() => {
     const kinds: BuildingKind[] = ['senior', 'apartments', 'office', 'shelter', 'homes'];
-    for (const k of kinds) for (const v of ['night', 'dusk', 'maquette', 'burning', 'lost']) new Image().src = spriteUrl(k, v);
+    for (const k of kinds) for (const v of ['night', 'dusk', 'maquette', 'burning', 'gutted', 'lost']) new Image().src = spriteUrl(k, v);
     for (const t of ['oak', 'palm', 'shrub'] as const) for (const v of ['night', 'dusk', 'maquette'] as const) new Image().src = propUrl(t, v);
     new Image().src = propUrl('snag', 'night');
   }, []);
@@ -85,6 +85,8 @@ export default function App() {
     lastEvent.current = e.id;
     if (first) return; // do not replay history after a deep link
     if (e.kind === 'dispatch') sound.siren(4.5);
+    else if (e.kind === 'collapse') sound.crash(1);
+    else if (e.kind === 'gutted') sound.crash(0.45);
     else if (e.tone === 'bad') sound.alert('fire');
     else if (e.tone === 'warn') sound.alert('behind');
     else if (e.tone === 'good') sound.alert('good');

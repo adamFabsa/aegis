@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------------------
-// MOCK WORLD — local stand-in for the Spacetime module so the town can be built and
+// MOCK WORLD: local stand-in for the Spacetime module so the town can be built and
 // demoed before the real tables/reducers exist. It follows the rules in LANTERN_SPEC.md
 // §4 closely, but the source of truth is spacetimedb/src/sim.ts. Replace useMockWorld()
 // with useTable() subscriptions once bindings are generated.
@@ -14,7 +14,8 @@ const BASE_SPREAD = 0.2; // mock pacing only; real constants come from seed/fire
 const WIND_K = 1.4;
 const SPOT_P = 0.02;
 const BURN_TICKS = 3;
-const BUILDING_BURN_TICKS = 5;
+const BUILDING_BURN_TICKS = 14; // ~10 s: burning, then gutted, then it collapses
+const GUTTED_AT = 6;
 const TICK_MS = 700;
 
 type Seed = [number, string, BuildingKind, number, number, number, number, number, number, number, number, number, number];
@@ -145,7 +146,7 @@ function fireTicks(cells: FireCell[], dirDeg: number): Float64Array {
 }
 
 /** Mirrors the spec's event_log table (the dashboard's live feed). */
-export interface LogEvent { id: number; tick: number; text: string; tone: 'info' | 'good' | 'warn' | 'bad'; kind?: 'dispatch' }
+export interface LogEvent { id: number; tick: number; text: string; tone: 'info' | 'good' | 'warn' | 'bad'; kind?: 'dispatch' | 'collapse' | 'gutted' }
 
 /** Fire units for the incident-command side (engines protect a building once on scene). */
 export interface Unit { id: number; name: string; status: 'ready' | 'enroute' | 'onscene'; targetId: number | null; ticksLeft: number; travelTicks: number }
@@ -251,16 +252,18 @@ function step(w: World): World {
     if (b.status === 'burning' && protectedIds.has(b.id)) {
       // engine on scene: the fire is knocked down instead of spreading through the building
       burnCount[b.id] = Math.max(0, (burnCount[b.id] ?? 0) - 1);
-      if (burnCount[b.id] === 0) b.status = b.evacStarted ? 'evacuating' : 'ok';
+      if (burnCount[b.id] === 0) { b.status = b.evacStarted ? 'evacuating' : 'ok'; b.damage = 0; }
       return b;
     }
     if (b.status === 'burning') {
       burnCount[b.id] = (burnCount[b.id] ?? 0) + 1;
-      if (burnCount[b.id] >= BUILDING_BURN_TICKS) b.status = 'lost';
+      b.damage = burnCount[b.id] >= GUTTED_AT ? 2 : 1;
+      if (burnCount[b.id] >= BUILDING_BURN_TICKS) { b.status = 'lost'; b.damage = 3; }
       return b;
     }
     if (fp.some((i) => cells[i].state === 1) && Math.random() < (b.risk / 100) * 0.5 * (protectedIds.has(b.id) ? 0.15 : 1)) {
       b.status = 'burning';
+      b.damage = 1;
       for (const i of fp) if (cells[i].state === 0) { cells[i].state = 1; cells[i].burnTicks = 0; }
       return b;
     }
@@ -276,10 +279,12 @@ function step(w: World): World {
 
   for (const b of buildings) {
     const before = w.buildings.find((x) => x.id === b.id)!.status;
+    const beforeDamage = w.buildings.find((x) => x.id === b.id)!.damage ?? 0;
+    if (b.status === 'burning' && (b.damage ?? 0) === 2 && beforeDamage < 2) events = log(events, sim.tick, `${b.name}: roof caving in, upper floors gutted`, 'bad', 'gutted');
     if (before === b.status) continue;
     if (b.status === 'behind') events = log(events, sim.tick, `${b.name} is behind: fire in ${hm(b.fireEtaMin)}, evacuation needs ${hm(b.evacNeededMin)}`, 'warn');
     else if (b.status === 'burning') events = log(events, sim.tick, `${b.name} caught fire`, 'bad');
-    else if (b.status === 'lost') events = log(events, sim.tick, `${b.name} was lost${b.residents - b.peopleOut > 0 ? `, ${b.residents - b.peopleOut} still inside` : ''}`, 'bad');
+    else if (b.status === 'lost') events = log(events, sim.tick, `${b.name} collapsed${b.residents - b.peopleOut > 0 ? `, ${b.residents - b.peopleOut} still inside` : ''}`, 'bad', 'collapse');
     else if (b.status === 'clear') events = log(events, sim.tick, `${b.name} is clear: everyone is out`, 'good');
   }
   if (!cells.some((c) => c.state === 1)) {

@@ -9,7 +9,7 @@ sprites that line up 1:1 with the web town view:
 Usage (from the repo root):
   blender -b -P blender/build_sprites.py -- \
       --kinds senior,apartments,office,shelter,homes \
-      --variants night,dusk,maquette,burning,lost \
+      --variants night,dusk,maquette,burning,gutted,lost \
       --scale 2 --samples 64 --format webp
 
 Output: web/public/sprites/<kind>_<variant>.<ext>  (transparent, shadows baked in)
@@ -24,7 +24,7 @@ def arg(name, default):
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KINDS = arg('--kinds', 'senior,apartments,office,shelter,homes').split(',')
-VARIANTS = arg('--variants', 'night,dusk,maquette,burning,lost').split(',')
+VARIANTS = arg('--variants', 'night,dusk,maquette,burning,gutted,lost').split(',')
 SCALE = float(arg('--scale', '2'))
 SAMPLES = int(arg('--samples', '64'))
 FMT = arg('--format', 'webp').lower()
@@ -50,6 +50,9 @@ CHAR = dict(stucco='#4A423D', stucco2='#463F3A', house2='#433C37', civic='#433D3
             amber='#3A2A20', glass='#050505', cw='#0A0A0A', solar='#0F0E0E', canopy='#1A1614',
             tile='#2E2624', awning='#221D1B', green='#2A2420', deck='#1E1917', sign='#2A2522',
             spandrel='#121010', wood='#1A1513', car1='#221C1A', car2='#1E1A19')
+# collapsed ruins: ash-gray broken concrete and soot, lighter than the still-burning char
+ASH = dict(CHAR, stucco='#5E5650', stucco2='#5A534D', house2='#58514B', civic='#5C5550', stone='#4E4843',
+           trim='#6E665F', roof='#3E3834', concrete='#6E6660', grass='#3E3833')
 MAQ = dict(stucco='#F2F0EB', stucco2='#EEEBE4', house2='#EAE6DD', civic='#F0EEE9', stone='#E4E0D8',
            trim='#FFFFFF', roof='#E9E6E0', metal='#D8D4CC', metalL='#E6E3DC', concrete='#ECE7DD',
            asphalt='#DDD6C8', grass='#D9BF92', foliage='#F4F2EE', palm='#EFECE5', trunk='#D7C9AE', van='#FFFFFF',
@@ -67,8 +70,11 @@ VARIANT = {
                      sun=('#FFFFFF', 3.2, MOON, 8.0), sky=('#DDE2E8', '#F4F1EC', 1.1), exposure=0.25),
     'burning':  dict(pal=BASE, lit=0.85, lit_col='#FF6A1F', lit_str=6.0, lobby=5.0, lamps=False, fire_glow=0,
                      sun=('#9FB4FF', 1.2, MOON, 1.5), sky=('#0A0C14', '#3A2420', 1.4), exposure=0.0, roof_fire=True),
-    'lost':     dict(pal=CHAR, lit=0.0, lit_col='#FF5A1F', lit_str=0.0, lobby=0.0, lamps=False, fire_glow=0,
-                     sun=('#B8C4E0', 3.5, MOON, 1.5), sky=('#0C0E14', '#3A3430', 1.8), exposure=1.0, embers=True),
+    # fire damage stages: gutted (still burning, roof corner caved in, windows blown) and lost (collapsed)
+    'gutted':   dict(pal=CHAR, lit=0.9, lit_col='#FF5A1F', lit_str=9.0, lobby=7.0, lamps=False, fire_glow=0,
+                     sun=('#9FB4FF', 1.6, MOON, 1.5), sky=('#0A0C14', '#3A2420', 1.4), exposure=0.75, roof_fire=True, damage='gutted'),
+    'lost':     dict(pal=ASH, lit=0.0, lit_col='#FF5A1F', lit_str=0.0, lobby=0.0, lamps=False, fire_glow=0,
+                     sun=('#C4CCE0', 4.2, MOON, 1.5), sky=('#0C0E14', '#3A3430', 2.0), exposure=1.1, embers=True, damage='ruin'),
 }
 
 # ------------------------------------------------------------------ low-level helpers
@@ -418,7 +424,7 @@ class Ctx:
     def __init__(self, v):
         self.v = v
         self.p = v['pal']
-        self.lost = v is VARIANT['lost']
+        self.lost = v.get('damage') is not None
         self.maq = v is VARIANT['maquette']
         self.rnd = random.Random(12)
         p, lamps = self.p, v['lamps']
@@ -478,6 +484,7 @@ class Ctx:
         )
         self.reset_lists()
         self.fire_spots = []
+        self.openings = []   # every window/door pane box, so damage can cut real openings
 
     def reset_lists(self):
         self.trim, self.glass, self.lit1, self.lit2, self.lobby, self.metal, self.rail = [], [], [], [], [], [], []
@@ -535,6 +542,7 @@ class Ctx:
 
     def flush(self):
         M = self.M
+        self.openings += self.lit1 + self.lit2 + self.glass + self.lobby
         boxes('trim', self.trim, M['trim'], bevel=0.015)
         boxes('glass', self.glass, M['glass'])
         boxes('lit1', self.lit1, M['lit1'])
@@ -810,6 +818,7 @@ def build_office(c):
     cw += c.glass          # unlit panes on an office read as reflective curtain-wall glass
     c.glass = []
     boxes('cw', cw, M['cw'])
+    c.openings += cw
     span = []
     for f in range(NF):
         z0 = f * FH
@@ -1026,6 +1035,275 @@ def build_snag(c):
 
 PROPS = dict(oak=build_oak, palm=build_palm, shrub=build_shrub, snag=build_snag)
 
+# ------------------------------------------------------------------ fire damage
+SITE = ('catcher', 'lawn', 'apron', 'walk', 'drive', 'plaza', 'lot', 'stripes', 'trunk', 'crown', 'shrub', 'pole', 'lamp',
+        'van', 'beacon', 'head', 'tail', 'wheel', 'car', 'flag', 'assembly', 'fence', 'ramp')
+
+def _invisible(o):
+    """Cutters must stay in the render (hide_render would drop the boolean) but never be seen."""
+    for attr in ('visible_camera', 'visible_shadow', 'visible_diffuse', 'visible_glossy', 'visible_transmission', 'visible_volume_scatter'):
+        if hasattr(o, attr):
+            setattr(o, attr, False)
+    o.name = 'cutter_' + o.name
+
+def _cutter_grid(z, size, strength, seed):
+    """A jagged horizontal break surface extruded upward: everything above it is removed."""
+    bpy.ops.mesh.primitive_grid_add(x_subdivisions=48, y_subdivisions=48, size=size, location=(0, 0, z))
+    g = bpy.context.active_object
+    tex = bpy.data.textures.new('breakTex', 'CLOUDS')
+    tex.noise_scale = 0.9
+    tex.noise_depth = 2
+    d = g.modifiers.new('break', 'DISPLACE')
+    d.texture = tex
+    d.strength = strength
+    d.texture_coords = 'GLOBAL'
+    sol = g.modifiers.new('volume', 'SOLIDIFY')
+    sol.thickness = 60
+    sol.offset = 1.0
+    _invisible(g)
+    g.rotation_euler = (0, 0, seed)
+    return g
+
+def _cutter_blob(loc, r, seed):
+    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=3, radius=r, location=loc)
+    b = bpy.context.active_object
+    tex = bpy.data.textures.new('holeTex', 'CLOUDS')
+    tex.noise_scale = 0.22
+    tex.noise_depth = 3
+    d = b.modifiers.new('rough', 'DISPLACE')
+    d.texture = tex
+    d.strength = r * 0.75
+    b.rotation_euler = (seed, seed * 1.7, seed * 0.6)
+    _invisible(b)
+    return b
+
+SHELLS = ('mass', 'plinth', 'walls', 'core', 'clere')
+
+def _bounds(o):
+    vs = [o.matrix_world @ v.co for v in o.data.vertices]
+    return (min(v.x for v in vs), max(v.x for v in vs), min(v.y for v in vs), max(v.y for v in vs), min(v.z for v in vs), max(v.z for v in vs))
+
+def hollow_interior(c, kind, mode, rnd):
+    """Swap solid masses for wall shells with floors, columns, rooms and burnt furniture inside,
+    and cut the window panes out as real openings so the fire-gutted interior shows through."""
+    M = c.M
+    ruin = mode == 'ruin'
+    plaster = make_mat('plaster', '#8A817A' if ruin else '#4A423E', rough=0.95, noise=0.8, nscale=9, bump=0.5, bscale=60)
+    slab = make_mat('slab', '#7A726B' if ruin else '#3B3633', rough=0.95, noise=0.8, nscale=6, bump=0.5, bscale=90)
+    charwood = make_mat('charwood', '#1C1412', rough=0.9, noise=0.8, nscale=25, bump=0.8, bscale=70)
+    shells = []
+    for o in [o for o in bpy.context.scene.objects if o.type == 'MESH' and o.name.split('.')[0] in SHELLS]:
+        b = _bounds(o)
+        mat = o.data.materials[0] if o.data.materials else M['stucco']
+        bpy.data.objects.remove(o, do_unlink=True)
+        x0, x1, y0, y1, z0, z1 = b
+        t = 0.35
+        if ruin:
+            # what survives a collapse: wall stubs of uneven height, built broken rather than cut
+            top = z0 + (z1 - z0) * 0.55
+            segs = []
+            def run(a0, a1, fixed, along_x):
+                n = max(2, int((a1 - a0) / 1.6))
+                for i in range(n):
+                    u0 = a0 + (a1 - a0) * i / n
+                    u1 = a0 + (a1 - a0) * (i + 1) / n
+                    hgt = z0 + (top - z0) * (rnd.uniform(0.15, 1.0) ** 1.6)
+                    if along_x:
+                        segs.append((u0, u1, fixed[0], fixed[1], z0, hgt))
+                    else:
+                        segs.append((fixed[0], fixed[1], u0, u1, z0, hgt))
+            run(x0, x1, (y0, y0 + t), True)
+            run(x0, x1, (y1 - t, y1), True)
+            run(y0, y1, (x0, x0 + t), False)
+            run(y0, y1, (x1 - t, x1), False)
+            shells.append((boxes('ruinwall', segs, mat), (x0, x1, y0, y1, z0, top)))
+        else:
+            shells.append((boxes('shell', [(x0, x1, y0, y0 + t, z0, z1), (x0, x1, y1 - t, y1, z0, z1),
+                                           (x0, x0 + t, y0, y1, z0, z1), (x1 - t, x1, y0, y1, z0, z1)], mat), b))
+    # window and door openings through the shell walls (panes are blown out)
+    cuts = []
+    for (x0, x1, y0, y1, z0, z1) in c.openings:
+        if (y1 - y0) < (x1 - x0):   # pane on a face that runs along x: push the cut through the wall in y
+            cuts.append((x0, x1, y0 - 0.3, y1 + 0.7, z0, z1))
+        else:
+            cuts.append((x0 - 0.7, x1 + 0.3, y0, y1, z0, z1))
+    if cuts and not ruin:   # stacking the openings cut under the collapse cut breaks the second boolean; ruins do not need it
+        win = boxes('cutter_windows', cuts, M['glass'])
+        for attr in ('visible_camera', 'visible_shadow', 'visible_diffuse', 'visible_glossy', 'visible_transmission', 'visible_volume_scatter'):
+            if hasattr(win, attr):
+                setattr(win, attr, False)
+        for sh, _ in shells:
+            m = sh.modifiers.new('openings', 'BOOLEAN')
+            m.operation = 'DIFFERENCE'
+            m.object = win
+            m.solver = 'FLOAT'
+    for name in ('glass', 'lit1', 'lit2', 'lobby', 'cw', 'rail'):
+        for o in [o for o in bpy.context.scene.objects if o.name.split('.')[0] == name]:
+            bpy.data.objects.remove(o, do_unlink=True)
+
+    # inside each shell: slabs at every storey, columns, corridor + room walls, charred contents
+    FH = 3.5
+    slabs, cols, parts, stuff, flames = [], [], [], [], []
+    for _, (x0, x1, y0, y1, z0, z1) in shells:
+        ix0, ix1, iy0, iy1 = x0 + 0.35, x1 - 0.35, y0 + 0.35, y1 - 0.35
+        storey = FH if (z1 - z0) > 4.2 else (z1 - z0)
+        z = z0
+        floors = []
+        while z < z1 - 0.6:
+            floors.append(z)
+            slabs.append((ix0, ix1, iy0, iy1, z, z + 0.25))
+            z += storey
+        nx = max(2, int((ix1 - ix0) / 4.7))
+        ny = max(1, int((iy1 - iy0) / 4.7))
+        for i in range(1, nx):
+            x = ix0 + (ix1 - ix0) * i / nx
+            for j in range(1, ny + 1):
+                y = iy0 + (iy1 - iy0) * j / (ny + 1)
+                cols.append((x - 0.2, x + 0.2, y - 0.2, y + 0.2, z0, z1))
+        if (iy1 - iy0) > 7:
+            yc = (iy0 + iy1) / 2
+            parts += [(ix0, ix1, yc - 1.3, yc - 1.15, z0, z1), (ix0, ix1, yc + 1.15, yc + 1.3, z0, z1)]
+        for i in range(1, nx):
+            x = ix0 + (ix1 - ix0) * i / nx + 1.1
+            parts.append((x - 0.07, x + 0.07, iy0, iy0 + (iy1 - iy0) * 0.42, z0, z1))
+        for fz in floors:
+            for i in range(nx):
+                if rnd.random() < 0.75:
+                    fx = ix0 + (ix1 - ix0) * (i + rnd.uniform(0.2, 0.7)) / nx
+                    fy = rnd.uniform(iy0 + 0.6, iy0 + (iy1 - iy0) * 0.38)
+                    w, d, h = rnd.uniform(0.8, 2.0), rnd.uniform(0.6, 1.4), rnd.uniform(0.35, 0.9)
+                    stuff.append((fx - w / 2, fx + w / 2, fy - d / 2, fy + d / 2, fz + 0.25, fz + 0.25 + h))
+            if mode == 'gutted':
+                # fire burning in the rooms: glowing beds of flame you can see through every opening
+                for k in range(nx):
+                    if rnd.random() < 0.8:
+                        lx = ix0 + (ix1 - ix0) * (k + rnd.uniform(0.25, 0.75)) / nx
+                        flames.append((lx - 0.8, lx + 0.8, iy0 + 0.6, iy0 + 1.5, fz + 0.25, fz + rnd.uniform(0.6, 1.6)))
+                for k in range(3):
+                    lx = ix0 + (ix1 - ix0) * (k + 0.5) / 3
+                    light('POINT', 'roomFire', (lx, iy0 + 1.4, fz + 1.5), 900, '#FF5A1F', size=1.2)
+    if ruin:
+        # interior survives as broken pieces too: chop walls into stubs, snap columns, keep only low floors
+        def broken(bx_list, seg):
+            out = []
+            for (a0, a1, b0, b1, z0_, z1_) in bx_list:
+                along_x = (a1 - a0) >= (b1 - b0)
+                L = (a1 - a0) if along_x else (b1 - b0)
+                n = max(1, int(L / seg))
+                for i in range(n):
+                    if rnd.random() < 0.25:
+                        continue
+                    hgt = z0_ + (z1_ - z0_) * (rnd.uniform(0.1, 0.9) ** 1.5)
+                    if along_x:
+                        out.append((a0 + L * i / n, a0 + L * (i + 1) / n, b0, b1, z0_, hgt))
+                    else:
+                        out.append((a0, a1, b0 + L * i / n, b0 + L * (i + 1) / n, z0_, hgt))
+            return out
+        parts = broken(parts, 1.4)
+        cols = broken(cols, 99)
+        lowest = min((z for (_, _, _, _, z, _) in slabs), default=0)
+        slabs = [b_ for b_ in slabs if b_[4] <= lowest + 3.6]
+    boxes('slabs', slabs, slab, bevel=0.02)
+    boxes('columns', cols, slab)
+    boxes('partitions', parts, plaster)
+    boxes('contents', stuff, charwood, bevel=0.04)
+    if flames:
+        boxes('roomFlames', flames, make_mat('roomGlow', '#FF6A1F', rough=0.6, emit='#FF6A1F', estr=14.0), bevel=0.2)
+
+def apply_damage(c, kind, W, D, H, mode):
+    """Carve the finished model: 'gutted' caves in a roof corner and punches holes in the front;
+    'ruin' snaps the building off along a jagged line and piles debris where it fell."""
+    M = c.M
+    rnd = random.Random(31 + len(kind))
+    hollow_interior(c, kind, mode, rnd)
+    targets = [o for o in bpy.context.scene.objects
+               if o.type in ('MESH',) and not o.name.startswith(SITE + (('ruinwall', 'partitions', 'columns', 'slabs', 'contents') if mode == 'ruin' else ())) and not o.name.startswith('cutter_') and not o.hide_render]
+    for o in [o for o in bpy.context.scene.objects if o.type == 'FONT']:
+        bpy.data.objects.remove(o, do_unlink=True)
+    cutters = []
+    hole_centres = []
+    if mode == 'gutted' and kind == 'homes':
+        for i in range(4):
+            cx = -35 + 19 * i + 6.5 + (i % 2) * 2
+            hole_centres.append((cx, -1.0, 6.4, 3.4))
+    elif mode == 'gutted':
+        r = 0.3 * max(W, D)
+        hole_centres.append((W * 0.2, -D * 0.2, H + r * 0.25, r))
+        hole_centres.append((-W * 0.26, -D * 0.5, H * 0.7, 0.12 * max(W, D)))
+    for k, (x, y, z, r) in enumerate(hole_centres):
+        cutters.append(_cutter_blob((x, y, z), r, 1.3 + k))
+    if mode == 'ruin':
+        top = H * 0.3 if kind != 'homes' else 1.5
+        cutters.append(_cutter_grid(top, max(W, D) * 1.8, H * 0.34 if kind != 'homes' else 1.1, 0.4))
+    for o in targets:
+        for k, cut in enumerate(cutters):
+            m = o.modifiers.new(f'dmg{k}', 'BOOLEAN')
+            m.operation = 'DIFFERENCE'
+            m.object = cut
+            m.solver = 'FLOAT'  # the exact solver gives up on the noisy cutter surface and silently skips the cut
+
+    # debris: broken slabs and blocks around the base, mounds where floors came down
+    hw, hd = W / 2, D / 2
+    mats = [M['stucco'], M['stone'], M['trim'], M['roof'], M['concrete']]
+    n = 70 if mode == 'ruin' else 26
+    for i in range(n):
+        if mode == 'ruin' and i % 3 == 0:
+            x, y = rnd.uniform(-hw, hw), rnd.uniform(-hd, hd)
+            z = H * 0.3 + rnd.uniform(-1, 1.5)
+        else:
+            side = rnd.random()
+            x = rnd.uniform(-hw - 2.5, hw + 2.5) if side < 0.6 else hw + rnd.uniform(0, 2.8)
+            y = -hd - rnd.uniform(0, 3.0) if side < 0.6 else rnd.uniform(-hd, hd)
+            z = rnd.uniform(0.05, 0.6)
+        s = rnd.uniform(0.35, 1.4) if mode == 'ruin' else rnd.uniform(0.25, 0.8)
+        o = boxes('debris', [(-s, s, -s * 0.6, s * 0.6, -s * 0.25, s * 0.25)], mats[i % len(mats)])
+        o.location = (x, y, z)
+        o.rotation_euler = (rnd.uniform(0, 1.2), rnd.uniform(0, 1.2), rnd.uniform(0, 3.14))
+    # charred beams left hanging across the broken areas
+    beam = make_mat('beam', '#1A1311', rough=0.9, noise=0.6, nscale=30, bump=0.6, bscale=80)
+    for (x, y, z, r) in hole_centres:
+        for j in range(4):
+            o = boxes('beam', [(-r * 0.8, r * 0.8, -0.12, 0.12, -0.12, 0.12)], beam)
+            o.location = (x + rnd.uniform(-r * 0.3, r * 0.3), y + rnd.uniform(-r * 0.3, r * 0.3), min(z, H) - rnd.uniform(0.2, 1.4))
+            o.rotation_euler = (rnd.uniform(-0.25, 0.25), rnd.uniform(-0.35, 0.35), rnd.uniform(0, 3.14))
+    if mode == 'ruin':
+        # low, rough heaps where the upper floors came down
+        tex = bpy.data.textures.new('heapTex', 'CLOUDS')
+        tex.noise_scale = 0.35
+        heaps = 6 if kind != 'homes' else 6
+        for i in range(heaps):
+            x = -hw + (i + 0.5) * W / heaps + rnd.uniform(-1, 1)
+            r = min(W, D) * (0.1 if kind != 'homes' else 0.22) * rnd.uniform(0.8, 1.2)
+            # heaps sit toward the back and sides so the broken floors stay visible
+            bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=3, radius=r, location=(x, rnd.uniform(hd * 0.1, hd * 0.6), H * 0.12 if kind != 'homes' else 0.9))
+            heap = bpy.context.active_object
+            d = heap.modifiers.new('rough', 'DISPLACE')
+            d.texture = tex
+            d.strength = r * 0.6
+            heap.scale = (1.5, 1.1, 0.42)
+            heap.data.materials.append(mats[i % len(mats)])
+        # what is left standing: twisted columns and a corner of wall above the rubble line
+        if kind != 'homes':
+            stand = make_mat('standing', '#2C2724', rough=0.95, noise=0.7, nscale=12, bump=0.6, bscale=50)
+            for k in range(5):
+                x = -hw + W * rnd.uniform(0.15, 0.85)
+                y = rnd.uniform(-hd * 0.6, hd * 0.6)
+                hgt = H * rnd.uniform(0.38, 0.62)
+                col = boxes('stub', [(-0.22, 0.22, -0.22, 0.22, 0, hgt)], stand)
+                col.location = (x, y, 0)
+                col.rotation_euler = (rnd.uniform(-0.12, 0.12), rnd.uniform(-0.12, 0.12), rnd.uniform(0, 3))
+            boxes('wallCorner', [(hw - 5.5, hw, -hd, -hd + 0.35, 0, H * 0.55), (hw - 0.35, hw, -hd, -hd + 4.5, 0, H * 0.5)], M['stucco'])
+            boxes('wallFrag', [(-hw, -hw + 3.2, -hd, -hd + 0.35, 0, H * 0.42)], M['stucco'])
+        # embers glowing in the rubble
+        glow = make_mat('emberGlow', '#2A1A12', rough=0.8, emit='#FF5A1F', estr=6.0)
+        for i in range(18):
+            o = boxes('ember', [(-0.18, 0.18, -0.12, 0.12, -0.06, 0.06)], glow)
+            o.location = (rnd.uniform(-hw, hw), rnd.uniform(-hd - 1.5, hd), rnd.uniform(0.1, H * 0.3))
+    else:
+        # fire light inside the caved-in corner
+        light('POINT', 'innerFire', (W * 0.22, -D * 0.2, H * 0.8), 2600, '#FF5A1F', size=2.5)
+        light('POINT', 'innerFire', (-W * 0.24, -D * 0.4, H * 0.65), 1200, '#FF6A1F', size=1.5)
+
 # ------------------------------------------------------------------ main
 ext = 'webp' if FMT == 'webp' else 'png'
 for kind in KINDS:
@@ -1037,7 +1315,7 @@ for kind in KINDS:
     for name in VARIANTS:
         if kind == 'snag' and name != 'lost':
             continue
-        if is_prop and kind != 'snag' and name in ('lost', 'burning'):
+        if is_prop and kind != 'snag' and name in ('lost', 'burning', 'gutted'):
             continue
         v = VARIANT[name]
         bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -1046,6 +1324,8 @@ for kind in KINDS:
         setup_world(v)
         c = Ctx(v)
         W, D, H = (PROPS if is_prop else BUILDERS)[kind](c)
+        if not is_prop and v.get('damage'):
+            apply_damage(c, kind, W, D, H, v['damage'])
         if is_prop:
             v_props = dict(v, roof_fire=False, embers=False, fire_glow=0)
             c.v = v_props
