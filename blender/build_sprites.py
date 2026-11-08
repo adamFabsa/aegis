@@ -40,19 +40,19 @@ ANCHOR_X, ANCHOR_Y = 220, 220
 # ------------------------------------------------------------------ palettes
 BASE = dict(stucco='#E6D2B5', stucco2='#EDE6D8', house2='#CFCBB2', civic='#D3CEC2', stone='#9C8B78',
             trim='#F2EBDD', roof='#8F8A82', metal='#3B3F45', metalL='#B8BCC2', concrete='#B9B3A8',
-            asphalt='#2C2D30', grass='#4E6B2E', foliage='#3F6A2A', trunk='#4A3626', van='#F2F2EF',
+            asphalt='#2C2D30', grass='#4E6B2E', foliage='#3F6A2A', palm='#6B8A3A', trunk='#4A3626', van='#F2F2EF',
             amber='#F2A93B', glass='#1C2A36', cw='#4E7088', solar='#14243A', canopy='#4A4038',
             tile='#B85E36', awning='#2F6B5E', green='#4C6B33', deck='#8E6A48', sign='#3DD68C',
             spandrel='#20272E', wood='#6B4A32', car1='#8C2F2F', car2='#2F4C7A')
 CHAR = dict(stucco='#4A423D', stucco2='#463F3A', house2='#433C37', civic='#433D39', stone='#2E2926',
             trim='#57504A', roof='#26211F', metal='#1F1B19', metalL='#3A3431', concrete='#4A443F',
-            asphalt='#242120', grass='#3A332E', foliage='#2A2522', trunk='#151110', van='#2A2523',
+            asphalt='#242120', grass='#3A332E', foliage='#2A2522', palm='#2A2522', trunk='#151110', van='#2A2523',
             amber='#3A2A20', glass='#050505', cw='#0A0A0A', solar='#0F0E0E', canopy='#1A1614',
             tile='#2E2624', awning='#221D1B', green='#2A2420', deck='#1E1917', sign='#2A2522',
             spandrel='#121010', wood='#1A1513', car1='#221C1A', car2='#1E1A19')
 MAQ = dict(stucco='#F2F0EB', stucco2='#EEEBE4', house2='#EAE6DD', civic='#F0EEE9', stone='#E4E0D8',
            trim='#FFFFFF', roof='#E9E6E0', metal='#D8D4CC', metalL='#E6E3DC', concrete='#ECE7DD',
-           asphalt='#DDD6C8', grass='#D9BF92', foliage='#F4F2EE', trunk='#D7C9AE', van='#FFFFFF',
+           asphalt='#DDD6C8', grass='#D9BF92', foliage='#F4F2EE', palm='#EFECE5', trunk='#D7C9AE', van='#FFFFFF',
            amber='#E0D8C8', glass='#B4C3CA', cw='#BFCDD3', solar='#AAB6BE', canopy='#E2DED6',
            tile='#E8E2D6', awning='#E0D9CC', green='#D8DCCB', deck='#DCC7A5', sign='#B9CDBE',
            spandrel='#E6E2DA', wood='#D9C9AC', car1='#FFFFFF', car2='#F2EFE9')
@@ -469,6 +469,9 @@ class Ctx:
             ink=make_mat('ink', '#0B0F17', rough=0.5),
             red=make_mat('red', '#FF3B30', rough=0.3, emit='#FF3B30', estr=0.0 if (self.lost or self.maq) else 6.0),
             tire=make_mat('tire', '#141414', rough=0.8),
+            leaf=make_mat('leaf', p['foliage'], rough=0.75, noise=0.0 if self.maq else 0.75, nscale=3, bump=0.9, bscale=45),
+            palmLeaf=make_mat('palmLeaf', p['palm'], rough=0.6, noise=0.0 if self.maq else 0.5, nscale=6, bump=0.4, bscale=80),
+            palmTrunk=make_mat('palmTrunk', p['trunk'], rough=0.9, noise=0.4, nscale=12, bump=0.6, bscale=30),
             pavers=make_mat('pavers', p['concrete'], rough=0.85, brick=2.4, bump=0.2),
             reveal=make_mat('reveal', scale_col(lin(p['stucco']), 0.62), rough=0.9),
             sconce=make_mat('sconce', '#FFE2B8', rough=0.4, emit='#FFD9A0', estr=on(9.0)),
@@ -937,19 +940,117 @@ def build_homes(c):
 
 BUILDERS = dict(senior=build_senior, apartments=build_apartments, office=build_office, shelter=build_shelter, homes=build_homes)
 
+# ------------------------------------------------------------------ vegetation props (billboards on the map)
+# Smaller frame, anchor = where the trunk meets the ground. Must match PROP_BOX in web/src/town/scene.ts.
+PROP_BOX = (176, 110, 36, 62)
+
+def branch(pivot, rx, rz, ln, r, mat):
+    """Cylinder that starts at pivot and points along the given tilt (rx) / heading (rz)."""
+    from mathutils import Euler
+    e = Euler((math.radians(rx), 0, math.radians(rz)))
+    d = Vector((0, 0, 1))
+    d.rotate(e)
+    cy = cylinder('branch', 0, 0, 0, ln, r, mat, verts=8)
+    cy.rotation_euler = e
+    cy.location = Vector(pivot) + d * (ln / 2)
+    return cy
+
+def prop_ground(c):
+    cat = boxes('catcher', [(-60, 60, -60, 60, -0.02, -0.001)], c.M['concrete'])
+    cat.is_shadow_catcher = True
+
+def build_oak(c):
+    M = c.M
+    prop_ground(c)
+    cylinder('trunk', 0, 0, 0.0, 3.0, 0.24, M['trunk'], verts=12)
+    for (rx, rz, ln) in ((35, 20, 1.6), (40, 140, 1.4), (30, 250, 1.3)):
+        branch((0, 0, 2.6), rx, rz, ln, 0.1, M['trunk'])
+    blobs = [((0, 0, 4.4), 1.9), ((1.1, -0.6, 3.9), 1.4), ((-1.0, 0.5, 4.0), 1.4), ((0.3, 0.9, 5.2), 1.3),
+             ((-0.5, -0.9, 5.0), 1.2), ((0.9, 0.4, 5.4), 1.0)]
+    for k, (loc, r) in enumerate(blobs):
+        blob('crown', loc, r, M['leaf'], k + 3)
+    return 3, 3, 6
+
+def build_palm(c):
+    M = c.M
+    prop_ground(c)
+    top = Vector((0.6, -0.3, 8.6))
+    segs = 8
+    for i in range(segs):
+        t0, t1 = i / segs, (i + 1) / segs
+        a = Vector((0, 0, 0)).lerp(top, t0)
+        b = Vector((0, 0, 0)).lerp(top, t1)
+        a.x += 0.5 * math.sin(t0 * math.pi) ; b.x += 0.5 * math.sin(t1 * math.pi)
+        mid = (a + b) / 2
+        d = b - a
+        cy = cylinder('palmTrunk', mid.x, mid.y, 0, d.length, 0.24 - 0.08 * t0, M['palmTrunk'], verts=12)
+        cy.location = mid
+        cy.rotation_euler = d.to_track_quat('Z', 'Y').to_euler()
+    top.x += 0.0
+    fronds = 11
+    for f in range(fronds):
+        ang = 2 * math.pi * f / fronds + 0.3
+        L = 3.2 + 0.4 * math.sin(f * 1.7)
+        lift = 1.3 if f % 3 else 1.8
+        v, faces = [], []
+        n = 10
+        for i in range(n + 1):
+            t = i / n
+            cx = top.x + math.cos(ang) * L * t
+            cy2 = top.y + math.sin(ang) * L * t
+            cz = top.z + lift * t - 3.4 * t * t
+            w = 0.55 * math.sin(math.pi * min(1.0, t * 1.15)) + 0.05
+            px, py = -math.sin(ang) * w, math.cos(ang) * w
+            v += [(cx + px, cy2 + py, cz - 0.08 * w), (cx, cy2, cz + 0.05), (cx - px, cy2 - py, cz - 0.08 * w)]
+            if i:
+                b0 = (i - 1) * 3
+                faces += [(b0, b0 + 1, b0 + 4, b0 + 3), (b0 + 1, b0 + 2, b0 + 5, b0 + 4)]
+        mesh_obj('frond', v, faces, M['palmLeaf'], solidify=0.02)
+    blob('palmHeart', tuple(top), 0.35, M['palmTrunk'], 2)
+    return 3, 3, 9
+
+def build_shrub(c):
+    M = c.M
+    prop_ground(c)
+    for k, (loc, r) in enumerate((((0, 0, 0.55), 0.75), ((0.6, -0.3, 0.45), 0.55), ((-0.5, 0.35, 0.5), 0.6))):
+        blob('shrub', loc, r, M['leaf'], k + 7)
+    return 2, 2, 1.2
+
+def build_snag(c):
+    M = c.M
+    prop_ground(c)
+    cylinder('trunk', 0, 0, 0.0, 4.2, 0.26, M['trunk'], verts=10)
+    for (rx, rz, ln, z) in ((40, 30, 1.8, 2.6), (45, 160, 1.5, 2.1), (35, 260, 1.3, 3.3), (25, 330, 1.0, 3.8)):
+        branch((0, 0, z), rx, rz, ln, 0.09, M['trunk'])
+    return 2, 2, 4
+
+PROPS = dict(oak=build_oak, palm=build_palm, shrub=build_shrub, snag=build_snag)
+
 # ------------------------------------------------------------------ main
 ext = 'webp' if FMT == 'webp' else 'png'
 for kind in KINDS:
+    is_prop = kind in PROPS
+    if is_prop:
+        BOX_W, BOX_H, ANCHOR_X, ANCHOR_Y = PROP_BOX
+    else:
+        BOX_W, BOX_H, ANCHOR_X, ANCHOR_Y = 520, 380, 220, 220
     for name in VARIANTS:
+        if kind == 'snag' and name != 'lost':
+            continue
+        if is_prop and kind != 'snag' and name in ('lost', 'burning'):
+            continue
         v = VARIANT[name]
         bpy.ops.wm.read_factory_settings(use_empty=True)
         setup_render(v)
         setup_camera()
         setup_world(v)
         c = Ctx(v)
-        W, D, H = BUILDERS[kind](c)
+        W, D, H = (PROPS if is_prop else BUILDERS)[kind](c)
+        if is_prop:
+            v_props = dict(v, roof_fire=False, embers=False, fire_glow=0)
+            c.v = v_props
         c.lights(W, D, H)
-        out = os.path.join(OUT, f'{kind}_{name}.{ext}')
+        out = os.path.join(OUT, f'{"prop_" if is_prop else ""}{kind}_{name}.{ext}')
         bpy.context.scene.render.filepath = out
         print(f'[lantern] rendering {kind}/{name} -> {out}', flush=True)
         bpy.ops.render.render(write_still=True)

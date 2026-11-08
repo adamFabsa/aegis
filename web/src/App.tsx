@@ -6,7 +6,7 @@ import type { Pack } from './town/types';
 import { Header } from './ui/Header';
 import { BuildingCard } from './ui/BuildingCard';
 import { Results } from './ui/Results';
-import { spriteUrl } from './town/scene';
+import { propUrl, spriteUrl } from './town/scene';
 import type { BuildingKind } from './town/types';
 
 type Look = 'auto' | Pack;
@@ -34,6 +34,8 @@ export default function App() {
   useEffect(() => {
     const kinds: BuildingKind[] = ['senior', 'apartments', 'office', 'shelter', 'homes'];
     for (const k of kinds) for (const v of ['night', 'dusk', 'maquette', 'burning', 'lost']) new Image().src = spriteUrl(k, v);
+    for (const t of ['oak', 'palm', 'shrub'] as const) for (const v of ['night', 'dusk', 'maquette'] as const) new Image().src = propUrl(t, v);
+    new Image().src = propUrl('snag', 'night');
   }, []);
   const [hideResults, setHideResults] = useState(false);
 

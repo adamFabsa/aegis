@@ -58,6 +58,13 @@ export const SPRITE: Record<BuildingKind, { W: number; D: number; roof: number; 
 };
 export const SPRITE_BOX = { w: 520, h: 380, ax: 220, ay: 220 }; // must match BOX_W/H + ANCHOR in blender/build_sprites.py
 
+/** Vegetation sprite frame (must match PROP_BOX in blender/build_sprites.py); anchor = trunk base. */
+export const PROP_BOX = { w: 176, h: 110, ax: 36, ay: 62 };
+
+export function propUrl(type: 'oak' | 'palm' | 'shrub' | 'snag', pack: Pack): string {
+  return `${import.meta.env.BASE_URL}sprites/prop_${type}_${type === 'snag' ? 'lost' : pack}.webp`;
+}
+
 export function spriteScale(b: Pick<Building, 'kind' | 'w' | 'h'>): number {
   const s = SPRITE[b.kind];
   return Math.min(1.15, Math.max(0.7, Math.sqrt((b.w * b.h) / (s.W * s.D))));

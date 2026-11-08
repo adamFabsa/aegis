@@ -2,7 +2,7 @@ import { memo, useMemo, type ReactNode } from 'react';
 import type { Building, FireCell, Pack, Sim } from './types';
 import { CELL, GROUND_MATRIX, MAP_H, MAP_W, OX, OY, VIEW_H, VIEW_W, pointsAttr, project, projectVec, windVector } from './iso';
 import {
-  HILLS_EDGE, HILLS_PATH, LAMPS, LOTS, PARK, ROAD_LINES, ROADS, SIDEWALKS, SPRITE, SPRITE_BOX,
+  HILLS_EDGE, HILLS_PATH, LAMPS, LOTS, PARK, PROP_BOX, ROAD_LINES, ROADS, SIDEWALKS, SPRITE, SPRITE_BOX, propUrl,
   evacRoute, generatePlants, spriteScale, spriteUrl, spriteVariant,
 } from './scene';
 import { PALETTES, STATUS_COLORS, type GroundPalette } from './palettes';
@@ -307,8 +307,24 @@ export function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, vi
     const st = cellState.get(Math.floor(p.y / CELL) * 1000 + Math.floor(p.x / CELL)) ?? 0;
     if (p.type === 'shrub' && st === 2) continue;
     const [px, py] = project(p.x, p.y);
-    const href = st === 2 ? '#snag' : `#${p.type}`;
-    items.push({ depth: p.x + p.y, key: `p${i}`, node: <use href={href} x={px} y={py} /> });
+    const type = st === 2 ? 'snag' : p.type;
+    // deterministic size jitter so the rows of trees do not look stamped
+    const sc = (type === 'shrub' ? 0.8 : 0.9) + ((i * 37) % 10) / 40;
+    items.push({
+      depth: p.x + p.y,
+      key: `p${i}`,
+      node: (
+        <image
+          href={propUrl(type, pack)}
+          x={px - PROP_BOX.ax * sc}
+          y={py - PROP_BOX.ay * sc}
+          width={PROP_BOX.w * sc}
+          height={PROP_BOX.h * sc}
+          preserveAspectRatio="none"
+          style={{ pointerEvents: 'none' }}
+        />
+      ),
+    });
   }
   for (const b of buildings) {
     items.push({
