@@ -6,7 +6,8 @@ import {
   evacRoute, generatePlants, previousVariant, ridgePaths, spriteScale, spriteUrl, spriteVariant,
 } from './scene';
 import { PALETTES, STATUS_COLORS, type GroundPalette } from './palettes';
-import { FireUnits, Markers, StreetLife } from './markers';
+import { FireUnits, Markers, ParkedEngine, StreetLife } from './markers';
+import { enginePark } from './vehicleData';
 import { WindowLayer } from './WindowLayer';
 import { FireDefs } from './FireDefs';
 import { TICK_SECONDS, type Unit } from './mockWorld';
@@ -373,6 +374,14 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
       ),
     });
   }
+  // engines on scene stand at the curb and sort with the buildings, so a building in front hides them
+  for (const u of units) {
+    if (u.status !== 'onscene') continue;
+    const b = buildings.find((x) => x.id === u.targetId);
+    if (!b) continue;
+    const { x, y } = enginePark(b, buildings);
+    items.push({ depth: x + y, key: `eng${u.id}`, node: <ParkedEngine b={b} all={buildings} pack={pack} /> });
+  }
   items.sort((a, b) => a.depth - b.depth);
 
   const evacuating = buildings.filter((b) => b.status === 'evacuating');
@@ -432,14 +441,15 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
         ))}
       </g>
 
-      {/* cars, strolling residents, evacuation columns and vans */}
+      {/* cars, strolling residents, evacuation columns and vans; engines on the road */}
       <StreetLife buildings={buildings} phase={sim.phase} pack={pack} />
+      <FireUnits units={units} buildings={buildings} tickSeconds={TICK_SECONDS} pack={pack} layer="under" />
 
       {/* depth-sorted world */}
       {items.map((it) => <g key={it.key}>{it.node}</g>)}
 
-      {/* fire units sit on top so engines at a building front and their water are never hidden */}
-      <FireUnits units={units} buildings={buildings} tickSeconds={TICK_SECONDS} pack={pack} />
+      {/* light bars, hoses and mist stay visible above the buildings */}
+      <FireUnits units={units} buildings={buildings} tickSeconds={TICK_SECONDS} pack={pack} layer="over" />
 
       {/* smoke, embers, fire light */}
       {fireOn && (

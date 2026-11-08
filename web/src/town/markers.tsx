@@ -3,7 +3,7 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import type { Building, Pack, Sim } from './types';
 import { PeopleDefs, RouteVehicle, VehicleSprite } from './vehicles';
-import { TRAFFIC, headingOf, personStyle, vehLook, vehOffset, type Heading } from './vehicleData';
+import { TRAFFIC, enginePark, personStyle, vehLook, vehOffset, type Heading } from './vehicleData';
 import { project } from './iso';
 import { SPRITE, STAGING, evacRoute, spriteScale, unitRoute } from './scene';
 import type { Unit } from './mockWorld';
@@ -266,29 +266,47 @@ const lightBar = (hd: Heading) => {
   );
 };
 
-export function FireUnits({ units, buildings, tickSeconds, pack }: { units: Unit[]; buildings: Building[]; tickSeconds: number; pack: Pack }) {
+/** Parked engine sprite, depth-sorted with the buildings by Town. */
+export function ParkedEngine({ b, all, pack }: { b: Building; all: Building[]; pack: Pack }) {
+  const { x, y, hd } = enginePark(b, all);
+  const [ex, ey] = project(x, y);
+  return <VehicleSprite model="engine" hd={hd} look={vehLook(pack)} x={ex} y={ey} />;
+}
+
+/**
+ * Fire units in two layers: 'under' (engines at staging and on the road, drawn below the buildings so
+ * a building in front hides them) and 'over' (light bars, hoses and mist, which must stay visible).
+ */
+export function FireUnits({ units, buildings, tickSeconds, pack, layer }: { units: Unit[]; buildings: Building[]; tickSeconds: number; pack: Pack; layer: 'under' | 'over' }) {
   const ready = units.filter((u) => u.status === 'ready');
   const look = vehLook(pack);
+  if (layer === 'under') {
+    return (
+      <g style={{ pointerEvents: 'none' }}>
+        <defs>
+          <radialGradient id="beacon"><stop offset="0" stopColor="#FF5A4E" stopOpacity="0.8" /><stop offset="1" stopColor="#FF5A4E" stopOpacity="0" /></radialGradient>
+          <radialGradient id="mist"><stop offset="0" stopColor="#CFEFFF" stopOpacity="0.7" /><stop offset="1" stopColor="#CFEFFF" stopOpacity="0" /></radialGradient>
+        </defs>
+        {/* engines parked side by side at the staging lot, noses toward the street */}
+        {ready.map((u, i) => {
+          const [x, y] = project(STAGING[0] - 28 + i * 28, STAGING[1] + 26);
+          return <VehicleSprite key={`r${u.id}`} model="engine" hd="n" look={look} x={x} y={y} />;
+        })}
+        {units.filter((u) => u.status === 'enroute').map((u) => {
+          const b = buildings.find((x) => x.id === u.targetId);
+          if (!b) return null;
+          return <RouteVehicle key={`m${u.id}-${b.id}`} route={unitRoute(b, buildings)} model="engine" look={look} dur={u.travelTicks * tickSeconds} once overlay={lightBar} />;
+        })}
+      </g>
+    );
+  }
   return (
     <g style={{ pointerEvents: 'none' }}>
-      <defs>
-        <radialGradient id="beacon"><stop offset="0" stopColor="#FF5A4E" stopOpacity="0.8" /><stop offset="1" stopColor="#FF5A4E" stopOpacity="0" /></radialGradient>
-        <radialGradient id="mist"><stop offset="0" stopColor="#CFEFFF" stopOpacity="0.7" /><stop offset="1" stopColor="#CFEFFF" stopOpacity="0" /></radialGradient>
-      </defs>
-      {/* engines parked side by side at the staging lot, noses toward the street */}
-      {ready.map((u, i) => {
-        const [x, y] = project(STAGING[0] - 28 + i * 28, STAGING[1] + 26);
-        return <VehicleSprite key={`r${u.id}`} model="engine" hd="n" look={look} x={x} y={y} />;
-      })}
-      {units.filter((u) => u.status !== 'ready').map((u) => {
+      {units.filter((u) => u.status === 'onscene').map((u) => {
         const b = buildings.find((x) => x.id === u.targetId);
         if (!b) return null;
-        const route = unitRoute(b);
-        if (u.status === 'enroute') {
-          return <RouteVehicle key={`m${u.id}-${b.id}`} route={route} model="engine" look={look} dur={u.travelTicks * tickSeconds} once overlay={lightBar} />;
-        }
-        const hd = headingOf(route[Math.max(0, route.length - 2)], route[route.length - 1]);
-        const [ex, ey] = project(...route[route.length - 1]);
+        const { x, y, hd } = enginePark(b, buildings);
+        const [ex, ey] = project(x, y);
         const [nx, ny] = vehOffset(hd, -6, 13);
         const [rx, ry] = project(b.x + b.w / 2, b.y + b.h / 2, SPRITE[b.kind].roof * spriteScale(b));
         const sx = ex + nx;
@@ -297,7 +315,6 @@ export function FireUnits({ units, buildings, tickSeconds, pack }: { units: Unit
         const cy = Math.min(sy, ry) - 40;
         return (
           <g key={`s${u.id}`}>
-            <VehicleSprite model="engine" hd={hd} look={look} x={ex} y={ey} />
             <g transform={`translate(${ex} ${ey})`}>{lightBar(hd)}</g>
             {[0, 1].map((k) => (
               <path key={k} d={`M${sx} ${sy} Q ${cx + k * 10} ${cy - k * 8} ${rx + (k ? 14 : -10)} ${ry}`} stroke="#A9DEFF" strokeWidth={k ? 1.6 : 2.4} fill="none" strokeLinecap="round" strokeDasharray="5 7" opacity="0.85">

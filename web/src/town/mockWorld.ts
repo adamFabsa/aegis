@@ -587,7 +587,7 @@ export function useMockWorld() {
       const b = w.buildings.find((x) => x.id === buildingId);
       const u = w.units.find((x) => x.status === 'ready');
       if (!b || !u || w.sim.phase !== 'fire' || b.status === 'lost' || w.units.some((x) => x.targetId === buildingId)) return w;
-      const travel = Math.max(2, Math.ceil(routeLength(unitRoute(b)) / 170));
+      const travel = Math.max(2, Math.ceil(routeLength(unitRoute(b, w.buildings)) / 170));
       return {
         ...w,
         units: w.units.map((x) => (x.id === u.id ? { ...x, status: 'enroute', targetId: buildingId, ticksLeft: travel, travelTicks: travel } : x)),

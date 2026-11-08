@@ -1,5 +1,6 @@
 // Static map geometry (from the spec / Main.dc mockup) and sprite metadata.
 import type { Building, BuildingKind, BuildingStatus, Pack } from './types';
+import { project } from './iso';
 
 export const HILLS_PATH =
   'M560,0 L1000,0 L1000,285 C930,255 880,218 820,206 C760,196 700,152 640,122 C608,102 584,62 560,0 Z';
@@ -163,10 +164,74 @@ export function evacRoute(b: Building, shelter: Building | undefined): [number, 
 /** Fire units wait in the office parking lot (map space) and drive the roads to a building. */
 export const STAGING: [number, number] = [72, 540];
 
-export function unitRoute(b: Building): [number, number][] {
-  const doorX = b.x + b.w / 2;
-  const front = b.y + b.h < 430 ? b.y + b.h + 6 : b.y - 6;
-  return [STAGING, [STAGING[0], 448], [doorX, 448], [doorX, front]];
+// Driving lanes (right-hand traffic): the main road (y 430..466), the cross street (x 360..392)
+// and the hillside street (y 214..236, east of the cross street).
+const LANE = { mainE: 457, mainW: 439, crossS: 383, crossN: 369, hillE: 220, hillW: 230 };
+
+/** Which street a building is served from: the one whose edge is closest to its footprint. */
+function servingRoad(b: Pick<Building, 'x' | 'y' | 'w' | 'h'>): 0 | 1 | 2 {
+  const gap = (r: Rect) => {
+    const dx = Math.max(r.x - (b.x + b.w), b.x - (r.x + r.w), 0);
+    const dy = Math.max(r.y - (b.y + b.h), b.y - (r.y + r.h), 0);
+    return Math.hypot(dx, dy);
+  };
+  const d = ROADS.map(gap);
+  return d.indexOf(Math.min(...d)) as 0 | 1 | 2;
+}
+
+/**
+ * Fire units leave the staging lot and drive the streets to the curb in front of the building,
+ * always in the right lane and never across lawns or through other buildings.
+ */
+/** Screen box of a building (footprint up to its roof). */
+function screenBox(o: Pick<Building, 'kind' | 'x' | 'y' | 'w' | 'h'>) {
+  const roof = SPRITE[o.kind].roof * spriteScale(o);
+  const pts = [[o.x, o.y], [o.x + o.w, o.y], [o.x + o.w, o.y + o.h], [o.x, o.y + o.h]].flatMap(([x, y]) => [project(x, y, 0), project(x, y, roof)]);
+  return { x0: Math.min(...pts.map((p) => p[0])), x1: Math.max(...pts.map((p) => p[0])), y0: Math.min(...pts.map((p) => p[1])), y1: Math.max(...pts.map((p) => p[1])) };
+}
+
+/**
+ * The curb spot along the building's street that is nearest its middle and not hidden behind
+ * another building, so the engine (and its hoses) can be seen from the camera.
+ */
+function parkAlong(b: Building, all: Building[], road: 0 | 1 | 2, lane: number, lo: number, hi: number, mid: number): number {
+  const front = all.filter((o) => o.id !== b.id);
+  const visible = (t: number) => {
+    const [x, y] = road === 1 ? [lane, t] : [t, lane];
+    const [ex, ey] = project(x, y);
+    const box = { x0: ex - 22, x1: ex + 22, y0: ey - 20, y1: ey + 4 };
+    return !front.some((o) => {
+      if (o.x + o.w / 2 + o.y + o.h / 2 <= x + y) return false; // behind the engine: drawn first
+      const r = screenBox(o);
+      return box.x0 < r.x1 && box.x1 > r.x0 && box.y0 < r.y1 && box.y1 > r.y0;
+    });
+  };
+  const span = Math.max(mid - lo, hi - mid) + 140;
+  for (let d = 0; d <= span; d += 8) {
+    for (const t of [mid - d, mid + d]) if (t >= lo - 140 && t <= hi + 140 && visible(t)) return t;
+  }
+  return mid;
+}
+
+export function unitRoute(b: Building, all: Building[] = []): [number, number][] {
+  const road = servingRoad(b);
+  const cx = road === 1 ? b.x + b.w / 2 : parkAlong(b, all, road, road === 0 ? LANE.mainE : LANE.hillE, b.x, b.x + b.w, b.x + b.w / 2);
+  const cy = road === 1 ? parkAlong(b, all, 1, LANE.crossN, b.y, b.y + b.h, b.y + b.h / 2) : b.y + b.h / 2;
+  const out: [number, number][] = [STAGING, [STAGING[0], LANE.mainE]];
+  if (road === 0) {
+    const x = Math.min(990, Math.max(20, cx));
+    out.push([x, x >= STAGING[0] ? LANE.mainE : LANE.mainW]);
+    return out;
+  }
+  // up the cross street (turn left from the eastbound lane into the northbound lane)
+  out.push([LANE.crossN, LANE.mainE]);
+  if (road === 1) {
+    const y = Math.min(600, Math.max(20, cy));
+    out.push([LANE.crossN, y]);
+    return out;
+  }
+  out.push([LANE.crossN, LANE.hillE], [Math.min(990, Math.max(410, cx)), LANE.hillE]);
+  return out;
 }
 
 export function routeLength(pts: [number, number][]): number {

@@ -1,7 +1,8 @@
 // Vehicle sprite metadata and street-life helpers (see vehicles.tsx).
 import type { CSSProperties } from 'react';
 import { project } from './iso';
-import type { Pack } from './types';
+import type { Building, Pack } from './types';
+import { unitRoute } from './scene';
 
 export const VEH_BOX = { w: 80, h: 60, ax: 40, ay: 36 }; // must match VW/VH/AX/AY in blender/build_vehicles.py
 export type VehModel = 'sedanW' | 'sedanK' | 'sedanR' | 'suvS' | 'suvB' | 'pickup' | 'van' | 'engine';
@@ -43,5 +44,13 @@ export function personStyle(i: number, shirt?: string): CSSProperties {
     '--hair': HAIR[(i * 3 + 2) % HAIR.length],
     '--pants': PANTS[(i * 11 + 4) % PANTS.length],
   } as CSSProperties;
+}
+
+
+/** Where an engine on scene stands: the end of its route, facing the way it drove in. */
+export function enginePark(b: Building, all: Building[]): { x: number; y: number; hd: Heading } {
+  const route = unitRoute(b, all);
+  const [x, y] = route[route.length - 1];
+  return { x, y, hd: headingOf(route[Math.max(0, route.length - 2)], route[route.length - 1]) };
 }
 
