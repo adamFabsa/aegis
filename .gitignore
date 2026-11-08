@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.DS_Store
+# data pipeline: raw downloads are large and re-fetchable (data/fetch_data.py)
+data/raw/
+data/.venv/
+__pycache__/
+*.pyc
+.env
+*.env
+.env*

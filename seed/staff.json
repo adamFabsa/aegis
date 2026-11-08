@@ -1,0 +1,40 @@
+{
+  "phoneStaff": [
+    "Alex",
+    "Sam",
+    "Jordan",
+    "Taylor"
+  ],
+  "onSiteByBuilding": {
+    "3": [
+      "Tom",
+      "Priya"
+    ],
+    "7": [
+      "Marcus",
+      "Dana"
+    ],
+    "9": [
+      "Ben",
+      "Rosa",
+      "Tom"
+    ],
+    "10": [
+      "Priya"
+    ],
+    "12": [
+      "Keiko",
+      "Ben",
+      "Rosa",
+      "Tom"
+    ],
+    "15": [
+      "Omar"
+    ],
+    "99": [
+      "Ben",
+      "Rosa"
+    ]
+  },
+  "note": "Phone users pick a phoneStaff name. On-site staff are simulated; their claims end with \" · on-site\"."
+}

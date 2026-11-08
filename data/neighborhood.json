@@ -1,0 +1,308 @@
+{
+  "_note": "Fictional neighborhood (SIMULATED). Positions match the 1000x620 design map. Construction features use Cal Fire DINS vocabulary so the risk model (data/risk_model.py) can score them. Dollar values are simulated placeholders.",
+  "map": {
+    "width": 1000,
+    "height": 620,
+    "hillsPath": "M560,0 L1000,0 L1000,285 C930,255 880,218 820,206 C760,196 700,152 640,122 C608,102 584,62 560,0 Z",
+    "roads": [
+      {
+        "name": "Main St",
+        "x": 0,
+        "y": 430,
+        "w": 1000,
+        "h": 36
+      },
+      {
+        "name": "Canyon Rd",
+        "x": 360,
+        "y": 0,
+        "w": 32,
+        "h": 620
+      },
+      {
+        "name": "Ridge Rd",
+        "x": 392,
+        "y": 214,
+        "w": 608,
+        "h": 22
+      }
+    ],
+    "shelterLotPad": 20,
+    "ignitionCells": [
+      [
+        48,
+        0
+      ],
+      [
+        49,
+        0
+      ],
+      [
+        48,
+        1
+      ],
+      [
+        49,
+        1
+      ]
+    ]
+  },
+  "buildings": [
+    {
+      "id": 12,
+      "name": "Building 12",
+      "kind": "senior",
+      "x": 570,
+      "y": 250,
+      "w": 150,
+      "h": 70,
+      "residents": 38,
+      "needsHelp": 9,
+      "staff": 4,
+      "vans": 1,
+      "valueUsd": 18500000,
+      "floors": 4,
+      "features": {
+        "roof": "Wood",
+        "eaves": "Unenclosed",
+        "vents": "Mesh Screen > 1/8\"",
+        "siding": "Wood",
+        "windows": "Single Pane",
+        "deckGrade": "Wood",
+        "deckElevated": "Wood",
+        "patio": "Combustible",
+        "fence": "Combustible",
+        "yearBuilt": 1968
+      }
+    },
+    {
+      "id": 9,
+      "name": "Building 9",
+      "kind": "senior",
+      "x": 780,
+      "y": 300,
+      "w": 110,
+      "h": 60,
+      "residents": 22,
+      "needsHelp": 6,
+      "staff": 3,
+      "vans": 1,
+      "valueUsd": 12000000,
+      "floors": 3,
+      "features": {
+        "roof": "Asphalt",
+        "eaves": "Unenclosed",
+        "vents": "Mesh Screen > 1/8\"",
+        "siding": "Stucco Brick Cement",
+        "windows": "Single Pane",
+        "deckGrade": "Wood",
+        "deckElevated": "No Deck/Porch",
+        "patio": "Combustible",
+        "fence": "Combustible",
+        "yearBuilt": 1978
+      }
+    },
+    {
+      "id": 7,
+      "name": "Building 7",
+      "kind": "apartments",
+      "x": 420,
+      "y": 290,
+      "w": 120,
+      "h": 90,
+      "residents": 64,
+      "needsHelp": 3,
+      "staff": 2,
+      "vans": 0,
+      "valueUsd": 24000000,
+      "floors": 5,
+      "features": {
+        "roof": "Asphalt",
+        "eaves": "Unenclosed",
+        "vents": "Mesh Screen > 1/8\"",
+        "siding": "Wood",
+        "windows": "Single Pane",
+        "deckGrade": "Masonry/Concrete",
+        "deckElevated": "Wood",
+        "patio": "No Patio Cover/Carport",
+        "fence": "Combustible",
+        "yearBuilt": 1974
+      }
+    },
+    {
+      "id": 3,
+      "name": "Building 3",
+      "kind": "apartments",
+      "x": 170,
+      "y": 270,
+      "w": 140,
+      "h": 80,
+      "residents": 80,
+      "needsHelp": 4,
+      "staff": 2,
+      "vans": 0,
+      "valueUsd": 31000000,
+      "floors": 5,
+      "features": {
+        "roof": "Tile",
+        "eaves": "Enclosed",
+        "vents": "Mesh Screen <= 1/8\"",
+        "siding": "Stucco Brick Cement",
+        "windows": "Multi Pane",
+        "deckGrade": "Masonry/Concrete",
+        "deckElevated": "No Deck/Porch",
+        "patio": "No Patio Cover/Carport",
+        "fence": "Non Combustible",
+        "yearBuilt": 2010
+      }
+    },
+    {
+      "id": 15,
+      "name": "Building 15",
+      "kind": "office",
+      "x": 140,
+      "y": 480,
+      "w": 130,
+      "h": 64,
+      "residents": 12,
+      "needsHelp": 0,
+      "staff": 1,
+      "vans": 0,
+      "valueUsd": 9500000,
+      "floors": 2,
+      "features": {
+        "roof": "Metal",
+        "eaves": "Enclosed",
+        "vents": "Mesh Screen <= 1/8\"",
+        "siding": "Metal",
+        "windows": "Multi Pane",
+        "deckGrade": "No Deck/Porch",
+        "deckElevated": "No Deck/Porch",
+        "patio": "No Patio Cover/Carport",
+        "fence": "No Fence",
+        "yearBuilt": 2014
+      }
+    },
+    {
+      "id": 10,
+      "name": "Building 10",
+      "kind": "apartments",
+      "x": 800,
+      "y": 470,
+      "w": 130,
+      "h": 70,
+      "residents": 30,
+      "needsHelp": 2,
+      "staff": 1,
+      "vans": 0,
+      "valueUsd": 13500000,
+      "floors": 3,
+      "features": {
+        "roof": "Tile",
+        "eaves": "Enclosed",
+        "vents": "Mesh Screen > 1/8\"",
+        "siding": "Stucco Brick Cement",
+        "windows": "Multi Pane",
+        "deckGrade": "Masonry/Concrete",
+        "deckElevated": "Wood",
+        "patio": "No Patio Cover/Carport",
+        "fence": "Non Combustible",
+        "yearBuilt": 1996
+      }
+    },
+    {
+      "id": 20,
+      "name": "Hillside homes",
+      "kind": "homes",
+      "x": 430,
+      "y": 150,
+      "w": 280,
+      "h": 40,
+      "residents": 14,
+      "needsHelp": 2,
+      "staff": 0,
+      "vans": 0,
+      "valueUsd": 7500000,
+      "floors": 2,
+      "features": {
+        "roof": "Wood",
+        "eaves": "Unenclosed",
+        "vents": "Mesh Screen > 1/8\"",
+        "siding": "Wood",
+        "windows": "Single Pane",
+        "deckGrade": "Wood",
+        "deckElevated": "Wood",
+        "patio": "Combustible",
+        "fence": "Combustible",
+        "yearBuilt": 1952
+      }
+    },
+    {
+      "id": 99,
+      "name": "Shelter A",
+      "kind": "shelter",
+      "x": 440,
+      "y": 505,
+      "w": 140,
+      "h": 60,
+      "residents": 0,
+      "needsHelp": 0,
+      "staff": 2,
+      "vans": 0,
+      "valueUsd": 6000000,
+      "floors": 1,
+      "features": {
+        "roof": "Metal",
+        "eaves": "Enclosed",
+        "vents": "Mesh Screen <= 1/8\"",
+        "siding": "Stucco Brick Cement",
+        "windows": "Multi Pane",
+        "deckGrade": "No Deck/Porch",
+        "deckElevated": "No Deck/Porch",
+        "patio": "No Patio Cover/Carport",
+        "fence": "No Fence",
+        "yearBuilt": 2005
+      }
+    }
+  ],
+  "fixes": [
+    {
+      "key": "van",
+      "name": "Second evacuation van",
+      "costUsd": 48000,
+      "addVans": 1,
+      "changes": {},
+      "source": "evacuation"
+    },
+    {
+      "key": "brush",
+      "name": "Clear brush to 30 ft",
+      "costUsd": 12000,
+      "addVans": 0,
+      "changes": {},
+      "source": "simulation",
+      "_note": "Defensible space is not recorded in DINS; riskDrop comes from the fire sim (ring cells around the footprint: lawn fuel 0.35 -> 0.08)."
+    },
+    {
+      "key": "vents",
+      "name": "Ember-resistant vent screens",
+      "costUsd": 9000,
+      "addVans": 0,
+      "changes": {
+        "vents": "Mesh Screen <= 1/8\""
+      },
+      "source": "dins"
+    },
+    {
+      "key": "roof",
+      "name": "Class A roof",
+      "costUsd": 140000,
+      "addVans": 0,
+      "changes": {
+        "roof": "Tile"
+      },
+      "source": "dins"
+    }
+  ],
+  "prepBudgetUsd": 500000
+}

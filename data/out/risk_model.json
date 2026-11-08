@@ -1,0 +1,194 @@
+{
+  "trainedOn": "CAL FIRE DINS (POSTFIRE_MASTER_DATA_SHARE): residential + commercial structures with all six features recorded",
+  "nStructuresAll": 95332,
+  "nStructuresTrained": 35062,
+  "nFires": 41,
+  "nNeighbourhoods": 2498,
+  "features": [
+    "roof",
+    "eaves",
+    "vents",
+    "siding",
+    "windows",
+    "yearBand"
+  ],
+  "eatonStructures": 12605,
+  "eatonDestroyedRate": 0.497,
+  "eatonCalibratedIntercept": 0.2011,
+  "aucRandomHoldout": 0.944,
+  "aucUnseenFiresConstructionOnly": 0.665,
+  "coefficients": {
+    "roof": {
+      "Asphalt": -0.22294768838331175,
+      "Fire Resistant": 0.16490959534158572,
+      "Metal": 0.0003220647577415574,
+      "Other": 0.038900658521995354,
+      "Tile/Concrete": -0.7405373547128818,
+      "Wood/Combustible": 0.5518571928661449
+    },
+    "eaves": {
+      "Enclosed": -0.43825393260709966,
+      "No Eaves": 0.3708214990208597,
+      "Unenclosed": -0.14006309802203884
+    },
+    "vents": {
+      "Coarse mesh (>1/8in)": 0.4872570136338459,
+      "Fine mesh (<=1/8in)": 0.11545875467493927,
+      "No vents": -0.5063662720312901,
+      "Screened (size unknown)": -0.07066502617023813,
+      "Unscreened": -0.233180001715637
+    },
+    "siding": {
+      "Ignition resistant": 0.34703341908801366,
+      "Metal": 0.022838984324618276,
+      "Other": -0.009606800637739716,
+      "Stucco/Brick/Cement": -0.13711025489875875,
+      "Wood/Combustible": -0.43065087948473424
+    },
+    "windows": {
+      "Multi Pane": -0.18077780125081497,
+      "No Windows": -0.33924443025524875,
+      "Single Pane": 0.31252669989752263
+    },
+    "yearBand": {
+      "1960-1989": 0.32670162820245,
+      "1990-2007": -0.06394910501907906,
+      "2008+ (WUI code)": -0.6202665784428527,
+      "before 1960": 0.15001852365052826
+    }
+  },
+  "pitchStats": [
+    {
+      "scope": "Eaton Fire",
+      "feature": "vents",
+      "good": "ember-resistant vents (\u22641/8\" mesh)",
+      "bad": "unscreened or coarse vents",
+      "destroyedPctGood": 24.3,
+      "nGood": 1277,
+      "destroyedPctBad": 43.0,
+      "nBad": 6901,
+      "sentence": "In Cal Fire's records for the Eaton Fire, buildings with unscreened or coarse vents were destroyed 43% of the time vs 24% with ember-resistant vents (\u22641/8\" mesh) (n=6,901 vs 1,277)."
+    },
+    {
+      "scope": "Eaton Fire",
+      "feature": "yearBand",
+      "good": "built 2008+ under the WUI fire code",
+      "bad": "built before 1960",
+      "destroyedPctGood": 24.3,
+      "nGood": 70,
+      "destroyedPctBad": 53.1,
+      "nBad": 10151,
+      "sentence": "In Cal Fire's records for the Eaton Fire, buildings with built before 1960 were destroyed 53% of the time vs 24% with built 2008+ under the WUI fire code (n=10,151 vs 70)."
+    },
+    {
+      "scope": "Eaton Fire",
+      "feature": "roof",
+      "good": "tile/concrete roofs",
+      "bad": "wood or combustible roofs",
+      "destroyedPctGood": 32.7,
+      "nGood": 2092,
+      "destroyedPctBad": 73.8,
+      "nBad": 42,
+      "sentence": "In Cal Fire's records for the Eaton Fire, buildings with wood or combustible roofs were destroyed 74% of the time vs 33% with tile/concrete roofs (n=42 vs 2,092)."
+    },
+    {
+      "scope": "Eaton Fire",
+      "feature": "fence",
+      "good": "no attached fence",
+      "bad": "a combustible fence attached",
+      "destroyedPctGood": 59.5,
+      "nGood": 3179,
+      "destroyedPctBad": 31.9,
+      "nBad": 3831,
+      "sentence": "In Cal Fire's records for the Eaton Fire, buildings with a combustible fence attached were destroyed 32% of the time vs 60% with no attached fence (n=3,831 vs 3,179)."
+    },
+    {
+      "scope": "Eaton Fire",
+      "feature": "eaves",
+      "good": "enclosed eaves",
+      "bad": "open eaves",
+      "destroyedPctGood": 10.5,
+      "nGood": 1659,
+      "destroyedPctBad": 25.5,
+      "nBad": 5675,
+      "sentence": "In Cal Fire's records for the Eaton Fire, buildings with open eaves were destroyed 26% of the time vs 11% with enclosed eaves (n=5,675 vs 1,659)."
+    },
+    {
+      "scope": "Eaton Fire",
+      "feature": "windows",
+      "good": "multi-pane windows",
+      "bad": "single-pane windows",
+      "destroyedPctGood": 23.2,
+      "nGood": 4345,
+      "destroyedPctBad": 37.4,
+      "nBad": 4674,
+      "sentence": "In Cal Fire's records for the Eaton Fire, buildings with single-pane windows were destroyed 37% of the time vs 23% with multi-pane windows (n=4,674 vs 4,345)."
+    },
+    {
+      "scope": "all CA fires since 2013",
+      "feature": "vents",
+      "good": "ember-resistant vents (\u22641/8\" mesh)",
+      "bad": "unscreened or coarse vents",
+      "destroyedPctGood": 45.3,
+      "nGood": 15735,
+      "destroyedPctBad": 56.2,
+      "nBad": 30986,
+      "sentence": "In Cal Fire's records for the all CA fires since 2013, buildings with unscreened or coarse vents were destroyed 56% of the time vs 45% with ember-resistant vents (\u22641/8\" mesh) (n=30,986 vs 15,735)."
+    },
+    {
+      "scope": "all CA fires since 2013",
+      "feature": "yearBand",
+      "good": "built 2008+ under the WUI fire code",
+      "bad": "built before 1960",
+      "destroyedPctGood": 28.8,
+      "nGood": 2712,
+      "destroyedPctBad": 58.7,
+      "nBad": 25293,
+      "sentence": "In Cal Fire's records for the all CA fires since 2013, buildings with built before 1960 were destroyed 59% of the time vs 29% with built 2008+ under the WUI fire code (n=25,293 vs 2,712)."
+    },
+    {
+      "scope": "all CA fires since 2013",
+      "feature": "roof",
+      "good": "tile/concrete roofs",
+      "bad": "wood or combustible roofs",
+      "destroyedPctGood": 32.4,
+      "nGood": 10282,
+      "destroyedPctBad": 77.3,
+      "nBad": 1646,
+      "sentence": "In Cal Fire's records for the all CA fires since 2013, buildings with wood or combustible roofs were destroyed 77% of the time vs 32% with tile/concrete roofs (n=1,646 vs 10,282)."
+    },
+    {
+      "scope": "all CA fires since 2013",
+      "feature": "fence",
+      "good": "no attached fence",
+      "bad": "a combustible fence attached",
+      "destroyedPctGood": 58.3,
+      "nGood": 36981,
+      "destroyedPctBad": 39.3,
+      "nBad": 13435,
+      "sentence": "In Cal Fire's records for the all CA fires since 2013, buildings with a combustible fence attached were destroyed 39% of the time vs 58% with no attached fence (n=13,435 vs 36,981)."
+    },
+    {
+      "scope": "all CA fires since 2013",
+      "feature": "eaves",
+      "good": "enclosed eaves",
+      "bad": "open eaves",
+      "destroyedPctGood": 33.7,
+      "nGood": 13929,
+      "destroyedPctBad": 40.8,
+      "nBad": 32904,
+      "sentence": "In Cal Fire's records for the all CA fires since 2013, buildings with open eaves were destroyed 41% of the time vs 34% with enclosed eaves (n=32,904 vs 13,929)."
+    },
+    {
+      "scope": "all CA fires since 2013",
+      "feature": "windows",
+      "good": "multi-pane windows",
+      "bad": "single-pane windows",
+      "destroyedPctGood": 48.3,
+      "nGood": 39890,
+      "destroyedPctBad": 59.4,
+      "nBad": 29526,
+      "sentence": "In Cal Fire's records for the all CA fires since 2013, buildings with single-pane windows were destroyed 59% of the time vs 48% with multi-pane windows (n=29,526 vs 39,890)."
+    }
+  ]
+}

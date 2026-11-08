@@ -1,0 +1,118 @@
+{
+  "station": "BUR",
+  "rotationDeg": 24.7,
+  "samples": [
+    {
+      "minute": 0,
+      "localTime": "Tue 18:00",
+      "realTowardDeg": 196.5,
+      "dirDeg": 221.2,
+      "mph": 31.8,
+      "gustMph": 63.3
+    },
+    {
+      "minute": 42,
+      "localTime": "Tue 19:00",
+      "realTowardDeg": 197.6,
+      "dirDeg": 222.3,
+      "mph": 35.4,
+      "gustMph": 62.1
+    },
+    {
+      "minute": 102,
+      "localTime": "Tue 20:00",
+      "realTowardDeg": 200.0,
+      "dirDeg": 224.7,
+      "mph": 31.6,
+      "gustMph": 82.9
+    },
+    {
+      "minute": 162,
+      "localTime": "Tue 21:00",
+      "realTowardDeg": 190.0,
+      "dirDeg": 214.7,
+      "mph": 32.2,
+      "gustMph": 58.7
+    },
+    {
+      "minute": 222,
+      "localTime": "Tue 22:00",
+      "realTowardDeg": 210.0,
+      "dirDeg": 234.7,
+      "mph": 33.4,
+      "gustMph": 57.5
+    },
+    {
+      "minute": 282,
+      "localTime": "Tue 23:00",
+      "realTowardDeg": 201.9,
+      "dirDeg": 226.6,
+      "mph": 22.1,
+      "gustMph": 44.9
+    },
+    {
+      "minute": 342,
+      "localTime": "Wed 00:00",
+      "realTowardDeg": 194.1,
+      "dirDeg": 218.8,
+      "mph": 19.8,
+      "gustMph": 43.7
+    },
+    {
+      "minute": 402,
+      "localTime": "Wed 01:00",
+      "realTowardDeg": 189.9,
+      "dirDeg": 214.6,
+      "mph": 11.5,
+      "gustMph": 33.4
+    },
+    {
+      "minute": 462,
+      "localTime": "Wed 02:00",
+      "realTowardDeg": 163.6,
+      "dirDeg": 188.3,
+      "mph": 9.7,
+      "gustMph": 25.3
+    },
+    {
+      "minute": 522,
+      "localTime": "Wed 03:00",
+      "realTowardDeg": 183.8,
+      "dirDeg": 208.5,
+      "mph": 12.4,
+      "gustMph": 36.8
+    },
+    {
+      "minute": 582,
+      "localTime": "Wed 04:00",
+      "realTowardDeg": 204.4,
+      "dirDeg": 229.1,
+      "mph": 16.4,
+      "gustMph": 39.1
+    },
+    {
+      "minute": 642,
+      "localTime": "Wed 05:00",
+      "realTowardDeg": 202.6,
+      "dirDeg": 227.3,
+      "mph": 15.6,
+      "gustMph": 43.7
+    },
+    {
+      "minute": 702,
+      "localTime": "Wed 06:00",
+      "realTowardDeg": 207.2,
+      "dirDeg": 231.9,
+      "mph": 17.3,
+      "gustMph": 48.3
+    },
+    {
+      "minute": 762,
+      "localTime": "Wed 07:00",
+      "realTowardDeg": 155.6,
+      "dirDeg": 180.3,
+      "mph": 11.4,
+      "gustMph": 23.0
+    }
+  ]
+}

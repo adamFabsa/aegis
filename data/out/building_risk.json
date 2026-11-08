@@ -1,0 +1,549 @@
+{
+  "12": {
+    "name": "Building 12",
+    "modelFeatures": {
+      "roof": "Wood/Combustible",
+      "eaves": "Unenclosed",
+      "vents": "Coarse mesh (>1/8in)",
+      "siding": "Wood/Combustible",
+      "windows": "Single Pane",
+      "deckGrade": "Combustible",
+      "deckElevated": "Combustible",
+      "patio": "Combustible",
+      "fence": "Combustible",
+      "yearBand": "1960-1989"
+    },
+    "otherFeatures": {
+      "deckGrade": "Wood",
+      "deckElevated": "Wood",
+      "patio": "Combustible",
+      "fence": "Combustible"
+    },
+    "baseRisk": 78.7,
+    "topDrivers": [
+      {
+        "feature": "roof",
+        "label": "roof",
+        "value": "Wood/Combustible",
+        "safest": "Tile/Concrete",
+        "logitAboveSafest": 1.292
+      },
+      {
+        "feature": "vents",
+        "label": "vents",
+        "value": "Coarse mesh (>1/8in)",
+        "safest": "No vents",
+        "logitAboveSafest": 0.994
+      },
+      {
+        "feature": "yearBand",
+        "label": "year built",
+        "value": "1960-1989",
+        "safest": "2008+ (WUI code)",
+        "logitAboveSafest": 0.947
+      }
+    ],
+    "fixes": {
+      "van": {
+        "applicable": true,
+        "riskDrop": null,
+        "source": "evacuation"
+      },
+      "brush": {
+        "applicable": true,
+        "riskDrop": null,
+        "source": "simulation"
+      },
+      "vents": {
+        "applicable": true,
+        "riskDrop": 6.9,
+        "riskAfter": 71.8,
+        "source": "dins"
+      },
+      "roof": {
+        "applicable": true,
+        "riskDrop": 28.3,
+        "riskAfter": 50.4,
+        "source": "dins"
+      }
+    }
+  },
+  "9": {
+    "name": "Building 9",
+    "modelFeatures": {
+      "roof": "Asphalt",
+      "eaves": "Unenclosed",
+      "vents": "Coarse mesh (>1/8in)",
+      "siding": "Stucco/Brick/Cement",
+      "windows": "Single Pane",
+      "deckGrade": "Combustible",
+      "deckElevated": "None",
+      "patio": "Combustible",
+      "fence": "Combustible",
+      "yearBand": "1960-1989"
+    },
+    "otherFeatures": {
+      "deckGrade": "Wood",
+      "deckElevated": "No Deck/Porch",
+      "patio": "Combustible",
+      "fence": "Combustible"
+    },
+    "baseRisk": 69.6,
+    "topDrivers": [
+      {
+        "feature": "vents",
+        "label": "vents",
+        "value": "Coarse mesh (>1/8in)",
+        "safest": "No vents",
+        "logitAboveSafest": 0.994
+      },
+      {
+        "feature": "yearBand",
+        "label": "year built",
+        "value": "1960-1989",
+        "safest": "2008+ (WUI code)",
+        "logitAboveSafest": 0.947
+      },
+      {
+        "feature": "windows",
+        "label": "windows",
+        "value": "Single Pane",
+        "safest": "No Windows",
+        "logitAboveSafest": 0.652
+      }
+    ],
+    "fixes": {
+      "van": {
+        "applicable": true,
+        "riskDrop": null,
+        "source": "evacuation"
+      },
+      "brush": {
+        "applicable": true,
+        "riskDrop": null,
+        "source": "simulation"
+      },
+      "vents": {
+        "applicable": true,
+        "riskDrop": 8.4,
+        "riskAfter": 61.2,
+        "source": "dins"
+      },
+      "roof": {
+        "applicable": true,
+        "riskDrop": 11.9,
+        "riskAfter": 57.7,
+        "source": "dins"
+      }
+    }
+  },
+  "7": {
+    "name": "Building 7",
+    "modelFeatures": {
+      "roof": "Asphalt",
+      "eaves": "Unenclosed",
+      "vents": "Coarse mesh (>1/8in)",
+      "siding": "Wood/Combustible",
+      "windows": "Single Pane",
+      "deckGrade": "Non-combustible",
+      "deckElevated": "Combustible",
+      "patio": "None",
+      "fence": "Combustible",
+      "yearBand": "1960-1989"
+    },
+    "otherFeatures": {
+      "deckGrade": "Masonry/Concrete",
+      "deckElevated": "Wood",
+      "patio": "No Patio Cover/Carport",
+      "fence": "Combustible"
+    },
+    "baseRisk": 63.0,
+    "topDrivers": [
+      {
+        "feature": "vents",
+        "label": "vents",
+        "value": "Coarse mesh (>1/8in)",
+        "safest": "No vents",
+        "logitAboveSafest": 0.994
+      },
+      {
+        "feature": "yearBand",
+        "label": "year built",
+        "value": "1960-1989",
+        "safest": "2008+ (WUI code)",
+        "logitAboveSafest": 0.947
+      },
+      {
+        "feature": "windows",
+        "label": "windows",
+        "value": "Single Pane",
+        "safest": "No Windows",
+        "logitAboveSafest": 0.652
+      }
+    ],
+    "fixes": {
+      "van": {
+        "applicable": true,
+        "riskDrop": null,
+        "source": "evacuation"
+      },
+      "brush": {
+        "applicable": true,
+        "riskDrop": null,
+        "source": "simulation"
+      },
+      "vents": {
+        "applicable": true,
+        "riskDrop": 9.0,
+        "riskAfter": 54.0,
+        "source": "dins"
+      },
+      "roof": {
+        "applicable": true,
+        "riskDrop": 12.6,
+        "riskAfter": 50.4,
+        "source": "dins"
+      }
+    }
+  },
+  "3": {
+    "name": "Building 3",
+    "modelFeatures": {
+      "roof": "Tile/Concrete",
+      "eaves": "Enclosed",
+      "vents": "Fine mesh (<=1/8in)",
+      "siding": "Stucco/Brick/Cement",
+      "windows": "Multi Pane",
+      "deckGrade": "Non-combustible",
+      "deckElevated": "None",
+      "patio": "None",
+      "fence": "Non-combustible",
+      "yearBand": "2008+ (WUI code)"
+    },
+    "otherFeatures": {
+      "deckGrade": "Masonry/Concrete",
+      "deckElevated": "No Deck/Porch",
+      "patio": "No Patio Cover/Carport",
+      "fence": "Non Combustible"
+    },
+    "baseRisk": 14.2,
+    "topDrivers": [
+      {
+        "feature": "vents",
+        "label": "vents",
+        "value": "Fine mesh (<=1/8in)",
+        "safest": "No vents",
+        "logitAboveSafest": 0.622
+      },
+      {
+        "feature": "siding",
+        "label": "siding",
+        "value": "Stucco/Brick/Cement",
+        "safest": "Wood/Combustible",
+        "logitAboveSafest": 0.294
+      },
+      {
+        "feature": "windows",
+        "label": "windows",
+        "value": "Multi Pane",
+        "safest": "No Windows",
+        "logitAboveSafest": 0.158
+      }
+    ],
+    "fixes": {
+      "van": {
+        "applicable": true,
+        "riskDrop": null,
+        "source": "evacuation"
+      },
+      "brush": {
+        "applicable": true,
+        "riskDrop": null,
+        "source": "simulation"
+      },
+      "vents": {
+        "applicable": false,
+        "riskDrop": 0.0,
+        "source": "dins"
+      },
+      "roof": {
+        "applicable": false,
+        "riskDrop": 0.0,
+        "source": "dins"
+      }
+    }
+  },
+  "15": {
+    "name": "Building 15",
+    "modelFeatures": {
+      "roof": "Metal",
+      "eaves": "Enclosed",
+      "vents": "Fine mesh (<=1/8in)",
+      "siding": "Metal",
+      "windows": "Multi Pane",
+      "deckGrade": "None",
+      "deckElevated": "None",
+      "patio": "None",
+      "fence": "None",
+      "yearBand": "2008+ (WUI code)"
+    },
+    "otherFeatures": {
+      "deckGrade": "No Deck/Porch",
+      "deckElevated": "No Deck/Porch",
+      "patio": "No Patio Cover/Carport",
+      "fence": "No Fence"
+    },
+    "baseRisk": 28.9,
+    "topDrivers": [
+      {
+        "feature": "roof",
+        "label": "roof",
+        "value": "Metal",
+        "safest": "Tile/Concrete",
+        "logitAboveSafest": 0.741
+      },
+      {
+        "feature": "vents",
+        "label": "vents",
+        "value": "Fine mesh (<=1/8in)",
+        "safest": "No vents",
+        "logitAboveSafest": 0.622
+      },
+      {
+        "feature": "siding",
+        "label": "siding",
+        "value": "Metal",
+        "safest": "Wood/Combustible",
+        "logitAboveSafest": 0.453
+      }
+    ],
+    "fixes": {
+      "van": {
+        "applicable": true,
+        "riskDrop": null,
+        "source": "evacuation"
+      },
+      "brush": {
+        "applicable": true,
+        "riskDrop": null,
+        "source": "simulation"
+      },
+      "vents": {
+        "applicable": false,
+        "riskDrop": 0.0,
+        "source": "dins"
+      },
+      "roof": {
+        "applicable": true,
+        "riskDrop": 12.7,
+        "riskAfter": 16.2,
+        "source": "dins"
+      }
+    }
+  },
+  "10": {
+    "name": "Building 10",
+    "modelFeatures": {
+      "roof": "Tile/Concrete",
+      "eaves": "Enclosed",
+      "vents": "Coarse mesh (>1/8in)",
+      "siding": "Stucco/Brick/Cement",
+      "windows": "Multi Pane",
+      "deckGrade": "Non-combustible",
+      "deckElevated": "Combustible",
+      "patio": "None",
+      "fence": "Non-combustible",
+      "yearBand": "1990-2007"
+    },
+    "otherFeatures": {
+      "deckGrade": "Masonry/Concrete",
+      "deckElevated": "Wood",
+      "patio": "No Patio Cover/Carport",
+      "fence": "Non Combustible"
+    },
+    "baseRisk": 29.5,
+    "topDrivers": [
+      {
+        "feature": "vents",
+        "label": "vents",
+        "value": "Coarse mesh (>1/8in)",
+        "safest": "No vents",
+        "logitAboveSafest": 0.994
+      },
+      {
+        "feature": "yearBand",
+        "label": "year built",
+        "value": "1990-2007",
+        "safest": "2008+ (WUI code)",
+        "logitAboveSafest": 0.556
+      },
+      {
+        "feature": "siding",
+        "label": "siding",
+        "value": "Stucco/Brick/Cement",
+        "safest": "Wood/Combustible",
+        "logitAboveSafest": 0.294
+      }
+    ],
+    "fixes": {
+      "van": {
+        "applicable": true,
+        "riskDrop": null,
+        "source": "evacuation"
+      },
+      "brush": {
+        "applicable": true,
+        "riskDrop": null,
+        "source": "simulation"
+      },
+      "vents": {
+        "applicable": true,
+        "riskDrop": 7.1,
+        "riskAfter": 22.4,
+        "source": "dins"
+      },
+      "roof": {
+        "applicable": false,
+        "riskDrop": 0.0,
+        "source": "dins"
+      }
+    }
+  },
+  "20": {
+    "name": "Hillside homes",
+    "modelFeatures": {
+      "roof": "Wood/Combustible",
+      "eaves": "Unenclosed",
+      "vents": "Coarse mesh (>1/8in)",
+      "siding": "Wood/Combustible",
+      "windows": "Single Pane",
+      "deckGrade": "Combustible",
+      "deckElevated": "Combustible",
+      "patio": "Combustible",
+      "fence": "Combustible",
+      "yearBand": "before 1960"
+    },
+    "otherFeatures": {
+      "deckGrade": "Wood",
+      "deckElevated": "Wood",
+      "patio": "Combustible",
+      "fence": "Combustible"
+    },
+    "baseRisk": 75.6,
+    "topDrivers": [
+      {
+        "feature": "roof",
+        "label": "roof",
+        "value": "Wood/Combustible",
+        "safest": "Tile/Concrete",
+        "logitAboveSafest": 1.292
+      },
+      {
+        "feature": "vents",
+        "label": "vents",
+        "value": "Coarse mesh (>1/8in)",
+        "safest": "No vents",
+        "logitAboveSafest": 0.994
+      },
+      {
+        "feature": "yearBand",
+        "label": "year built",
+        "value": "before 1960",
+        "safest": "2008+ (WUI code)",
+        "logitAboveSafest": 0.77
+      }
+    ],
+    "fixes": {
+      "van": {
+        "applicable": true,
+        "riskDrop": null,
+        "source": "evacuation"
+      },
+      "brush": {
+        "applicable": true,
+        "riskDrop": null,
+        "source": "simulation"
+      },
+      "vents": {
+        "applicable": true,
+        "riskDrop": 7.5,
+        "riskAfter": 68.1,
+        "source": "dins"
+      },
+      "roof": {
+        "applicable": true,
+        "riskDrop": 29.6,
+        "riskAfter": 46.0,
+        "source": "dins"
+      }
+    }
+  },
+  "99": {
+    "name": "Shelter A",
+    "modelFeatures": {
+      "roof": "Metal",
+      "eaves": "Enclosed",
+      "vents": "Fine mesh (<=1/8in)",
+      "siding": "Stucco/Brick/Cement",
+      "windows": "Multi Pane",
+      "deckGrade": "None",
+      "deckElevated": "None",
+      "patio": "None",
+      "fence": "None",
+      "yearBand": "1990-2007"
+    },
+    "otherFeatures": {
+      "deckGrade": "No Deck/Porch",
+      "deckElevated": "No Deck/Porch",
+      "patio": "No Patio Cover/Carport",
+      "fence": "No Fence"
+    },
+    "baseRisk": 37.7,
+    "topDrivers": [
+      {
+        "feature": "roof",
+        "label": "roof",
+        "value": "Metal",
+        "safest": "Tile/Concrete",
+        "logitAboveSafest": 0.741
+      },
+      {
+        "feature": "vents",
+        "label": "vents",
+        "value": "Fine mesh (<=1/8in)",
+        "safest": "No vents",
+        "logitAboveSafest": 0.622
+      },
+      {
+        "feature": "yearBand",
+        "label": "year built",
+        "value": "1990-2007",
+        "safest": "2008+ (WUI code)",
+        "logitAboveSafest": 0.556
+      }
+    ],
+    "fixes": {
+      "van": {
+        "applicable": true,
+        "riskDrop": null,
+        "source": "evacuation"
+      },
+      "brush": {
+        "applicable": true,
+        "riskDrop": null,
+        "source": "simulation"
+      },
+      "vents": {
+        "applicable": false,
+        "riskDrop": 0.0,
+        "source": "dins"
+      },
+      "roof": {
+        "applicable": true,
+        "riskDrop": 15.3,
+        "riskAfter": 22.4,
+        "source": "dins"
+      }
+    }
+  }
+}

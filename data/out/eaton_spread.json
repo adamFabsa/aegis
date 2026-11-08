@@ -1,0 +1,252 @@
+{
+  "source": "NASA FIRMS VIIRS S-NPP + MODIS (yearly US archive), bbox {\"west\": -118.25, \"south\": 34.1, \"east\": -117.95, \"north\": 34.3}",
+  "ignitionLocal": "2025-01-07T18:18:00-08:00",
+  "ignitionPoint": {
+    "lat": 34.2011,
+    "lon": -118.0817,
+    "method": "most upwind detection of first overpass"
+  },
+  "windStation": "BUR (Burbank) ASOS via Iowa Environmental Mesonet",
+  "meanWindFromDegFirst6h": 20.3,
+  "meanWindTowardDegFirst6h": 200.3,
+  "meanWindMphFirst6h": 27.8,
+  "maxGustMphFirst6h": 71.3,
+  "firstPass": {
+    "bucketUtc": "2025-01-08T04:00:00+00:00",
+    "bucketLocal": "2025-01-07T20:00:00-08:00",
+    "detections": 17,
+    "sensors": [
+      "MODIS"
+    ],
+    "hoursSinceIgnition": 2.38,
+    "maxKmFromIgnition": 4.58,
+    "bearingOfFarthestDeg": 224.0,
+    "frontSpeedKmh": 1.921,
+    "totalFrpMw": 4789.6
+  },
+  "targetFrontSpeedKmh": 1.921,
+  "buckets": [
+    {
+      "bucketUtc": "2025-01-08T04:00:00+00:00",
+      "bucketLocal": "2025-01-07T20:00:00-08:00",
+      "detections": 17,
+      "sensors": [
+        "MODIS"
+      ],
+      "hoursSinceIgnition": 2.38,
+      "maxKmFromIgnition": 4.58,
+      "bearingOfFarthestDeg": 224.0,
+      "frontSpeedKmh": 1.921,
+      "totalFrpMw": 4789.6
+    },
+    {
+      "bucketUtc": "2025-01-08T09:00:00+00:00",
+      "bucketLocal": "2025-01-08T01:00:00-08:00",
+      "detections": 165,
+      "sensors": [
+        "VIIRS S-NPP"
+      ],
+      "hoursSinceIgnition": 7.13,
+      "maxKmFromIgnition": 11.72,
+      "bearingOfFarthestDeg": 242.2,
+      "frontSpeedKmh": 1.644,
+      "totalFrpMw": 4406.1
+    },
+    {
+      "bucketUtc": "2025-01-08T10:00:00+00:00",
+      "bucketLocal": "2025-01-08T02:00:00-08:00",
+      "detections": 34,
+      "sensors": [
+        "MODIS"
+      ],
+      "hoursSinceIgnition": 8.4,
+      "maxKmFromIgnition": 5.08,
+      "bearingOfFarthestDeg": 293.9,
+      "frontSpeedKmh": 0.605,
+      "totalFrpMw": 4809.6
+    },
+    {
+      "bucketUtc": "2025-01-08T18:00:00+00:00",
+      "bucketLocal": "2025-01-08T10:00:00-08:00",
+      "detections": 19,
+      "sensors": [
+        "MODIS"
+      ],
+      "hoursSinceIgnition": 16.03,
+      "maxKmFromIgnition": 8.2,
+      "bearingOfFarthestDeg": 263.6,
+      "frontSpeedKmh": 0.511,
+      "totalFrpMw": 7359.4
+    },
+    {
+      "bucketUtc": "2025-01-08T20:00:00+00:00",
+      "bucketLocal": "2025-01-08T12:00:00-08:00",
+      "detections": 133,
+      "sensors": [
+        "VIIRS S-NPP"
+      ],
+      "hoursSinceIgnition": 18.45,
+      "maxKmFromIgnition": 7.29,
+      "bearingOfFarthestDeg": 263.6,
+      "frontSpeedKmh": 0.395,
+      "totalFrpMw": 2998.5
+    },
+    {
+      "bucketUtc": "2025-01-08T21:00:00+00:00",
+      "bucketLocal": "2025-01-08T13:00:00-08:00",
+      "detections": 23,
+      "sensors": [
+        "MODIS"
+      ],
+      "hoursSinceIgnition": 19.4,
+      "maxKmFromIgnition": 7.73,
+      "bearingOfFarthestDeg": 274.8,
+      "frontSpeedKmh": 0.399,
+      "totalFrpMw": 2676.1
+    },
+    {
+      "bucketUtc": "2025-01-09T05:00:00+00:00",
+      "bucketLocal": "2025-01-08T21:00:00-08:00",
+      "detections": 4,
+      "sensors": [
+        "MODIS"
+      ],
+      "hoursSinceIgnition": 27.03,
+      "maxKmFromIgnition": 7.05,
+      "bearingOfFarthestDeg": 285.8,
+      "frontSpeedKmh": 0.261,
+      "totalFrpMw": 63.0
+    },
+    {
+      "bucketUtc": "2025-01-09T09:00:00+00:00",
+      "bucketLocal": "2025-01-09T01:00:00-08:00",
+      "detections": 75,
+      "sensors": [
+        "VIIRS S-NPP"
+      ],
+      "hoursSinceIgnition": 30.82,
+      "maxKmFromIgnition": 11.72,
+      "bearingOfFarthestDeg": 242.5,
+      "frontSpeedKmh": 0.38,
+      "totalFrpMw": 198.1
+    },
+    {
+      "bucketUtc": "2025-01-09T10:00:00+00:00",
+      "bucketLocal": "2025-01-09T02:00:00-08:00",
+      "detections": 39,
+      "sensors": [
+        "VIIRS S-NPP"
+      ],
+      "hoursSinceIgnition": 32.48,
+      "maxKmFromIgnition": 7.19,
+      "bearingOfFarthestDeg": 283.3,
+      "frontSpeedKmh": 0.221,
+      "totalFrpMw": 139.7
+    },
+    {
+      "bucketUtc": "2025-01-09T17:00:00+00:00",
+      "bucketLocal": "2025-01-09T09:00:00-08:00",
+      "detections": 12,
+      "sensors": [
+        "MODIS"
+      ],
+      "hoursSinceIgnition": 39.07,
+      "maxKmFromIgnition": 7.25,
+      "bearingOfFarthestDeg": 283.6,
+      "frontSpeedKmh": 0.185,
+      "totalFrpMw": 6923.0
+    },
+    {
+      "bucketUtc": "2025-01-09T20:00:00+00:00",
+      "bucketLocal": "2025-01-09T12:00:00-08:00",
+      "detections": 53,
+      "sensors": [
+        "VIIRS S-NPP"
+      ],
+      "hoursSinceIgnition": 42.13,
+      "maxKmFromIgnition": 4.34,
+      "bearingOfFarthestDeg": 310.0,
+      "frontSpeedKmh": 0.103,
+      "totalFrpMw": 1886.5
+    },
+    {
+      "bucketUtc": "2025-01-09T22:00:00+00:00",
+      "bucketLocal": "2025-01-09T14:00:00-08:00",
+      "detections": 8,
+      "sensors": [
+        "MODIS"
+      ],
+      "hoursSinceIgnition": 44.05,
+      "maxKmFromIgnition": 5.2,
+      "bearingOfFarthestDeg": 315.8,
+      "frontSpeedKmh": 0.118,
+      "totalFrpMw": 1556.1
+    },
+    {
+      "bucketUtc": "2025-01-10T04:00:00+00:00",
+      "bucketLocal": "2025-01-09T20:00:00-08:00",
+      "detections": 3,
+      "sensors": [
+        "MODIS"
+      ],
+      "hoursSinceIgnition": 50.07,
+      "maxKmFromIgnition": 4.1,
+      "bearingOfFarthestDeg": 313.8,
+      "frontSpeedKmh": 0.082,
+      "totalFrpMw": 287.0
+    },
+    {
+      "bucketUtc": "2025-01-10T08:00:00+00:00",
+      "bucketLocal": "2025-01-10T00:00:00-08:00",
+      "detections": 32,
+      "sensors": [
+        "VIIRS S-NPP"
+      ],
+      "hoursSinceIgnition": 54.5,
+      "maxKmFromIgnition": 12.01,
+      "bearingOfFarthestDeg": 243.0,
+      "frontSpeedKmh": 0.22,
+      "totalFrpMw": 95.5
+    },
+    {
+      "bucketUtc": "2025-01-10T10:00:00+00:00",
+      "bucketLocal": "2025-01-10T02:00:00-08:00",
+      "detections": 62,
+      "sensors": [
+        "MODIS",
+        "VIIRS S-NPP"
+      ],
+      "hoursSinceIgnition": 56.16,
+      "maxKmFromIgnition": 6.85,
+      "bearingOfFarthestDeg": 285.6,
+      "frontSpeedKmh": 0.122,
+      "totalFrpMw": 169.3
+    },
+    {
+      "bucketUtc": "2025-01-10T20:00:00+00:00",
+      "bucketLocal": "2025-01-10T12:00:00-08:00",
+      "detections": 2,
+      "sensors": [
+        "VIIRS S-NPP"
+      ],
+      "hoursSinceIgnition": 65.83,
+      "maxKmFromIgnition": 3.26,
+      "bearingOfFarthestDeg": 330.4,
+      "frontSpeedKmh": 0.05,
+      "totalFrpMw": 9.4
+    },
+    {
+      "bucketUtc": "2025-01-10T21:00:00+00:00",
+      "bucketLocal": "2025-01-10T13:00:00-08:00",
+      "detections": 1,
+      "sensors": [
+        "MODIS"
+      ],
+      "hoursSinceIgnition": 67.08,
+      "maxKmFromIgnition": 3.35,
+      "bearingOfFarthestDeg": 327.6,
+      "frontSpeedKmh": 0.05,
+      "totalFrpMw": 22.8
+    }
+  ]
+}
