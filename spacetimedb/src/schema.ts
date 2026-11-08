@@ -120,6 +120,16 @@ const mitigation = table({ name: 'mitigation', public: true }, {
   note: t.string(),
 });
 
+/** Fire engines (units.ts): auto-dispatched to burning buildings, or sent ahead of the fire by Lantern's advisor. */
+const unit = table({ name: 'unit', public: true }, {
+  id: t.u32().primaryKey(),
+  name: t.string(),                        // "Engine 1"
+  status: t.string(),                      // 'ready' | 'enroute' | 'onscene' | 'returning'
+  targetId: t.u32(),                       // building id (0 = none); kept while returning so clients can draw the way back
+  ticksLeft: t.u32(),
+  travelTicks: t.u32(),
+});
+
 // Private operational state; the public contract above is unchanged.
 const admin = table({ name: 'admin' }, {
   id: t.u32().primaryKey(), identity: t.identity(), worker: t.identity().optional(),
@@ -134,7 +144,7 @@ const taskOwner = table({ name: 'task_owner' }, {
   taskId: t.u64().primaryKey(), identity: t.identity(),
 });
 export const db = schema({ sim, building, person, task, fix, fireCell, eventLog, result, simTick,
-  presence, buildingProfile, mitigation,
+  presence, buildingProfile, mitigation, unit,
   admin, worldSeed, engineState, taskOwner });
 export default db;
 export { simTick };

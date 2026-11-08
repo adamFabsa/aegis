@@ -1,10 +1,11 @@
-// The phone panel from the spec: a resident checking in, and staff claiming help tasks.
-// Drawn inside a phone frame on wide screens, as a tab on phones, and full screen at ?view=phone.
-import { useMemo, useState } from 'react';
-import qrcode from 'qrcode-generator';
-import type { Building, Person, Sim, Task } from '../town/types';
-import { staffOf } from '../town/mockWorld';
-import { fmtClock } from './format';
+// The phone: Lantern AI's step-by-step instructions (default), a resident checking in, and staff claiming
+// help tasks. Drawn inside a phone frame on wide screens, as a tab on phones, and full screen at ?view=phone.
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Building, Person, ScenarioResult, Sim, Task } from '../town/types';
+import { staffOf, type Unit } from '../town/mockWorld';
+import type { BuildingProfile, FixView, Measure } from '../town/world';
+import { advise, type Action, type Instruction } from './advisor';
+import { fmtClock, fmtUsd } from './format';
 
 export interface PhoneProps {
   sim: Sim;
@@ -15,9 +16,24 @@ export interface PhoneProps {
   onReply: (personId: number, choice: 'safe' | 'cant_move' | 'text', text?: string) => Answer | void;
   onClaim: (taskId: number, staff: string) => Answer;
   onDone: (taskId: number) => Answer | void;
-  initialRole?: 'resident' | 'staff';
+  initialRole?: 'advisor' | 'resident' | 'staff';
   initialPerson?: number;
   initialStaff?: string;
+  /** Lantern AI (the advisor tab): shown when fixesFor is given */
+  units?: Unit[];
+  fixesFor?: (buildingId: number) => FixView[];
+  approved?: Record<number, string[]>;
+  profileFor?: (buildingId: number) => BuildingProfile | undefined;
+  checklistFor?: (buildingId: number) => Measure[];
+  results?: { with: ScenarioResult; without: ScenarioResult };
+  selectedId?: number | null;
+  onApprove?: (buildingId: number, key: string) => void;
+  onRecommend?: () => void;
+  onEvacuate?: (buildingId: number) => void;
+  onDispatch?: (buildingId: number) => Answer | void;
+  onAssign?: (taskId: number) => Answer;
+  onSelect?: (buildingId: number | null) => void;
+  workerOnline?: boolean;
 }
 
 type Answer = string | null | Promise<string | null>;
@@ -130,50 +146,123 @@ function StaffView({ buildings, persons, tasks, onClaim, onDone, initialStaff }:
   );
 }
 
-/** QR for opening this page as a phone; only where the address is one people can open (not inside a preview frame). */
-function phoneUrl(): string | null {
-  try {
-    if (window.top !== window.self || /localhost|127\.0\.0\.1/.test(window.location.hostname)) return null;
-  } catch { return null; }
-  const u = new URL(window.location.href);
-  u.search = '?view=phone';
-  return u.toString();
-}
-
-function qrSvg(url: string): string {
-  const q = qrcode(0, 'M');
-  q.addData(url);
-  q.make();
-  return q.createSvgTag({ cellSize: 3, margin: 2, scalable: true });
-}
-
-function Qr() {
-  const [svg] = useState(() => { const url = phoneUrl(); return url ? qrSvg(url) : null; });
-  if (!svg) return null;
+/** People and money chips on an instruction. */
+function Impact({ it }: { it: Instruction }) {
+  if (!it.people && !it.usd) return null;
   return (
-    <div className="qr">
-      <span className="qr-code" dangerouslySetInnerHTML={{ __html: svg }} />
-      <span>Scan to check in from your own phone</span>
+    <span className="ai-impact">
+      {it.people ? <span className="chip people">{it.people} {it.people === 1 ? 'person' : 'people'}</span> : null}
+      {it.usd ? <span className="chip money">{fmtUsd(it.usd)} claims</span> : null}
+    </span>
+  );
+}
+
+function AdvisorView(props: PhoneProps) {
+  const { sim, buildings, persons, tasks } = props;
+  const advice = useMemo(() => advise({
+    sim, buildings, persons, tasks, units: props.units ?? [], fixesFor: props.fixesFor ?? (() => []),
+    profileFor: props.profileFor, checklistFor: props.checklistFor, results: props.results, selectedId: props.selectedId, canAssign: !!props.onAssign,
+  }, props.approved ?? {}), [sim, buildings, persons, tasks, props.units, props.fixesFor, props.profileFor, props.checklistFor, props.results, props.selectedId, props.approved, props.onAssign]);
+  const [busy, setBusy] = useState<Set<string>>(() => new Set());
+  const [error, setError] = useState<string | null>(null);
+  // a pressed button stays disabled until the shared state moves on (the card then changes or disappears)
+  const stamp = `${sim.phase}:${sim.tick}:${sim.budgetLeft}`;
+  const last = useRef(stamp);
+  useEffect(() => { if (last.current !== stamp) { last.current = stamp; setBusy(new Set()); } }, [stamp]);
+  const act = async (a: Action, id: string) => {
+    setBusy((b) => new Set(b).add(id));
+    setError(null);
+    let r: string | null | void = null;
+    if (a.kind === 'approve') props.onApprove?.(a.buildingId, a.fixKey);
+    else if (a.kind === 'plan') props.onRecommend?.();
+    else if (a.kind === 'evacuate') props.onEvacuate?.(a.buildingId);
+    else if (a.kind === 'dispatch') r = await props.onDispatch?.(a.buildingId);
+    else if (a.kind === 'assign') r = await props.onAssign?.(a.taskId);
+    else props.onSelect?.(a.buildingId);
+    if (a.kind === 'select') setBusy((b) => { const n = new Set(b); n.delete(id); return n; });
+    if (typeof r === 'string') { setError(r); setBusy((b) => { const n = new Set(b); n.delete(id); return n; }); }
+  };
+  return (
+    <div className="phone-body ai">
+      <div className="ai-head">
+        <p className="ai-kicker"><span className="ai-spark" aria-hidden="true" />Lantern AI · {sim.phase === 'prep' ? 'before the fire' : sim.phase === 'fire' ? 'live' : 'debrief'}</p>
+        <h3 className="ai-headline" key={advice.headline}>{advice.headline}</h3>
+        <p className="ai-detail">{advice.detail}</p>
+        {advice.stats.length > 0 && (
+          <dl className="ai-stats">
+            {advice.stats.map((x) => <div key={x.label}><dd className={x.tone ?? ''}>{x.value}</dd><dt>{x.label}</dt></div>)}
+          </dl>
+        )}
+      </div>
+      {advice.note && (
+        <blockquote className="ai-note">
+          <span className="ai-note-by">{props.workerOnline ? `Gemini on ${advice.note.building}` : `Why ${advice.note.building} is at risk`}</span>
+          {advice.note.text}
+        </blockquote>
+      )}
+      {error && <p className="phone-error" role="alert">{error}</p>}
+      <ol className="ai-list" aria-live="polite">
+        {advice.items.map((it, i) => (
+          <li key={it.id} className={`ai-card ${it.tone}`} style={{ animationDelay: `${Math.min(i, 5) * 60}ms` }}>
+            <span className="ai-step" aria-hidden="true">{it.tone === 'good' ? '✓' : it.tone === 'info' ? '•' : i + 1}</span>
+            <div className="ai-body">
+              <b className="ai-title">{it.title}</b>
+              <span className="ai-why">{it.why}</span>
+              {it.quote && <q className="ai-quote">{it.quote}</q>}
+              {(it.people || it.usd || it.action) && (
+                <span className="ai-row">
+                  <Impact it={it} />
+                  {it.action && (
+                    <button type="button" className={`btn small ${it.tone === 'now' && it.action.kind !== 'select' ? 'urgent' : 'go'}`} disabled={busy.has(it.id)} onClick={() => void act(it.action!, it.id)}>
+                      {busy.has(it.id) && it.action.kind !== 'select' ? 'Sent…' : it.action.label}
+                    </button>
+                  )}
+                </span>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+      {advice.plan && props.onRecommend && (
+        <button type="button" className="btn primary wide ai-plan" disabled={busy.has('plan')} onClick={() => void act({ kind: 'plan', label: '' }, 'plan')}>
+          Approve all {advice.plan.count} · {fmtUsd(advice.plan.cost)}
+        </button>
+      )}
+      {sim.phase === 'ended' && <p className="ai-tag">Like a good neighbor, Lantern was there, before the fire.</p>}
+      <p className="ai-foot">Risk from a model trained on 132,522 CAL FIRE damage inspections · fire calibrated to the 2025 Eaton Fire{props.workerOnline ? ' · notes and replies read by Gemini' : ''}</p>
     </div>
   );
 }
 
+type Role = 'advisor' | 'resident' | 'staff';
+
 export function Phone(props: PhoneProps & { framed?: boolean; onClose?: () => void }) {
-  const [role, setRole] = useState<'resident' | 'staff'>(props.initialRole ?? 'resident');
+  const hasAdvisor = !!props.fixesFor;
+  const [role, setRole] = useState<Role>(props.initialRole ?? (hasAdvisor ? 'advisor' : 'resident'));
   const openTasks = props.tasks.filter((t) => !t.done && !t.claimedBy).length;
+  const tabs: { id: Role; label: string; count?: number }[] = [
+    ...(hasAdvisor ? [{ id: 'advisor' as const, label: 'AI coach' }] : []),
+    { id: 'resident', label: 'Resident' },
+    { id: 'staff', label: 'Staff', count: openTasks || undefined },
+  ];
   const inner = (
     <>
       <div className="phone-status"><span>{props.sim.phase === 'prep' ? '9:41' : fmtClock(props.sim.simMinutes + 9 * 60 + 41)}</span>{props.onClose && <button type="button" className="phone-close" aria-label="Hide phone" onClick={props.onClose}>×</button>}</div>
       <div className="phone-app">
-        <div className="phone-title">Lantern</div>
-        <div className="tabs phone-tabs" role="tablist">
-          <button type="button" role="tab" aria-selected={role === 'resident'} className={role === 'resident' ? 'on' : ''} onClick={() => setRole('resident')}>Resident</button>
-          <button type="button" role="tab" aria-selected={role === 'staff'} className={role === 'staff' ? 'on' : ''} onClick={() => setRole('staff')}>
-            Staff{openTasks > 0 && <span className="tab-count">{openTasks}</span>}
-          </button>
+        <div className="phone-title">
+          <span>Lantern</span>
+          <span className="sf-badge" title="Built for the State Farm challenge"><img src="/brand/state-farm.svg" alt="State Farm" /></span>
         </div>
-        {role === 'resident' ? <ResidentView {...props} /> : <StaffView {...props} />}
-        {props.framed && <Qr />}
+        <div className="tabs phone-tabs" role="tablist">
+          {tabs.map((t) => (
+            <button key={t.id} type="button" role="tab" aria-selected={role === t.id} className={role === t.id ? 'on' : ''} onClick={() => setRole(t.id)}>
+              {t.label}{t.count ? <span className="tab-count">{t.count}</span> : null}
+            </button>
+          ))}
+        </div>
+        <div className="phone-view" key={role}>
+          {role === 'advisor' ? <AdvisorView {...props} /> : role === 'resident' ? <ResidentView {...props} /> : <StaffView {...props} />}
+        </div>
       </div>
     </>
   );

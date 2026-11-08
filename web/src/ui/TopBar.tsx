@@ -62,7 +62,7 @@ export function TopBar({ sim, look, onLook, onPrepare, onStartFire, onTogglePaus
         <LanternMark />
         <span>Lantern</span>
       </div>
-      <p className="tb-sub">Eaton Fire replay · simulated neighborhood</p>
+      <p className="tb-sub">Eaton Fire replay · built for <img className="sf-inline" src="/brand/state-farm.svg" alt="State Farm" /></p>
 
       <ol className="stepper" aria-label="Simulation steps">
         {steps.map((s, i) => (

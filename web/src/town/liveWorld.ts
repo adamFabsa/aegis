@@ -37,12 +37,17 @@ interface Snapshot {
   checklists: Map<number, Measure[]>;
   devices: number;
   workerOnline: boolean;
+  units: Unit[];
 }
 
 const EMPTY_SIM: Sim = { phase: 'prep', running: false, tick: 0, simMinutes: 0, minutesPerTick: 2, budgetLeft: 0, windDirDeg: 225, windMph: 0 };
 
 /** Feed line → tone (colour + alert sound) and kind (siren / crash sounds), from the engine's wording. */
 function classify(text: string): Pick<LogEvent, 'tone' | 'kind'> {
+  // engines first: "returning to staging: Building 9 was lost" is not itself a collapse
+  if (/responding to|sent ahead of the fire/i.test(text)) return { tone: 'info', kind: 'dispatch' };
+  if (/on scene at/i.test(text)) return { tone: 'good' };
+  if (/staging/i.test(text)) return { tone: 'info' };
   if (/\blost\b|collapsed/i.test(text)) return { tone: 'bad', kind: 'collapse' };
   if (/caught fire|is on fire|Fire started|left behind/i.test(text)) return { tone: 'bad' };
   if (/behind|Escalated|can.t get out|needs medical|unclear/i.test(text)) return { tone: 'warn' };
@@ -75,7 +80,7 @@ class LiveStore {
   private footprints = new Map<number, { key: string; inside: number[]; ring: number[] }>();
   private resolveReady!: (c: DbConnection) => void;
   readonly ready = new Promise<DbConnection>((r) => { this.resolveReady = r; });
-  snapshot: Snapshot = { sim: EMPTY_SIM, buildings: [], cells: [], persons: [], tasks: [], events: [], approved: {}, fixes: [], connection: { state: 'connecting', server: `${SERVER} / ${DATABASE}` }, profiles: new Map(), checklists: new Map(), devices: 0, workerOnline: false };
+  snapshot: Snapshot = { sim: EMPTY_SIM, buildings: [], cells: [], persons: [], tasks: [], events: [], approved: {}, fixes: [], connection: { state: 'connecting', server: `${SERVER} / ${DATABASE}` }, profiles: new Map(), checklists: new Map(), devices: 0, workerOnline: false, units: [] };
 
   connect() {
     if (this.conn) return;
@@ -116,6 +121,7 @@ class LiveStore {
     c.db.presence.onInsert(touch); c.db.presence.onUpdate(touch); c.db.presence.onDelete(touch);
     c.db.buildingProfile.onInsert(touch); c.db.buildingProfile.onUpdate(touch); c.db.buildingProfile.onDelete(touch);
     c.db.mitigation.onInsert(touch); c.db.mitigation.onUpdate(touch); c.db.mitigation.onDelete(touch);
+    c.db.unit.onInsert(touch); c.db.unit.onUpdate(touch); c.db.unit.onDelete(touch);
     c.db.fireCell.onInsert(touch);
     c.db.fireCell.onDelete(touch);
     c.db.fireCell.onUpdate((_ctx, oldRow, newRow) => {
@@ -194,10 +200,13 @@ class LiveStore {
       checklists.set(r.buildingId, list);
     }
     const present = [...c.db.presence.iter()];
+    const units: Unit[] = [...c.db.unit.iter()].sort((a, b) => a.id - b.id).map((u) => ({
+      id: u.id, name: u.name, status: u.status as Unit['status'], targetId: u.targetId || null, ticksLeft: u.ticksLeft, travelTicks: u.travelTicks,
+    }));
 
     this.snapshot = {
       sim, buildings, cells, persons, tasks, events, approved, fixes, results: w && wo ? { with: strip(w), without: strip(wo) } : undefined, connection: this.snapshot.connection,
-      profiles, checklists, devices: present.length, workerOnline: present.some((x) => x.worker),
+      profiles, checklists, devices: present.length, workerOnline: present.some((x) => x.worker), units,
     };
     this.emit();
   }
@@ -227,7 +236,6 @@ class LiveStore {
 }
 
 const store = new LiveStore();
-const NO_UNITS: Unit[] = [];
 
 export function useLiveWorld(): WorldApi {
   const snap = useSyncExternalStore(store.subscribe, store.getSnapshot);
@@ -244,12 +252,13 @@ export function useLiveWorld(): WorldApi {
     togglePause: () => void store.call((c) => c.reducers.setRunning({ running: !store.snapshot.sim.running })),
     reset: () => void store.call((c) => c.reducers.resetSim({})),
     advance: (n: number) => void store.call((c) => c.reducers.advanceTicks({ ticks: Math.min(500, Math.max(1, Math.round(n))) })),
-    // Fire units are part of B's incident-command concept but not of the shared simulation yet.
-    dispatchUnit: () => {},
-    releaseUnit: () => {},
+    // Fire engines live in the module's unit table (auto-dispatch to burning buildings + Lantern's own calls).
+    dispatchUnit: (buildingId: number) => store.call((c) => c.reducers.dispatchUnit({ buildingId })),
+    releaseUnit: (unitId: number) => store.call((c) => c.reducers.releaseUnit({ unitId })),
     replyCheckin: (personId: number, choice: 'safe' | 'cant_move' | 'text', text = '') => store.call((c) => c.reducers.replyCheckin({ personId, choice, text })),
     claimTask: (taskId: number, staffName: string) => store.call((c) => c.reducers.claimTask({ taskId: BigInt(taskId), staffName })),
     completeTask: (taskId: number) => store.call((c) => c.reducers.completeTask({ taskId: BigInt(taskId) })),
+    assignStaff: (taskId: number) => store.call((c) => c.reducers.assignStaff({ taskId: BigInt(taskId) })),
   }), []);
   const fixesFor = useMemo(() => {
     const by = new Map<number, FixView[]>();
@@ -263,7 +272,7 @@ export function useLiveWorld(): WorldApi {
   const m = snap.sim.minutesPerTick;
   return {
     sim: snap.sim, buildings: snap.buildings, cells: snap.cells, persons: snap.persons, tasks: snap.tasks,
-    events: snap.events, approved: snap.approved, results: snap.results, units: NO_UNITS,
+    events: snap.events, approved: snap.approved, results: snap.results, units: snap.units,
     speed: m >= 8 ? 4 : m >= 4 ? 2 : 1,
     fixesFor,
     // A building is prepared when its (rounded) risk is under 70 and evacuation beats the fire (spacetimedb/src/sim.ts).

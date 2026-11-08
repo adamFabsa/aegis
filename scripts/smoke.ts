@@ -84,6 +84,24 @@ try {
   await worker.reducers.setReplyClass({ personId: ROBERT, choice: 'needs_medical' });
   await waitFor(() => admin.db.person.id.find(ROBERT)?.status === 'cant_move', 'worker classification');
   assert.ok([...admin.db.task.iter()].some((t) => t.personId === ROBERT && !t.done && t.priority === 3), 'Robert has an urgent task');
+  // Lantern's coach sends on-site staff at once (the engine then completes the rescue at the staff × van pace).
+  const robertTask = [...admin.db.task.iter()].find((t) => t.personId === ROBERT && !t.done)!;
+  // (on-site staff may claim him first on their own; either way he ends up with on-site staff)
+  const assigned = await a.reducers.assignStaff({ taskId: robertTask.id }).then(() => null, (e: Error) => e.message);
+  if (assigned && !/already claimed/.test(assigned)) throw new Error(assigned);
+  await waitFor(() => admin.db.task.id.find(robertTask.id)!.claimedBy.endsWith(' · on-site'), 'on-site staff assigned to Robert');
+  assert.ok(['claimed', 'out'].includes(admin.db.person.id.find(ROBERT)!.status));
+  await assert.rejects(a.reducers.assignStaff({ taskId: robertTask.id }), /already claimed|already done/);
+  // Fire engines: shared rows every screen draws; sent ahead of the fire, released back to staging.
+  assert.equal(admin.db.unit.count(), 3n);
+  await a.reducers.dispatchUnit({ buildingId: 12 });
+  await waitFor(() => [...admin.db.unit.iter()].some((u) => u.targetId === 12 && u.status === 'enroute'), 'engine en route to Building 12');
+  await assert.rejects(b.reducers.dispatchUnit({ buildingId: 12 }), /already assigned/);
+  const shelter = [...admin.db.building.iter()].find((x) => x.kind === 'shelter')!;
+  await assert.rejects(a.reducers.dispatchUnit({ buildingId: shelter.id }), /shelter/);
+  const sent = [...admin.db.unit.iter()].find((u) => u.targetId === 12)!;
+  await b.reducers.releaseUnit({ unitId: sent.id });
+  await waitFor(() => admin.db.unit.id.find(sent.id)!.status !== 'enroute', 'engine released');
   await a.reducers.replyCheckin({ personId: MOBILE, choice: 'safe', text: '' });
   // The next tick may already walk a safe resident out; either way they are accounted for exactly once.
   await waitFor(() => ['safe', 'out'].includes(admin.db.person.id.find(MOBILE)!.status), 'safe confirmation');
@@ -106,8 +124,9 @@ try {
   assert.equal(admin.db.building.id.find(12)!.vans, 1);
   assert.ok([...admin.db.mitigation.iter()].every((m) => !/approved/.test(m.note)), 'reset restores the checklist');
   assert.equal(admin.db.sim.id.find(0)!.budgetLeft, 500000);
+  assert.ok([...admin.db.unit.iter()].every((u) => u.status === 'ready' && u.targetId === 0), 'reset parks every engine');
   await admin.reducers.seedWorld({ json: JSON.stringify(readSeed()) });
-  console.log('PASS: seed rollback, authorization, presence, insurer checklist, fixes, cross-client check-ins, atomic competing claims, rescue ownership, worker writes, scheduled escalation/end, baseline and reset.');
+  console.log('PASS: seed rollback, authorization, presence, insurer checklist, fixes, cross-client check-ins, atomic competing claims, rescue ownership, worker writes, coach staff assignment, fire engines, scheduled escalation/end, baseline and reset.');
 } finally {
   for (const c of clients) c.disconnect();
 }

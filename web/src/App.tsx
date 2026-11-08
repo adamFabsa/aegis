@@ -122,10 +122,15 @@ export default function App() {
   useEffect(() => { const on = () => setVw(window.innerWidth); window.addEventListener('resize', on); return () => window.removeEventListener('resize', on); }, []);
   const [phoneOpen, setPhoneOpen] = useState(true);
   const phoneLayout = vw <= 760;
-  const showFrame = vw >= 1180 && sim.phase !== 'prep' && phoneOpen;
+  // the phone carries Lantern AI's instructions in every phase, so it is on screen from the start
+  const showFrame = vw >= 1180 && phoneOpen;
   const phoneProps = {
     sim, buildings, persons: world.persons, tasks: world.tasks,
     onReply: world.replyCheckin, onClaim: world.claimTask, onDone: world.completeTask,
+    units, fixesFor: world.fixesFor, approved, profileFor: world.profileFor, checklistFor: world.checklistFor,
+    results: world.results, selectedId, workerOnline: world.live?.workerOnline,
+    onApprove: world.approveFix, onRecommend: world.approveRecommended, onEvacuate: world.startEvacuation,
+    onDispatch: world.dispatchUnit, onAssign: world.assignStaff, onSelect: setSelectedId,
   };
   const view = new URLSearchParams(window.location.search).get('view');
   const startFire = () => { setSelectedId(null); world.setPhase('fire'); };
@@ -151,7 +156,7 @@ export default function App() {
     const q = new URLSearchParams(window.location.search);
     return (
       <div className="phone-page">
-        <Phone {...phoneProps} initialRole={q.get('role') === 'staff' ? 'staff' : 'resident'} initialPerson={q.get('id') ? Number(q.get('id')) : undefined} initialStaff={q.get('name') ?? undefined} />
+        <Phone {...phoneProps} initialRole={q.get('role') === 'staff' ? 'staff' : q.get('role') === 'resident' ? 'resident' : undefined} initialPerson={q.get('id') ? Number(q.get('id')) : undefined} initialStaff={q.get('name') ?? undefined} />
         {sim.phase === 'prep' && <button type="button" className="btn fire wide" onClick={startFire}>Start the fire</button>}
       </div>
     );
@@ -164,7 +169,7 @@ export default function App() {
         selectedId={selectedId} onSelect={setSelectedId}
         topInset={insets.top} bottomInset={insets.bottom} leftInset={insets.left} rightInset={showFrame ? 336 : 0} lite={lite} units={units}
         rotation={rotation} onRotate={[1, 2, 3].every((r) => ready(spriteUrl('homes', pack, r)) && ready(spriteUrl('office', pack, r))) ? onRotate : undefined}
-        onPhone={vw >= 1180 && sim.phase !== 'prep' && !phoneOpen ? () => setPhoneOpen(true) : undefined}
+        onPhone={vw >= 1180 && !phoneOpen ? () => setPhoneOpen(true) : undefined}
       />
       <WindChip deg={sim.windDirDeg} mph={sim.windMph} style={phoneLayout ? { right: 8, top: 'calc(130px + env(safe-area-inset-top))' } : { left: insets.left + 4, bottom: 16 }} />
       {world.live && (

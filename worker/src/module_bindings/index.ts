@@ -37,10 +37,13 @@ import {
 import AdvanceTicksReducer from "./advance_ticks_reducer";
 import ApproveFixReducer from "./approve_fix_reducer";
 import ApproveRecommendedReducer from "./approve_recommended_reducer";
+import AssignStaffReducer from "./assign_staff_reducer";
 import ClaimTaskReducer from "./claim_task_reducer";
 import CompleteTaskReducer from "./complete_task_reducer";
+import DispatchUnitReducer from "./dispatch_unit_reducer";
 import EndAndCompareReducer from "./end_and_compare_reducer";
 import RegisterWorkerReducer from "./register_worker_reducer";
+import ReleaseUnitReducer from "./release_unit_reducer";
 import ReplyCheckinReducer from "./reply_checkin_reducer";
 import ResetSimReducer from "./reset_sim_reducer";
 import RunBaselineReducer from "./run_baseline_reducer";
@@ -66,6 +69,7 @@ import PresenceRow from "./presence_table";
 import ResultRow from "./result_table";
 import SimRow from "./sim_table";
 import TaskRow from "./task_table";
+import UnitRow from "./unit_table";
 
 /** Type-only namespace exports for generated type groups. */
 
@@ -192,6 +196,17 @@ const tablesSchema = __schema({
       { name: 'task_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, TaskRow),
+  unit: __table({
+    name: 'unit',
+    indexes: [
+      { accessor: 'id', name: 'unit_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'unit_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, UnitRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
@@ -199,10 +214,13 @@ const reducersSchema = __reducers(
   __reducerSchema("advance_ticks", AdvanceTicksReducer),
   __reducerSchema("approve_fix", ApproveFixReducer),
   __reducerSchema("approve_recommended", ApproveRecommendedReducer),
+  __reducerSchema("assign_staff", AssignStaffReducer),
   __reducerSchema("claim_task", ClaimTaskReducer),
   __reducerSchema("complete_task", CompleteTaskReducer),
+  __reducerSchema("dispatch_unit", DispatchUnitReducer),
   __reducerSchema("end_and_compare", EndAndCompareReducer),
   __reducerSchema("register_worker", RegisterWorkerReducer),
+  __reducerSchema("release_unit", ReleaseUnitReducer),
   __reducerSchema("reply_checkin", ReplyCheckinReducer),
   __reducerSchema("reset_sim", ResetSimReducer),
   __reducerSchema("run_baseline", RunBaselineReducer),

@@ -11,6 +11,7 @@ import { parseSeed } from './seed';
 import * as S from './sim';
 import { SEED } from './seed_data';
 import { DATA_SOURCES, applyFixToChecklist, mitigationRows, type MitigationRow } from './insurance';
+import * as U from './units';
 export default db;
 type Context = ReducerCtx<typeof db.schemaType>;
 
@@ -65,7 +66,23 @@ function load(ctx: Context): S.World {
     tasks: [...ctx.db.task.iter()].map((x) => ({ ...x })),
     cells: [...ctx.db.fireCell.iter()].map((c) => ({ ...c })),
     pingedAtMinute: loadPings(ctx),
+    protectedBuildingIds: U.protectedIds([...ctx.db.unit.iter()]),
   };
+}
+
+// Fire engines: plain copies of the unit rows, stepped once per tick after the fire.
+function loadUnits(ctx: Context): U.UnitRow[] {
+  return [...ctx.db.unit.iter()].map((u) => ({ ...u })).sort((a, b) => a.id - b.id);
+}
+function saveUnits(ctx: Context, units: U.UnitRow[]) {
+  for (const u of units) ctx.db.unit.id.update(u);
+}
+/** After an engine step: move the trucks, auto-dispatch to burning buildings, keep the world's protection current. */
+function stepUnits(ctx: Context, world: S.World, units: U.UnitRow[], tick: number) {
+  const r = U.stepUnits(units, world.buildings);
+  world.protectedBuildingIds = U.protectedIds(units);
+  log(ctx, r.events, tick);
+  return r.changed;
 }
 
 /** Persist an engine step: only the rows the engine reports as changed (cheap subscription traffic). */
@@ -116,6 +133,8 @@ function seedWorld(ctx: Context, seed: S.Seed) {
   for (const o of [...ctx.db.taskOwner.iter()]) ctx.db.taskOwner.taskId.delete(o.taskId);
   for (const r of [...ctx.db.buildingProfile.iter()]) ctx.db.buildingProfile.buildingId.delete(r.buildingId);
   for (const r of [...ctx.db.mitigation.iter()]) ctx.db.mitigation.id.delete(r.id);
+  for (const u of [...ctx.db.unit.iter()]) ctx.db.unit.id.delete(u.id);
+  for (const u of U.freshUnits()) ctx.db.unit.insert(u);
   const w = S.buildWorldFromSeed(seed);
   if (ctx.db.sim.id.find(0)) ctx.db.sim.id.update(w.sim);
   else ctx.db.sim.insert(w.sim);
@@ -235,15 +254,18 @@ export const advance_ticks = db.reducer({ ticks: t.u32() }, (ctx, { ticks }) => 
   if (ticks < 1 || ticks > 500) reject('ticks must be 1–500');
   const p = params(ctx);
   const world = load(ctx);
+  const units = loadUnits(ctx);
   const wasRunning = world.sim.running;
   for (let i = 0; i < ticks && world.sim.phase === 'fire'; i++) {
     world.sim.running = true;
     const r = S.stepSimulation(world, p, p.fireSeed);
     log(ctx, r.events, r.sim.tick);
     if (r.ended) break;
+    stepUnits(ctx, world, units, r.sim.tick);
   }
   if (world.sim.phase === 'fire') world.sim.running = wasRunning;
   saveAll(ctx, world);
+  saveUnits(ctx, units);
   if (world.sim.phase === 'ended') writeResults(ctx, world);
 });
 
@@ -380,6 +402,30 @@ export const claim_task = db.reducer({ taskId: t.u64(), staffName: t.string() },
   log(ctx, `${name} claimed ${person?.name ?? task.kind}`);
 });
 
+/**
+ * Lantern's coach: send the building's on-site staff to this resident now instead of waiting out the claim window
+ * for a staff phone. The engine then completes the rescue at the building's real staff × van pace (mutual-aid
+ * staff for a building with none), exactly like an on-site claim it made itself.
+ */
+export const assign_staff = db.reducer({ taskId: t.u64() }, (ctx, { taskId }) => {
+  requireFire(ctx);
+  const task = ctx.db.task.id.find(taskId) ?? reject('task not found');
+  if (task.done) reject('task already done');
+  if (task.claimedBy !== '') reject(`already claimed by ${task.claimedBy.replace(S.AUTO_SUFFIX, ' (on-site)')}`);
+  const person = task.personId ? ctx.db.person.id.find(task.personId) : undefined;
+  if (person && ['safe', 'out', 'left_behind'].includes(person.status)) reject('resident no longer needs help');
+  const b = ctx.db.building.id.find(task.buildingId) ?? reject('building not found');
+  if (b.status === 'lost') reject(`${b.name} is lost`);
+  const helper = b.staff > 0 ? b
+    : [...ctx.db.building.iter()].filter((x) => x.staff > 0 && x.kind !== 'shelter' && x.status !== 'lost')
+      .sort((x, y) => Math.hypot(x.x - b.x, x.y - b.y) - Math.hypot(y.x - b.x, y.y - b.y))[0] ?? b;
+  const k = [...ctx.db.task.iter()].filter((x) => x.buildingId === b.id && x.claimedBy.endsWith(S.AUTO_SUFFIX)).length;
+  const name = S.onSiteName(helper, k);
+  ctx.db.task.id.update({ ...task, claimedBy: name });
+  if (person) ctx.db.person.id.update({ ...person, status: 'claimed' });
+  log(ctx, `Lantern sent ${name.replace(S.AUTO_SUFFIX, '')} (on-site staff) to ${person?.name ?? b.name}`);
+});
+
 export const complete_task = db.reducer({ taskId: t.u64() }, (ctx, { taskId }) => {
   requireFire(ctx);
   const task = ctx.db.task.id.find(taskId) ?? reject('task not found');
@@ -400,6 +446,29 @@ export const complete_task = db.reducer({ taskId: t.u64() }, (ctx, { taskId }) =
     who = person.name;
   }
   log(ctx, `${who} reached safety with ${task.claimedBy}`);
+});
+
+// ───────────────────────────── fire engines ─────────────────────────────
+
+/** Send a free engine to a building (Lantern's advisor: ahead of the fire, before it ignites). */
+export const dispatch_unit = db.reducer({ buildingId: t.u32() }, (ctx, { buildingId }) => {
+  requireFire(ctx);
+  const units = loadUnits(ctx);
+  const b = ctx.db.building.id.find(buildingId) ?? reject('building not found');
+  const r = U.dispatch(units, b, b.status !== 'burning');
+  if (r.error || !r.unit) reject(r.error ?? 'no engine free');
+  ctx.db.unit.id.update(r.unit);
+  log(ctx, r.event!);
+});
+
+/** Bring an engine back to staging so it can be sent somewhere else. */
+export const release_unit = db.reducer({ unitId: t.u32() }, (ctx, { unitId }) => {
+  requireFire(ctx);
+  const u = { ...(ctx.db.unit.id.find(unitId) ?? reject('unit not found')) };
+  const r = U.release(u);
+  if (r.error) reject(r.error);
+  ctx.db.unit.id.update(u);
+  log(ctx, r.event!);
 });
 
 // ───────────────────────────── end of run ─────────────────────────────
@@ -431,4 +500,5 @@ export const tick = db.reducer({ onSchedule: simTick }, { arg: simTick.rowType }
   const r = S.stepSimulation(world, p, p.fireSeed);
   saveStep(ctx, r, world);
   if (r.ended) writeResults(ctx, world);
+  else saveUnits(ctx, stepUnits(ctx, world, loadUnits(ctx), r.sim.tick));
 });

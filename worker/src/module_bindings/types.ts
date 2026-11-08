@@ -167,6 +167,16 @@ export const TaskOwner = __t.object("TaskOwner", {
 });
 export type TaskOwner = __Infer<typeof TaskOwner>;
 
+export const Unit = __t.object("Unit", {
+  id: __t.u32(),
+  name: __t.string(),
+  status: __t.string(),
+  targetId: __t.u32(),
+  ticksLeft: __t.u32(),
+  travelTicks: __t.u32(),
+});
+export type Unit = __Infer<typeof Unit>;
+
 export const WorldSeed = __t.object("WorldSeed", {
   id: __t.u32(),
   json: __t.string(),

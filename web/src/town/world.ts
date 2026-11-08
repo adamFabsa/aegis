@@ -76,12 +76,14 @@ export interface WorldApi {
   startEvacuation: (id: number) => void;
   approveFix: (id: number, key: string) => void;
   approveRecommended?: () => void;
+  /** live only: Lantern's coach sends on-site staff to a waiting resident now */
+  assignStaff?: (taskId: number) => Result;
   endAndCompare?: () => void;
   togglePause: () => void;
   reset: () => void;
   advance: (n: number) => void;
-  dispatchUnit: (buildingId: number) => void;
-  releaseUnit: (unitId: number) => void;
+  dispatchUnit: (buildingId: number) => Result | void;
+  releaseUnit: (unitId: number) => Result | void;
   replyCheckin: (personId: number, choice: 'safe' | 'cant_move' | 'text', text?: string) => Result | void;
   claimTask: (taskId: number, staffName: string) => Result;
   completeTask: (taskId: number) => Result | void;

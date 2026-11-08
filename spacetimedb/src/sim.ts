@@ -177,6 +177,8 @@ export interface FireParams {
 
   urgentEtaMin: number; // task priority bumps when fire is closer than this
   minRisk: number;
+  /** ignition multiplier for a building with an engine on scene (optional; default 0.35) */
+  engineProtect?: number;
   preparedRiskMax: number;
   prepBudgetUsd: number;
 
@@ -246,6 +248,12 @@ export interface World {
    * engine_state table; if absent, the engine falls back to (tick − pingedAtTick) × minutesPerTick.
    */
   pingedAtMinute?: Record<number, number>;
+  /**
+   * Buildings with a fire engine on scene (the module's unit table). An engine there before the fire arrives
+   * wets the structure: its per-step ignition probability is multiplied by p.engineProtect (default 0.35).
+   * Absent in the baseline, which models engines arriving only after a building is already burning.
+   */
+  protectedBuildingIds?: number[];
 }
 
 /** Sim-minute a resident was pinged (exact if recorded, else reconstructed from ticks at the current speed). */
@@ -378,6 +386,8 @@ export interface Engine {
   foot: number[][]; // building index → footprint cell ids
   ring: number[][]; // building index → cells touching the footprint
   risk: Float64Array; // building index → risk 0..100
+  /** building index → ignition multiplier (an engine on scene before the fire arrives); absent = 1 */
+  protect?: Float64Array;
 }
 
 /** Mutable fire state. */
@@ -522,7 +532,8 @@ export function fireSubstep(eng: Engine, g: FireGrid, rng: Rng, wind: WindSample
   for (let b = 0; b < nb; b++) {
     if (!exposedFlag[b] || bstate[b] !== BSTATE_OK) continue;
     exposed.push(b);
-    if (rng() < igniteProb(eng.risk[b], p)) {
+    // one draw per exposed building either way, so protection never shifts the random streams
+    if (rng() < igniteProb(eng.risk[b], p) * (eng.protect ? eng.protect[b] : 1)) {
       bstate[b] = BSTATE_BURNING;
       ignited.push(b);
       for (const c of eng.foot[b]) {
@@ -707,7 +718,7 @@ function taskPriority(person: PersonRow, b: BuildingRow, p: FireParams): number 
   return Math.min(3, pr);
 }
 
-function onSiteName(b: { id: number }, k: number): string {
+export function onSiteName(b: { id: number }, k: number): string {
   return ON_SITE_STAFF[(b.id * 3 + k) % ON_SITE_STAFF.length] + AUTO_SUFFIX;
 }
 
@@ -758,6 +769,13 @@ export function stepSimulation(world: World, p: FireParams, rngSrc: RngSource, o
   const n = p.cols * p.rows;
   const { fuel, byId } = cellArrays(world, p);
   const eng = makeEngine(p, fuel, world.buildings);
+  if (world.protectedBuildingIds?.length) {
+    eng.protect = new Float64Array(eng.bIds.length).fill(1);
+    for (const id of world.protectedBuildingIds) {
+      const bi = eng.bIds.indexOf(id);
+      if (bi >= 0) eng.protect[bi] = p.engineProtect ?? 0.35;
+    }
+  }
   const g = gridFromRows(byId, world.buildings, n);
   const [first, last] = stepRange(p, oldMin, sim.simMinutes);
   const ignitedB = new Set<number>();
