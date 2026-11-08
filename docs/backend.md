@@ -56,11 +56,13 @@ The examples use generated bindings directly; B may use the SDK's React provider
 | `complete_task` / `completeTask` | `{taskId: bigint}` | Fire only; require the claiming identity; reject repeated completion; mark person out and recompute peopleOut from residents. |
 | `run_baseline` / `runBaseline` | `{}` | Ended only; the same fire (same `fireSeed`) with no fixes, late evacuation and no check-ins/escalation; idempotent. The tick already writes it when the fire ends. |
 | `end_and_compare` / `endAndCompare` | `{}` | Fire only; runs the rest of the fire instantly and writes both results (an "End & compare" button). |
+| `set_running` / `setRunning` | `{running: boolean}` | Fire only; pause / resume the scheduled tick (the dashboard's pause button). |
+| `advance_ticks` / `advanceTicks` | `{ticks: number}` | Fire only; 1–500 engine ticks at once (demo deep links, "skip ahead"). Same steps as the scheduled tick. |
 | `reset_sim` / `resetSim` | `{}` | Restore original seed, budget, people, grid and fixes; remove tasks/events/results; preserve worker registration and schedule. |
 
 Dashboard/staff/resident actions are intentionally shared demo controls, as requested; there is no production resident account or building access model. Anyone with access to the demo can reset or start it. Seed replacement and worker registration require the original publishing identity. Staff names are display labels; identity, rather than a matching name, authorizes completion.
 
-Safe replies immediately account for the resident and close obsolete help tasks. Safe replies and rescue completion cannot double-count a person. Repeated `cant_move` replies never create duplicate open help tasks. Classifier `needs_medical` maps to urgent assistance; `unclear` retains the pending check-in and the original escalation deadline. Workers should process each `(personId, replyText)` once and skip anyone no longer pinged. A delayed classification that races a newer free-text reply cannot be version-checked through the fixed two-argument worker reducer, so D should serialize per-person classifications.
+Button replies are recorded as reply text ("I'm safe" / "I can't get out"), so a person with a help task and empty `replyText` was escalated for not answering. Safe replies immediately account for the resident and close obsolete help tasks. Safe replies and rescue completion cannot double-count a person. Repeated `cant_move` replies never create duplicate open help tasks. Classifier `needs_medical` maps to urgent assistance; `unclear` retains the pending check-in and the original escalation deadline. Workers should process each `(personId, replyText)` once and skip anyone no longer pinged. A delayed classification that races a newer free-text reply cannot be version-checked through the fixed two-argument worker reducer, so D should serialize per-person classifications.
 
 ## A's seed input
 

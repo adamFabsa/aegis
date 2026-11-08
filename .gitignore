@@ -21,3 +21,6 @@ spacetimedb/dist/
 spacetimedb/target/
 spacetime.local.json
 spacetime.*.local.json
+
+# Part B (web + Blender)
+blender/renders/

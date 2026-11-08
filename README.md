@@ -7,7 +7,9 @@ Wildfire preparedness and evacuation simulation for property managers (HackUTD 2
   engine), [`seed/`](seed/README.md), and [`preview/`](preview/README.md) (the engine in a browser, no server needed).
 - **Part C — SpacetimeDB backend:** state, transactional game actions, the scheduled tick, auth, seed
   administration and generated client bindings ([`docs/backend.md`](docs/backend.md)).
-- Part B (website) and Part D (Gemini worker, hosting) are not in this repository yet.
+- **Part B — website:** [`web/`](web/README.md) (React + Vite isometric town with Blender-rendered sprites, dashboard,
+  resident/staff phones) rendering the live module; [`blender/`](blender/README.md) builds the sprites.
+- Part D (Gemini worker, hosting) is not in this repository yet.
 
 **What is real and what is simulated.** The neighborhood, residents and dollar values are **fictional (simulated)**.
 The fire is calibrated to the real 2025 Eaton Fire (NASA FIRMS front speed 1.92 km/h, Burbank wind replay), and
@@ -35,6 +37,9 @@ npm run check:all       # type-check, engine + preview tests, module build
 npm run smoke           # disposable database only (see below)
 npm run seed            # optional: re-send seed/*.json through the admin seed_world reducer
 ```
+
+Then the website: `npm run web:dev` (or `cd web && npm ci && npm run dev`) and open http://localhost:5173 —
+`?view=phone` for the phone, `?mock=1` for the offline demo (see [`web/README.md`](web/README.md)).
 
 `bash data/run_pipeline.sh` (or `npm run pipeline`) rebuilds the seed, `seed_data.ts` and the preview from the public data.
 
@@ -78,6 +83,6 @@ Evacuation time uses A's staff × van bottleneck model (the brief's linear formu
 
 ## Frameworks and libraries
 
-All code here was written for this build. Dependencies: SpacetimeDB 2.14.1 (server runtime, realtime SDK and generated bindings), TypeScript (types/compiler), tsx (TypeScript script runner), and `@types/node` (Node types). Tests use Node's built-in test/assert modules. SpacetimeDB's CLI builds/bundles and generates the client bindings. Data pipeline (Python): pandas, NumPy, scikit-learn, psycopg 3; Tiger Data (managed TimescaleDB) for the FIRMS hypertable. Preview fonts: Inter and Space Grotesk (Google Fonts). Data: NASA FIRMS, Iowa Environmental Mesonet (ASOS), CAL FIRE DINS. The repository does not contain B's React/Vite app or D's Gemini worker yet.
+All code here was written for this build. Dependencies: SpacetimeDB 2.14.1 (server runtime, realtime SDK and generated bindings), TypeScript (types/compiler), tsx (TypeScript script runner), and `@types/node` (Node types). Tests use Node's built-in test/assert modules. SpacetimeDB's CLI builds/bundles and generates the client bindings. Data pipeline (Python): pandas, NumPy, scikit-learn, psycopg 3; Tiger Data (managed TimescaleDB) for the FIRMS hypertable. Preview fonts: Inter and Space Grotesk (Google Fonts). Data: NASA FIRMS, Iowa Environmental Mesonet (ASOS), CAL FIRE DINS. Website (Part B): React 19, Vite 8, TypeScript 7, oxlint, qrcode-generator; sprites rendered with Blender. The repository does not contain D's Gemini worker yet.
 
 API choices were checked against the [official scheduler documentation](https://spacetimedb.com/docs/tables/schedule-tables/) and [CLI configuration documentation](https://spacetimedb.com/docs/cli-reference/spacetime-json/), then verified with the pinned SDK and a real local database.

@@ -191,6 +191,30 @@ export const set_speed = db.reducer({ minutesPerTick: t.u32() }, (ctx, { minutes
   ctx.db.sim.id.update({ ...getSim(ctx), minutesPerTick });
 });
 
+/** Pause / resume the fire (the dashboard's pause button). */
+export const set_running = db.reducer({ running: t.bool() }, (ctx, { running }) => {
+  requireFire(ctx);
+  ctx.db.sim.id.update({ ...getSim(ctx), running });
+});
+
+/** Skip ahead n ticks instantly (demo deep links / "skip ahead"); same engine steps as the scheduled tick. */
+export const advance_ticks = db.reducer({ ticks: t.u32() }, (ctx, { ticks }) => {
+  requireFire(ctx);
+  if (ticks < 1 || ticks > 500) reject('ticks must be 1–500');
+  const p = params(ctx);
+  const world = load(ctx);
+  const wasRunning = world.sim.running;
+  for (let i = 0; i < ticks && world.sim.phase === 'fire'; i++) {
+    world.sim.running = true;
+    const r = S.stepSimulation(world, p, p.fireSeed);
+    log(ctx, r.events, r.sim.tick);
+    if (r.ended) break;
+  }
+  if (world.sim.phase === 'fire') world.sim.running = wasRunning;
+  saveAll(ctx, world);
+  if (world.sim.phase === 'ended') writeResults(ctx, world);
+});
+
 export const approve_fix = db.reducer({ fixId: t.u32() }, (ctx, { fixId }) => {
   if (getSim(ctx).phase !== 'prep') reject('fixes can only be approved in prep');
   const fix = ctx.db.fix.id.find(fixId) ?? reject('fix not found');
@@ -266,7 +290,7 @@ function reply(ctx: Context, personId: number, choice: string, text: string, wor
   } else if (choice === 'safe') {
     if (person.status === 'safe') return;
     person.status = 'safe';
-    if (!worker) person.replyText = text;
+    if (!worker) person.replyText = text || "I'm safe"; // button replies are recorded too, so "no reply" means no reply
     for (const x of world.tasks) {
       if (x.personId === person.id && !x.done) {
         x.done = true; // obsolete help task
@@ -276,7 +300,7 @@ function reply(ctx: Context, personId: number, choice: string, text: string, wor
     line = `${person.name}: “I'm safe”`;
   } else {
     if (person.status === 'safe') reject('resident already safe');
-    if (!worker) person.replyText = text;
+    if (!worker) person.replyText = text || "I can't get out";
     const r = S.applyReply(world, person.id, choice, p);
     if (r.error) reject(r.error);
     changedTasks.push(...r.tasksUpdated);

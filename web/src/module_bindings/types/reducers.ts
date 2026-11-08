@@ -6,6 +6,7 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AdvanceTicksReducer from "../advance_ticks_reducer";
 import ApproveFixReducer from "../approve_fix_reducer";
 import ApproveRecommendedReducer from "../approve_recommended_reducer";
 import ClaimTaskReducer from "../claim_task_reducer";
@@ -19,9 +20,11 @@ import SeedWorldReducer from "../seed_world_reducer";
 import SetExplanationReducer from "../set_explanation_reducer";
 import SetPhaseReducer from "../set_phase_reducer";
 import SetReplyClassReducer from "../set_reply_class_reducer";
+import SetRunningReducer from "../set_running_reducer";
 import SetSpeedReducer from "../set_speed_reducer";
 import StartEvacuationReducer from "../start_evacuation_reducer";
 
+export type AdvanceTicksParams = __Infer<typeof AdvanceTicksReducer>;
 export type ApproveFixParams = __Infer<typeof ApproveFixReducer>;
 export type ApproveRecommendedParams = __Infer<typeof ApproveRecommendedReducer>;
 export type ClaimTaskParams = __Infer<typeof ClaimTaskReducer>;
@@ -35,6 +38,7 @@ export type SeedWorldParams = __Infer<typeof SeedWorldReducer>;
 export type SetExplanationParams = __Infer<typeof SetExplanationReducer>;
 export type SetPhaseParams = __Infer<typeof SetPhaseReducer>;
 export type SetReplyClassParams = __Infer<typeof SetReplyClassReducer>;
+export type SetRunningParams = __Infer<typeof SetRunningReducer>;
 export type SetSpeedParams = __Infer<typeof SetSpeedReducer>;
 export type StartEvacuationParams = __Infer<typeof StartEvacuationReducer>;
 

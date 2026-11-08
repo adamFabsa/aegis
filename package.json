@@ -15,7 +15,9 @@
     "spacetime": "node --import tsx scripts/spacetime.ts",
     "check:all": "npm run check && npm test && npm run build",
     "pipeline": "bash data/run_pipeline.sh",
-    "preview": "node --import tsx preview/build.ts"
+    "preview": "node --import tsx preview/build.ts",
+    "web:dev": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build"
   },
   "dependencies": {
     "spacetimedb": "2.14.1"

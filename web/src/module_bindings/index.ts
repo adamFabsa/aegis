@@ -34,6 +34,7 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AdvanceTicksReducer from "./advance_ticks_reducer";
 import ApproveFixReducer from "./approve_fix_reducer";
 import ApproveRecommendedReducer from "./approve_recommended_reducer";
 import ClaimTaskReducer from "./claim_task_reducer";
@@ -47,6 +48,7 @@ import SeedWorldReducer from "./seed_world_reducer";
 import SetExplanationReducer from "./set_explanation_reducer";
 import SetPhaseReducer from "./set_phase_reducer";
 import SetReplyClassReducer from "./set_reply_class_reducer";
+import SetRunningReducer from "./set_running_reducer";
 import SetSpeedReducer from "./set_speed_reducer";
 import StartEvacuationReducer from "./start_evacuation_reducer";
 
@@ -158,6 +160,7 @@ const tablesSchema = __schema({
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("advance_ticks", AdvanceTicksReducer),
   __reducerSchema("approve_fix", ApproveFixReducer),
   __reducerSchema("approve_recommended", ApproveRecommendedReducer),
   __reducerSchema("claim_task", ClaimTaskReducer),
@@ -171,6 +174,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_explanation", SetExplanationReducer),
   __reducerSchema("set_phase", SetPhaseReducer),
   __reducerSchema("set_reply_class", SetReplyClassReducer),
+  __reducerSchema("set_running", SetRunningReducer),
   __reducerSchema("set_speed", SetSpeedReducer),
   __reducerSchema("start_evacuation", StartEvacuationReducer),
 );
