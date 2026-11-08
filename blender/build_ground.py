@@ -24,6 +24,7 @@ def arg(name, default):
     return argv[argv.index(name) + 1] if name in argv else default
 
 LOOKS = arg('--looks', 'dusk,night,maquette').split(',')
+ROTS = [int(r) for r in arg('--rots', '0').split(',')]
 SCALE = float(arg('--scale', '2'))
 SAMPLES = int(arg('--samples', '64'))
 OUT = arg('--out', os.path.join(bs.ROOT, 'web', 'public', 'sprites'))
@@ -634,19 +635,22 @@ def setup(look):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    for look in LOOKS:
+    for look, r in [(l, r) for l in LOOKS for r in ROTS]:
         bpy.ops.wm.read_factory_settings(use_empty=True)
         setup(look)
         maq = look == 'maquette'
         M = materials(GP['maq' if maq else 'real'], maq)
         build(M, maq)
         park_cars(look, maq)
-        png = os.path.join(OUT, f'ground_{look}.png')
+        # the board turns about its centre, exactly as the web app turns map space
+        bs.rotate_view(r, pivot=P(MAP_W / 2, MAP_H / 2)[:2])
+        rs = f'_r{r}' if r else ''
+        png = os.path.join(OUT, f'ground_{look}{rs}.png')
         bpy.context.scene.render.filepath = png
         print(f'[ground] rendering {look} -> {png}', flush=True)
         bpy.ops.render.render(write_still=True)
         for suffix, extra in (('', []), ('_lite', ['-resize', str(int(FW * 1.1)), '0'])):
-            webp = os.path.join(OUT, f'ground_{look}{suffix}.webp')
+            webp = os.path.join(OUT, f'ground_{look}{rs}{suffix}.webp')
             subprocess.run(['cwebp', '-quiet', '-q', '80' if not suffix else '74', *extra, png, '-o', webp], check=True)
             print(f'[ground] wrote {webp} ({os.path.getsize(webp) // 1024} KB)', flush=True)
         os.remove(png)

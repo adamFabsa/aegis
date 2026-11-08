@@ -3,6 +3,7 @@
 // Window outlines come from Blender (blender/build_sprites.py --export-windows) in sprite-frame units.
 import windowsJson from './windows.json';
 import type { Building } from './types';
+import { viewRotation } from './iso';
 
 type Win = number[]; // x1,y1,x2,y2,x3,y3,x4,y4,floor,face
 const WINDOWS = windowsJson as Record<string, Win[]>;
@@ -33,7 +34,8 @@ function roomState(b: Building, h: number, floorShare: number): RoomState {
 interface Props { b: Building; ox: number; oy: number; s: number; lite: boolean }
 
 export function WindowLayer({ b, ox, oy, s, lite }: Props) {
-  const wins = WINDOWS[b.kind];
+  const r = viewRotation();
+  const wins = WINDOWS[r ? `${b.kind}_r${r}` : b.kind] ?? (r ? [] : undefined);
   if (!wins || b.status === 'lost') return null;
   const maxFloor = Math.max(1, ...wins.map((w) => w[8]));
   const items = wins.map((w, i) => {

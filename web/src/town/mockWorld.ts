@@ -163,7 +163,8 @@ function fireTicks(cells: FireCell[], dirDeg: number): Float64Array {
 export interface LogEvent { id: number; tick: number; text: string; tone: 'info' | 'good' | 'warn' | 'bad'; kind?: 'dispatch' | 'collapse' | 'gutted' }
 
 /** Fire units for the incident-command side (engines protect a building once on scene). */
-export interface Unit { id: number; name: string; status: 'ready' | 'enroute' | 'onscene'; targetId: number | null; ticksLeft: number; travelTicks: number }
+/** 'returning': driving back to staging along the way it came (targetId is the building it left). */
+export interface Unit { id: number; name: string; status: 'ready' | 'enroute' | 'onscene' | 'returning'; targetId: number | null; ticksLeft: number; travelTicks: number }
 const seedUnits = (): Unit[] => [
   { id: 1, name: 'Engine 1', status: 'ready', targetId: null, ticksLeft: 0, travelTicks: 0 },
   { id: 2, name: 'Engine 2', status: 'ready', targetId: null, ticksLeft: 0, travelTicks: 0 },
@@ -389,10 +390,19 @@ function step(w: World): World {
   for (const u of units) {
     const tb = w.buildings.find((b) => b.id === u.targetId);
     if (!tb) continue;
+    if (u.status === 'returning') {
+      u.ticksLeft -= 1;
+      if (u.ticksLeft <= 0) {
+        u.status = 'ready';
+        u.targetId = null;
+        events = log(events, sim.tick, `${u.name} back at staging, ready`, 'info');
+      }
+      continue;
+    }
     if (tb.status === 'lost') {
       events = log(events, sim.tick, `${u.name} returning to staging: ${tb.name} was lost`, 'info');
-      u.status = 'ready';
-      u.targetId = null;
+      u.status = 'returning';
+      u.ticksLeft = u.travelTicks;
       continue;
     }
     if (u.status === 'enroute') {
@@ -494,6 +504,8 @@ function step(w: World): World {
   if (!cells.some((c) => c.state === 1) && !buildings.some((b) => b.status === 'burning')) {
     sim.phase = 'ended';
     sim.running = false;
+    // the fire is out: every unit is released back to staging
+    for (const u of units) { u.status = 'ready'; u.targetId = null; u.ticksLeft = 0; }
     events = log(events, sim.tick, 'The fire is out', 'info');
   }
   const next: World = { ...w, sim, buildings, cells, burnCount, events, units, persons, tasks, helpCredit, exposed };
@@ -586,7 +598,7 @@ export function useMockWorld() {
     setWorld((w) => {
       const b = w.buildings.find((x) => x.id === buildingId);
       const u = w.units.find((x) => x.status === 'ready');
-      if (!b || !u || w.sim.phase !== 'fire' || b.status === 'lost' || w.units.some((x) => x.targetId === buildingId)) return w;
+      if (!b || !u || w.sim.phase !== 'fire' || b.status === 'lost' || w.units.some((x) => x.targetId === buildingId && x.status !== 'returning')) return w;
       const travel = Math.max(2, Math.ceil(routeLength(unitRoute(b, w.buildings)) / 170));
       return {
         ...w,
@@ -598,11 +610,17 @@ export function useMockWorld() {
 
   /** Bring a unit back to staging so it can be sent somewhere else. */
   const releaseUnit = useCallback((unitId: number) => {
-    setWorld((w) => ({
-      ...w,
-      units: w.units.map((x) => (x.id === unitId ? { ...x, status: 'ready', targetId: null, ticksLeft: 0 } : x)),
-      events: log(w.events, w.sim.tick, `${w.units.find((x) => x.id === unitId)?.name ?? 'Unit'} back at staging`, 'info'),
-    }));
+    setWorld((w) => {
+      const u = w.units.find((x) => x.id === unitId);
+      if (!u || u.status === 'ready' || u.status === 'returning') return w;
+      // a unit still on its way just turns around; one on scene drives the whole way back
+      const back = u.status === 'enroute' ? Math.max(1, u.travelTicks - u.ticksLeft) : u.travelTicks;
+      return {
+        ...w,
+        units: w.units.map((x) => (x.id === unitId ? { ...x, status: 'returning', ticksLeft: back, travelTicks: back } : x)),
+        events: log(w.events, w.sim.tick, `${u.name} returning to staging`, 'info'),
+      };
+    });
   }, []);
 
   /** Spec reply_checkin: a resident answers from their phone (free text goes through the classifier). */

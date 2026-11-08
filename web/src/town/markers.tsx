@@ -3,8 +3,8 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import type { Building, Pack, Sim } from './types';
 import { PeopleDefs, RouteVehicle, VehicleSprite } from './vehicles';
-import { TRAFFIC, enginePark, personStyle, vehLook, vehOffset, type Heading } from './vehicleData';
-import { project } from './iso';
+import { TRAFFIC, enginePark, headingOf, personStyle, vehLook, vehOffset, type Heading } from './vehicleData';
+import { depthOf, project } from './iso';
 import { SPRITE, STAGING, evacRoute, spriteScale, unitRoute } from './scene';
 import type { Unit } from './mockWorld';
 import { STATUS_COLORS } from './palettes';
@@ -52,7 +52,7 @@ interface Placed { b: Building; info: MarkerInfo; x: number; y: number; roofY: n
 
 /** Front buildings keep their spot; markers behind them slide up their stem until clear. */
 function layout(buildings: Building[], phase: Sim['phase'], s: number): Placed[] {
-  const order = [...buildings].sort((a, b) => b.x + b.w / 2 + b.y + b.h / 2 - (a.x + a.w / 2 + a.y + a.h / 2));
+  const order = [...buildings].sort((a, b) => depthOf(b.x + b.w / 2, b.y + b.h / 2) - depthOf(a.x + a.w / 2, a.y + a.h / 2));
   const out: Placed[] = [];
   for (const b of order) {
     const info = markerInfo(b, phase);
@@ -266,6 +266,69 @@ const lightBar = (hd: Heading) => {
   );
 };
 
+/**
+ * A fire stream: water leaves the deck gun, arcs under gravity (a parabola), breaks into droplets
+ * along the way, hits the building in a burst of spray, runs down the wall and hangs as mist.
+ */
+function HoseStream({ sx, sy, tx, ty, lift, seed, lite }: { sx: number; sy: number; tx: number; ty: number; lift: number; seed: number; lite: boolean }) {
+  // quadratic Bezier with its apex `lift` above the higher end: the shape of a jet under gravity
+  const dist = Math.hypot(tx - sx, ty - sy);
+  const qx = (sx + tx) / 2 + (tx - sx) * 0.12;
+  const qy = Math.min(sy, ty) - 10 - dist * 0.14 + lift * 0.1;
+  const d = `M${sx.toFixed(1)} ${sy.toFixed(1)} Q ${qx.toFixed(1)} ${qy.toFixed(1)} ${tx.toFixed(1)} ${ty.toFixed(1)}`;
+  const j = (n: number) => ((seed * 9301 + n * 49297) % 233280) / 233280; // stable jitter
+  const drops = lite ? 6 : 14;
+  const splash = lite ? 5 : 10;
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      {/* the jet: a soft spray envelope around a bright core that flickers as it breaks up */}
+      {!lite && <path d={d} stroke="#CFEFFF" strokeWidth="5.5" fill="none" strokeLinecap="round" opacity="0.18" filter="url(#blur2)" />}
+      <path d={d} stroke="url(#jet)" strokeWidth="2.2" fill="none" strokeLinecap="round" opacity="0.85">
+        <animate attributeName="stroke-width" values="2.2;1.6;2.4;1.9;2.2" dur="0.5s" repeatCount="indefinite" />
+      </path>
+      <path d={d} stroke="#F4FBFF" strokeWidth="0.9" fill="none" strokeLinecap="round" strokeDasharray="7 5 2 6" opacity="0.9">
+        <animate attributeName="stroke-dashoffset" from="40" to="0" dur="0.35s" repeatCount="indefinite" />
+      </path>
+      {/* droplets riding the stream, spreading a little as they fly */}
+      {Array.from({ length: drops }, (_, i) => (
+        <circle key={`d${i}`} r={0.6 + j(i) * 0.7} fill="#E9F7FF" opacity="0.9">
+          <animateMotion path={d} dur={`${0.55 + j(i + 3) * 0.2}s`} begin={`${-i * 0.06}s`} repeatCount="indefinite" />
+          <animateTransform attributeName="transform" type="translate" values={`0 0;${(j(i + 7) - 0.5) * 6} ${(j(i + 9) - 0.2) * 5}`} dur={`${0.55 + j(i + 3) * 0.2}s`} begin={`${-i * 0.06}s`} repeatCount="indefinite" additive="sum" />
+        </circle>
+      ))}
+      {/* impact: spray bursts out and falls back */}
+      <g transform={`translate(${tx.toFixed(1)} ${ty.toFixed(1)})`}>
+        {Array.from({ length: splash }, (_, i) => {
+          const ang = -Math.PI * (0.1 + 0.8 * j(i + 20));
+          const dist = 8 + j(i + 30) * 14;
+          const ex = Math.cos(ang) * dist;
+          const ey = Math.sin(ang) * dist * 0.7;
+          const dur = 0.5 + j(i + 40) * 0.4;
+          return (
+            <circle key={`s${i}`} r={0.6 + j(i + 50) * 0.8} fill="#F2FAFF">
+              <animateMotion path={`M0 0 Q ${(ex * 0.6).toFixed(1)} ${(ey - 6).toFixed(1)} ${ex.toFixed(1)} ${(ey + 10).toFixed(1)}`} dur={`${dur}s`} begin={`${-j(i + 60) * dur}s`} repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0.95;0.7;0" dur={`${dur}s`} begin={`${-j(i + 60) * dur}s`} repeatCount="indefinite" />
+            </circle>
+          );
+        })}
+        {/* water running down the wall */}
+        {!lite && [0, 1, 2].map((i) => (
+          <circle key={`r${i}`} r="0.7" fill="#D8F0FF">
+            <animateMotion path={`M${(i - 1) * 5} 2 L ${(i - 1) * 5 + 1} 34`} dur={`${0.9 + i * 0.25}s`} begin={`${-i * 0.3}s`} repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0;0.8;0.5;0" dur={`${0.9 + i * 0.25}s`} begin={`${-i * 0.3}s`} repeatCount="indefinite" />
+          </circle>
+        ))}
+        {/* mist hanging where the water hits */}
+        <ellipse rx="16" ry="10" fill="url(#mist)" opacity="0.8">
+          <animate attributeName="rx" values="13;20;13" dur="1.3s" repeatCount="indefinite" />
+          <animate attributeName="ry" values="8;12;8" dur="1.3s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.55;0.85;0.55" dur="1.3s" repeatCount="indefinite" />
+        </ellipse>
+      </g>
+    </g>
+  );
+}
+
 /** Parked engine sprite, depth-sorted with the buildings by Town. */
 export function ParkedEngine({ b, all, pack }: { b: Building; all: Building[]; pack: Pack }) {
   const { x, y, hd } = enginePark(b, all);
@@ -277,7 +340,7 @@ export function ParkedEngine({ b, all, pack }: { b: Building; all: Building[]; p
  * Fire units in two layers: 'under' (engines at staging and on the road, drawn below the buildings so
  * a building in front hides them) and 'over' (light bars, hoses and mist, which must stay visible).
  */
-export function FireUnits({ units, buildings, tickSeconds, pack, layer }: { units: Unit[]; buildings: Building[]; tickSeconds: number; pack: Pack; layer: 'under' | 'over' }) {
+export function FireUnits({ units, buildings, tickSeconds, pack, layer, lite = false }: { units: Unit[]; buildings: Building[]; tickSeconds: number; pack: Pack; layer: 'under' | 'over'; lite?: boolean }) {
   const ready = units.filter((u) => u.status === 'ready');
   const look = vehLook(pack);
   if (layer === 'under') {
@@ -285,12 +348,19 @@ export function FireUnits({ units, buildings, tickSeconds, pack, layer }: { unit
       <g style={{ pointerEvents: 'none' }}>
         <defs>
           <radialGradient id="beacon"><stop offset="0" stopColor="#FF5A4E" stopOpacity="0.8" /><stop offset="1" stopColor="#FF5A4E" stopOpacity="0" /></radialGradient>
-          <radialGradient id="mist"><stop offset="0" stopColor="#CFEFFF" stopOpacity="0.7" /><stop offset="1" stopColor="#CFEFFF" stopOpacity="0" /></radialGradient>
+          <radialGradient id="mist"><stop offset="0" stopColor="#E4F5FF" stopOpacity="0.75" /><stop offset="0.6" stopColor="#CFEFFF" stopOpacity="0.3" /><stop offset="1" stopColor="#CFEFFF" stopOpacity="0" /></radialGradient>
+          <linearGradient id="jet" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#FFFFFF" /><stop offset="0.7" stopColor="#CDEBFF" /><stop offset="1" stopColor="#A9DEFF" stopOpacity="0.6" /></linearGradient>
         </defs>
         {/* engines parked side by side at the staging lot, noses toward the street */}
         {ready.map((u, i) => {
           const [x, y] = project(STAGING[0] - 28 + i * 28, STAGING[1] + 26);
-          return <VehicleSprite key={`r${u.id}`} model="engine" hd="n" look={look} x={x} y={y} />;
+          return <VehicleSprite key={`r${u.id}`} model="engine" hd={headingOf([0, 0], [0, -1])} look={look} x={x} y={y} />;
+        })}
+        {/* driving back: the route in reverse, light bar off */}
+        {units.filter((u) => u.status === 'returning').map((u) => {
+          const b = buildings.find((x) => x.id === u.targetId);
+          if (!b) return null;
+          return <RouteVehicle key={`b${u.id}-${b.id}-${u.travelTicks}`} route={[...unitRoute(b, buildings)].reverse()} model="engine" look={look} dur={u.travelTicks * tickSeconds} once />;
         })}
         {units.filter((u) => u.status === 'enroute').map((u) => {
           const b = buildings.find((x) => x.id === u.targetId);
@@ -311,19 +381,13 @@ export function FireUnits({ units, buildings, tickSeconds, pack, layer }: { unit
         const [rx, ry] = project(b.x + b.w / 2, b.y + b.h / 2, SPRITE[b.kind].roof * spriteScale(b));
         const sx = ex + nx;
         const sy = ey + ny;
-        const cx = (sx + rx) / 2;
         const cy = Math.min(sy, ry) - 40;
         return (
           <g key={`s${u.id}`}>
             <g transform={`translate(${ex} ${ey})`}>{lightBar(hd)}</g>
             {[0, 1].map((k) => (
-              <path key={k} d={`M${sx} ${sy} Q ${cx + k * 10} ${cy - k * 8} ${rx + (k ? 14 : -10)} ${ry}`} stroke="#A9DEFF" strokeWidth={k ? 1.6 : 2.4} fill="none" strokeLinecap="round" strokeDasharray="5 7" opacity="0.85">
-                <animate attributeName="stroke-dashoffset" from="24" to="0" dur={k ? '0.45s' : '0.6s'} repeatCount="indefinite" />
-              </path>
+              <HoseStream key={k} sx={sx} sy={sy} tx={rx + (k ? 16 : -12)} ty={ry + (k ? 4 : -2)} lift={(cy - Math.min(sy, ry)) + (k ? -6 : 0)} seed={u.id * 2 + k} lite={lite} />
             ))}
-            <circle cx={rx} cy={ry} r="22" fill="url(#mist)">
-              <animate attributeName="r" values="18;26;18" dur="1.4s" repeatCount="indefinite" />
-            </circle>
           </g>
         );
       })}

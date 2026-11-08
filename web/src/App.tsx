@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { MapView } from './town/MapView';
 import { useMockWorld } from './town/mockWorld';
 import { PALETTES } from './town/palettes';
 import { groundUrl, propUrl, spriteUrl } from './town/scene';
+import { setViewRotation } from './town/iso';
 import { vehUrl } from './town/vehicleData';
 import type { BuildingKind, Pack } from './town/types';
 import { TopBar, type Look } from './ui/TopBar';
@@ -73,6 +74,11 @@ export default function App() {
     return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
   }, []);
 
+  // camera turns in 90 degree steps; set before anything below projects a point
+  const [rotation, setRotation] = useState(() => Number(new URLSearchParams(window.location.search).get('rot') ?? 0) % 4);
+  setViewRotation(rotation);
+  const onRotate = useCallback((dir: 1 | -1) => setRotation((r) => (r + dir + 4) % 4), []);
+
   const pack: Pack = look === 'auto' ? (sim.phase === 'prep' ? 'dusk' : 'night') : look;
   // Phones and reduced-motion users get the lighter effects path (no noise textures, blur or blend modes).
   const [lite] = useState(() => window.innerWidth < 760 || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
@@ -131,9 +137,10 @@ export default function App() {
         sim={sim} buildings={buildings} fireCells={cells} pack={pack}
         selectedId={selectedId} onSelect={setSelectedId}
         topInset={insets.top} bottomInset={insets.bottom} leftInset={insets.left} rightInset={showFrame ? 336 : 0} lite={lite} units={units}
+        rotation={rotation} onRotate={onRotate}
         onPhone={vw >= 1180 && sim.phase !== 'prep' && !phoneOpen ? () => setPhoneOpen(true) : undefined}
       />
-      <WindChip deg={sim.windDirDeg} mph={sim.windMph} style={phoneLayout ? { right: 8, top: 'calc(58px + env(safe-area-inset-top))' } : { left: insets.left + 4, bottom: 16 }} />
+      <WindChip deg={sim.windDirDeg} mph={sim.windMph} style={phoneLayout ? { right: 8, top: 'calc(130px + env(safe-area-inset-top))' } : { left: insets.left + 4, bottom: 16 }} />
       {showFrame && <Phone {...phoneProps} framed onClose={() => setPhoneOpen(false)} />}
         <Dock
           ref={dockRef}

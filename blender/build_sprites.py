@@ -28,6 +28,9 @@ VARIANTS = arg('--variants', 'night,dusk,maquette,burning,gutted,lost').split(',
 SCALE = float(arg('--scale', '2'))
 SAMPLES = int(arg('--samples', '64'))
 FMT = arg('--format', 'webp').lower()
+# view rotations to render: 0 is the original camera, 1..3 turn the town 90 degrees at a time
+ROTS = [int(r) for r in arg('--rots', '0').split(',')]
+ROTS_ALL = (0, 1, 2, 3)
 OUT = arg('--out', os.path.join(ROOT, 'web', 'public', 'sprites'))
 os.makedirs(OUT, exist_ok=True)
 
@@ -1320,6 +1323,70 @@ def apply_damage(c, kind, W, D, H, mode):
         light('POINT', 'innerFire', (W * 0.22, -D * 0.2, H * 0.8), 2600, '#FF5A1F', size=2.5)
         light('POINT', 'innerFire', (-W * 0.24, -D * 0.4, H * 0.65), 1200, '#FF6A1F', size=1.5)
 
+# ------------------------------------------------------------------ all-round facades and view rotation
+def _box_key(bx):
+    return tuple(round(v, 2) for v in bx)
+
+def mirror_boxes(boxes_list, W, D):
+    """Copies of facade boxes for the faces the original camera never saw: front (-y) -> back (+y),
+    side (+x) -> left (-x). Skips copies that would sit exactly on an existing box."""
+    hw, hd = W / 2, D / 2
+    seen = {_box_key(b) for b in boxes_list}
+    out = []
+    for (x0, x1, y0, y1, z0, z1) in boxes_list:
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        cands = []
+        if cy < -hd + 0.8 and abs(cy) > 0.4 * hd:
+            cands.append((x0, x1, -y1, -y0, z0, z1))
+        if cx > hw - 0.8 and abs(cx) > 0.4 * hw:
+            cands.append((-x1, -x0, y0, y1, z0, z1))
+        for m in cands:
+            k = _box_key(m)
+            if k not in seen:
+                seen.add(k)
+                out.append(m)
+    return out
+
+def mirror_facades(c, W, D):
+    """Give a building windows and detail on all four sides, so the town can be viewed from any side."""
+    skip = set(SITE) | {'cutter'}
+    for o in list(bpy.data.objects):
+        if o.type != 'MESH' or o.parent is not None or any(o.name.startswith(n) for n in skip):
+            continue
+        me = o.data
+        nv = len(me.vertices)
+        if nv == 0 or nv % 8 or len(me.polygons) != nv // 8 * 6:
+            continue   # not built by boxes(): cylinders, text, blobs
+        bx = []
+        for g in range(nv // 8):
+            vs = [me.vertices[g * 8 + i].co for i in range(8)]
+            bx.append((min(v.x for v in vs), max(v.x for v in vs), min(v.y for v in vs), max(v.y for v in vs), min(v.z for v in vs), max(v.z for v in vs)))
+        extra = mirror_boxes(bx, W, D)
+        if not extra:
+            continue
+        mat = me.materials[0] if me.materials else None
+        bevel = next((m.width for m in o.modifiers if m.type == 'BEVEL'), 0.0)
+        mo = boxes(o.name + '_mirror', extra, mat, bevel)
+        mo.location = o.location
+        for attr in ('visible_camera', 'visible_shadow', 'visible_diffuse', 'visible_glossy', 'visible_transmission', 'visible_volume_scatter'):
+            setattr(mo, attr, getattr(o, attr))
+    c.openings += mirror_boxes(c.openings, W, D)
+
+def rotate_view(r, pivot=(0.0, 0.0)):
+    """Turn the whole model (not the camera, not the sun) by r x 90 degrees about Z around the pivot:
+    the same turn the web app applies to map space, with light staying put relative to the camera."""
+    if not r:
+        return
+    from mathutils import Matrix
+    T = Matrix.Translation((pivot[0], pivot[1], 0.0))
+    R = T @ Matrix.Rotation(math.radians(90 * r), 4, 'Z') @ T.inverted()
+    for o in bpy.data.objects:
+        if o.parent is not None or o.type == 'CAMERA' or o.name.startswith('catcher'):
+            continue
+        if o.type == 'LIGHT' and o.data.type == 'SUN':
+            continue
+        o.matrix_world = R @ o.matrix_world
+
 # ------------------------------------------------------------------ window export
 def export_windows(path):
     """Project every window/door pane onto the sprite frame so the web app can light, darken or
@@ -1333,23 +1400,40 @@ def export_windows(path):
         setup_render(v)
         setup_camera()
         c = Ctx(v)
-        BUILDERS[kind](c)
+        W, D, H = BUILDERS[kind](c)
         sc = bpy.context.scene
         cam = sc.camera
-        out = []
-        for (x0, x1, y0, y1, z0, z1) in c.openings:
-            if (y1 - y0) < (x1 - x0):      # pane on the front face (outward -y)
-                quad = [(x0, y0, z0), (x1, y0, z0), (x1, y0, z1), (x0, y0, z1)]
-                face = 0
-            else:                           # pane on the side face (outward +x)
-                quad = [(x1, y1, z0), (x1, y0, z0), (x1, y0, z1), (x1, y1, z1)]
-                face = 1
-            pts = []
-            for q in quad:
-                uv = world_to_camera_view(sc, cam, Vector(q))
-                pts += [round(uv.x * BOX_W, 1), round((1 - uv.y) * BOX_H, 1)]
-            out.append(pts + [int(z0 // 3.5), face])
-        data[kind] = out
+        openings = c.openings + mirror_boxes(c.openings, W, D)
+        for r in ROTS_ALL:
+            ca, sa = round(math.cos(math.radians(90 * r))), round(math.sin(math.radians(90 * r)))
+            rot = lambda x, y: (x * ca - y * sa, x * sa + y * ca)
+            out = []
+            for (x0, x1, y0, y1, z0, z1) in openings:
+                cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+                if (y1 - y0) < (x1 - x0):   # pane on a +-y face
+                    ny = -1 if cy < 0 else 1
+                    yy = y0 if ny < 0 else y1
+                    quad2 = [(x0, yy), (x1, yy)]
+                    n = rot(0, ny)
+                else:                        # pane on a +-x face
+                    nx = 1 if cx > 0 else -1
+                    xx = x1 if nx > 0 else x0
+                    quad2 = [(xx, y1), (xx, y0)]
+                    n = rot(nx, 0)
+                if n[1] < -0.5:
+                    face = 0                 # faces the camera's front (world -y)
+                elif n[0] > 0.5:
+                    face = 1                 # faces the camera's side (world +x)
+                else:
+                    continue                 # turned away: not drawn in this view
+                a2, b2 = rot(*quad2[0]), rot(*quad2[1])
+                quad = [(a2[0], a2[1], z0), (b2[0], b2[1], z0), (b2[0], b2[1], z1), (a2[0], a2[1], z1)]
+                pts = []
+                for q in quad:
+                    uv = world_to_camera_view(sc, cam, Vector(q))
+                    pts += [round(uv.x * BOX_W, 1), round((1 - uv.y) * BOX_H, 1)]
+                out.append(pts + [int(z0 // 3.5), face])
+            data[kind if r == 0 else f'{kind}_r{r}'] = out
         print(f'[windows] {kind}: {len(out)}', flush=True)
     with open(path, 'w') as f:
         json.dump(data, f, separators=(',', ':'))
@@ -1376,22 +1460,29 @@ def main():
             if is_prop and kind != 'snag' and name in ('lost', 'burning', 'gutted'):
                 continue
             v = VARIANT[name]
-            bpy.ops.wm.read_factory_settings(use_empty=True)
-            setup_render(v)
-            setup_camera()
-            setup_world(v)
-            c = Ctx(v)
-            W, D, H = (PROPS if is_prop else BUILDERS)[kind](c)
-            if not is_prop and v.get('damage'):
-                apply_damage(c, kind, W, D, H, v['damage'])
-            if is_prop:
-                v_props = dict(v, roof_fire=False, embers=False, fire_glow=0)
-                c.v = v_props
-            c.lights(W, D, H)
-            out = os.path.join(OUT, f'{"prop_" if is_prop else ""}{kind}_{name}.{ext}')
-            bpy.context.scene.render.filepath = out
-            print(f'[lantern] rendering {kind}/{name} -> {out}', flush=True)
-            bpy.ops.render.render(write_still=True)
+            for r in ROTS:
+                if r and is_prop:
+                    continue   # trees look the same from every side
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                setup_render(v)
+                setup_camera()
+                setup_world(v)
+                c = Ctx(v)
+                W, D, H = (PROPS if is_prop else BUILDERS)[kind](c)
+                if not is_prop:
+                    mirror_facades(c, W, D)
+                if not is_prop and v.get('damage'):
+                    apply_damage(c, kind, W, D, H, v['damage'])
+                if is_prop:
+                    v_props = dict(v, roof_fire=False, embers=False, fire_glow=0)
+                    c.v = v_props
+                c.lights(W, D, H)
+                rotate_view(r)
+                suffix = f'_r{r}' if r else ''
+                out = os.path.join(OUT, f'{"prop_" if is_prop else ""}{kind}_{name}{suffix}.{ext}')
+                bpy.context.scene.render.filepath = out
+                print(f'[lantern] rendering {kind}/{name}/r{r} -> {out}', flush=True)
+                bpy.ops.render.render(write_still=True)
     print('[lantern] all done', flush=True)
 
 

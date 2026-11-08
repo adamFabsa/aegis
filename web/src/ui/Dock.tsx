@@ -63,7 +63,7 @@ function Thumb({ b, pack, hero = false }: { b: Building; pack: Pack; hero?: bool
 }
 
 function unitFor(units: Unit[], buildingId: number) {
-  return units.find((u) => u.targetId === buildingId && u.status !== 'ready');
+  return units.find((u) => u.targetId === buildingId && (u.status === 'enroute' || u.status === 'onscene'));
 }
 
 const riskColor = (r: number) => (r >= 70 ? STATUS_COLORS.red : r >= 40 ? STATUS_COLORS.amber : STATUS_COLORS.green);
@@ -389,12 +389,12 @@ function incident(p: DockProps): ReactNode {
       <ul className="list" aria-label="Units">
         {units.map((u) => {
           const b = buildings.find((x) => x.id === u.targetId);
-          const text = u.status === 'ready' ? 'At staging, ready' : u.status === 'enroute' ? `Responding to ${b?.name}` : `On scene at ${b?.name}`;
+          const text = u.status === 'ready' ? 'At staging, ready' : u.status === 'enroute' ? `Responding to ${b?.name}` : u.status === 'returning' ? 'Returning to staging' : `On scene at ${b?.name}`;
           return (
             <li key={u.id} className="item static">
               <span className={`unit-badge ${u.status}`}><TruckIcon /></span>
               <span className="item-text"><span className="item-name">{u.name}</span><span className="item-detail">{text}</span></span>
-              {u.status !== 'ready' && <button type="button" className="btn small" onClick={() => onRelease(u.id)}>Return</button>}
+              {(u.status === 'enroute' || u.status === 'onscene') && <button type="button" className="btn small" onClick={() => onRelease(u.id)}>Return</button>}
             </li>
           );
         })}

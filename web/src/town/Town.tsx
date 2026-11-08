@@ -1,6 +1,6 @@
 import { memo, useMemo, type CSSProperties, type ReactNode, type Ref } from 'react';
 import type { Building, FireCell, Pack, Sim } from './types';
-import { CELL, GROUND_MATRIX, VIEW_H, VIEW_W, pointsAttr, project, projectVec, windVector } from './iso';
+import { CELL, MAP_H, MAP_W, VIEW_H, VIEW_W, depthOf, groundMatrix, pointsAttr, project, projectRaw, projectVec, rotRect, viewRotation, windVector } from './iso';
 import {
   GROUND_PLATE, LAMPS, groundUrl, PROP_BOX, SPRITE, SPRITE_BOX, propUrl,
   evacRoute, generatePlants, previousVariant, ridgePaths, spriteScale, spriteUrl, spriteVariant,
@@ -9,6 +9,7 @@ import { PALETTES, STATUS_COLORS, type GroundPalette } from './palettes';
 import { FireUnits, Markers, ParkedEngine, StreetLife } from './markers';
 import { enginePark } from './vehicleData';
 import { WindowLayer } from './WindowLayer';
+import { ready } from './assets';
 import { FireDefs } from './FireDefs';
 import { TICK_SECONDS, type Unit } from './mockWorld';
 
@@ -26,6 +27,10 @@ interface TownProps {
   /** Screen-constant scale for status tags so they stay readable when zoomed out. */
   tagScale?: number;
   units?: Unit[];
+  /** bumps when a tracked image finishes loading */
+  assets?: number;
+  /** view rotation (0..3); the projection reads it from iso.ts, this prop just re-renders the town */
+  rotation?: number;
 }
 
 const FLAMES = ['fireA', 'fireB', 'fireC'];
@@ -131,7 +136,8 @@ function Defs({ P }: { P: GroundPalette }) {
   );
 }
 
-const StaticGround = memo(function StaticGround({ P, pack, lite }: { P: GroundPalette; pack: Pack; lite: boolean }) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const StaticGround = memo(function StaticGround({ P, pack, lite }: { P: GroundPalette; pack: Pack; lite: boolean; rotation: number; assets: number }) {
   return (
     <>
       {/* the San Gabriel Mountains behind the town, fading into haze */}
@@ -147,12 +153,12 @@ const StaticGround = memo(function StaticGround({ P, pack, lite }: { P: GroundPa
         </defs>
         {RIDGES.map((d, i) => <path key={i} d={d} fill={`url(#mtn${i})`} />)}
       </g>
-      <polygon points="575,160 1430,660 884,975 10,470" fill="#000" opacity={lite ? 0.22 : 0.35} filter={lite ? undefined : 'url(#blur20)'} />
+      <polygon points={pointsAttr([project(0, 0), project(MAP_W, 0), project(MAP_W, MAP_H), project(0, MAP_H)].map(([x, y]) => [x + (x > 720 ? 10 : -8), y + 42] as [number, number]))} fill="#000" opacity={lite ? 0.22 : 0.35} filter={lite ? undefined : 'url(#blur20)'} />
       {/* the board itself (terrain, roads, sidewalks, park, lots, soil edge) is one Blender render;
           the flat polygon underneath only shows while the image loads */}
-      <polygon points="555,120 1421,620 884,930 18,430" fill={P.ground} />
-      <image href={groundUrl(pack, lite)} x={GROUND_PLATE.x} y={GROUND_PLATE.y} width={GROUND_PLATE.w} height={GROUND_PLATE.h} preserveAspectRatio="none" />
-      <g transform={GROUND_MATRIX}>
+      <polygon points={pointsAttr([project(0, 0), project(MAP_W, 0), project(MAP_W, MAP_H), project(0, MAP_H)])} fill={P.ground} />
+      {ready(groundUrl(pack, lite, viewRotation())) && <image href={groundUrl(pack, lite, viewRotation())} x={GROUND_PLATE.x} y={GROUND_PLATE.y} width={GROUND_PLATE.w} height={GROUND_PLATE.h} preserveAspectRatio="none" />}
+      <g transform={groundMatrix()}>
         <g opacity={P.lampOp}>
           {LAMPS.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="34" fill="url(#lamp)" />)}
         </g>
@@ -161,25 +167,34 @@ const StaticGround = memo(function StaticGround({ P, pack, lite }: { P: GroundPa
   );
 });
 
+/** The render for this view; until a turned render has loaded, the original one stands in. */
+function pickSprite(kind: Building['kind'], variant: string): string {
+  const r = viewRotation();
+  const url = spriteUrl(kind, variant, r);
+  return !r || ready(url) ? url : spriteUrl(kind, variant, 0);
+}
+
 function BuildingSprite({ b, pack, selected, onSelect, lite }: { b: Building; pack: Pack; selected: boolean; onSelect: (id: number) => void; lite: boolean }) {
   const s = spriteScale(b);
-  const cx = b.x + b.w / 2;
-  const cy = b.y + b.h / 2;
-  const [sx, sy] = project(cx, cy);
+  // geometry in the turned view: the visible faces are always the view's front (+y) and side (+x)
+  const r = rotRect(b);
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
+  const [sx, sy] = projectRaw(cx, cy);
   const roof = SPRITE[b.kind].roof * s;
   const damage = b.damage ?? 0;
   const variant = spriteVariant(pack, b.status, damage);
   const prev = previousVariant(pack, variant);
   const hull: [number, number][] = [
-    project(b.x, b.y, roof), project(b.x + b.w, b.y, roof), project(b.x + b.w, b.y, 0),
-    project(b.x + b.w, b.y + b.h, 0), project(b.x, b.y + b.h, 0), project(b.x, b.y + b.h, roof),
+    projectRaw(r.x, r.y, roof), projectRaw(r.x + r.w, r.y, roof), projectRaw(r.x + r.w, r.y, 0),
+    projectRaw(r.x + r.w, r.y + r.h, 0), projectRaw(r.x, r.y + r.h, 0), projectRaw(r.x, r.y + r.h, roof),
   ];
   const roofPts = [[0.2, 0.3], [0.45, 0.62], [0.72, 0.35], [0.86, 0.72], [0.3, 0.82], [0.6, 0.14], [0.52, 0.45], [0.12, 0.62]]
-    .map(([fx, fy]) => project(b.x + fx * b.w, b.y + fy * b.h, roof));
+    .map(([fx, fy]) => projectRaw(r.x + fx * r.w, r.y + fy * r.h, roof));
   // fire breaking out of the windows on the two visible faces once the building is gutted
-  const facePts = [[0.18, 0.62], [0.42, 0.42], [0.7, 0.7], [0.88, 0.5]].map(([fx, fz]) => project(b.x + fx * b.w, b.y + b.h, roof * fz))
-    .concat([[0.3, 0.55], [0.75, 0.75]].map(([fy, fz]) => project(b.x + b.w, b.y + fy * b.h, roof * fz)));
-  const [rx, ry] = project(cx, cy, roof);
+  const facePts = [[0.18, 0.62], [0.42, 0.42], [0.7, 0.7], [0.88, 0.5]].map(([fx, fz]) => projectRaw(r.x + fx * r.w, r.y + r.h, roof * fz))
+    .concat([[0.3, 0.55], [0.75, 0.75]].map(([fy, fz]) => projectRaw(r.x + r.w, r.y + fy * r.h, roof * fz)));
+  const [rx, ry] = projectRaw(cx, cy, roof);
   const label = `${b.name}, ${b.kind}, ${b.status}`;
   const box = { x: sx - SPRITE_BOX.ax * s, y: sy - SPRITE_BOX.ay * s, width: SPRITE_BOX.w * s, height: SPRITE_BOX.h * s };
   const heavy = b.status === 'burning' && damage >= 2;
@@ -187,8 +202,8 @@ function BuildingSprite({ b, pack, selected, onSelect, lite }: { b: Building; pa
   return (
     <g>
       {/* the previous damage stage fades out underneath while the new one fades in */}
-      {prev && <image key={`prev-${prev}`} className={variant === 'lost' ? 'sprite-collapse' : 'sprite-out'} href={spriteUrl(b.kind, prev)} {...box} preserveAspectRatio="none" style={{ pointerEvents: 'none' }} />}
-      <image key={`cur-${variant}`} className={prev ? (variant === 'lost' ? 'sprite-in-late' : 'sprite-in') : undefined} href={spriteUrl(b.kind, variant)} {...box} preserveAspectRatio="none"
+      {prev && <image key={`prev-${prev}`} className={variant === 'lost' ? 'sprite-collapse' : 'sprite-out'} href={pickSprite(b.kind, prev)} {...box} preserveAspectRatio="none" style={{ pointerEvents: 'none' }} />}
+      <image key={`cur-${variant}`} className={prev ? (variant === 'lost' ? 'sprite-in-late' : 'sprite-in') : undefined} href={pickSprite(b.kind, variant)} {...box} preserveAspectRatio="none"
         filter={b.status === 'burning' && !lite ? 'url(#heatHaze)' : undefined} style={{ pointerEvents: 'none' }} />
       {/* rooms: power failing, then fire moving through them */}
       <WindowLayer b={b} ox={box.x} oy={box.y} s={s} lite={lite} />
@@ -271,7 +286,7 @@ const COOL_TICKS = 7;
 /** Stable 0..1 jitter per cell so neighbours ignite a few hundred ms apart instead of in lockstep. */
 const jitter = (id: number) => ((id * 2654435761) % 1000) / 1000;
 
-export const Town = memo(function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, svgRef, tagScale = 1, lite = false, units = [] }: TownProps) {
+export const Town = memo(function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, svgRef, tagScale = 1, lite = false, units = [], rotation = 0, assets = 0 }: TownProps) {
   const P = PALETTES[pack];
   // plants only depend on building footprints, which never change during a run
   const footprintKey = buildings.map((b) => `${b.x},${b.y},${b.w},${b.h}`).join('|');
@@ -316,7 +331,7 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
     // deterministic size jitter so the rows of trees do not look stamped
     const sc = (type === 'shrub' ? 0.8 : type === 'palm' ? 1.12 : 0.92) + ((i * 37) % 10) / 40;
     items.push({
-      depth: p.x + p.y,
+      depth: depthOf(p.x, p.y),
       key: `p${i}`,
       node: (
         <image
@@ -333,7 +348,7 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
   }
   for (const b of buildings) {
     items.push({
-      depth: b.x + b.w / 2 + b.y + b.h / 2,
+      depth: depthOf(b.x + b.w / 2, b.y + b.h / 2),
       key: `b${b.id}`,
       node: <BuildingSprite b={b} pack={pack} selected={selectedId === b.id} onSelect={onSelect} lite={lite} />,
     });
@@ -348,7 +363,7 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
     const h = (c.x * 7 + c.y * 13) % 3;
     const delay = `${Math.round(jitter(c.id) * 650)}ms`;
     items.push({
-      depth: mx + my,
+      depth: depthOf(mx, my),
       key: `f${c.id}`,
       node: (
         <g transform={`translate(${fx} ${fy})`}>
@@ -365,7 +380,7 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
     if (inBuilding(mx, my)) continue;
     const [fx, fy] = project(mx, my);
     items.push({
-      depth: mx + my,
+      depth: depthOf(mx, my),
       key: `d${c.id}`,
       node: (
         <g transform={`translate(${fx} ${fy})`}>
@@ -380,7 +395,7 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
     const b = buildings.find((x) => x.id === u.targetId);
     if (!b) continue;
     const { x, y } = enginePark(b, buildings);
-    items.push({ depth: x + y, key: `eng${u.id}`, node: <ParkedEngine b={b} all={buildings} pack={pack} /> });
+    items.push({ depth: depthOf(x, y), key: `eng${u.id}`, node: <ParkedEngine b={b} all={buildings} pack={pack} /> });
   }
   items.sort((a, b) => a.depth - b.depth);
 
@@ -397,10 +412,10 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
       onClick={() => onSelect(null)}
     >
       <Defs P={P} />
-      <StaticGround P={P} pack={pack} lite={lite} />
+      <StaticGround P={P} pack={pack} lite={lite} rotation={rotation} assets={assets} />
 
       {/* ground-level dynamic layer: fire cells, rings, routes */}
-      <g transform={GROUND_MATRIX}>
+      <g transform={groundMatrix()}>
         {fireOn && <circle cx={fcx} cy={fcy} r="300" fill="url(#groundGlow)" opacity={P.glowOp} />}
         {/* settled ash */}
         <path d={cellPath(burned)} fill="url(#ash)" filter={lite ? undefined : 'url(#blur2)'} opacity="0.92" />
@@ -449,7 +464,7 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
       {items.map((it) => <g key={it.key}>{it.node}</g>)}
 
       {/* light bars, hoses and mist stay visible above the buildings */}
-      <FireUnits units={units} buildings={buildings} tickSeconds={TICK_SECONDS} pack={pack} layer="over" />
+      <FireUnits units={units} buildings={buildings} tickSeconds={TICK_SECONDS} pack={pack} layer="over" lite={lite} />
 
       {/* smoke, embers, fire light */}
       {fireOn && (

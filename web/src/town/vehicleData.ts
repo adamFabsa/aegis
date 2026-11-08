@@ -1,6 +1,6 @@
 // Vehicle sprite metadata and street-life helpers (see vehicles.tsx).
 import type { CSSProperties } from 'react';
-import { project } from './iso';
+import { projectRaw, rot } from './iso';
 import type { Building, Pack } from './types';
 import { unitRoute } from './scene';
 
@@ -14,9 +14,12 @@ export function vehUrl(model: VehModel, hd: Heading, look: string): string {
   return `${import.meta.env.BASE_URL}sprites/veh_${model}_${hd}_${look}.webp`;
 }
 
+/** On-screen heading of travel from a to b (map points), in the current view rotation. */
 export function headingOf(a: [number, number], b: [number, number]): Heading {
-  const dx = b[0] - a[0];
-  const dy = b[1] - a[1];
+  const [ax, ay] = rot(a[0], a[1]);
+  const [bx, by] = rot(b[0], b[1]);
+  const dx = bx - ax;
+  const dy = by - ay;
   return Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 'e' : 'w') : (dy >= 0 ? 's' : 'n');
 }
 
@@ -25,8 +28,8 @@ const unit = (hd: Heading): [number, number] => (hd === 'e' ? [1, 0] : hd === 'w
 /** Screen offset of a point on the vehicle: `along` map units ahead of its centre, `up` units above the road. */
 export function vehOffset(hd: Heading, along: number, up: number): [number, number] {
   const [ux, uy] = unit(hd);
-  const [ox, oy] = project(0, 0, 0);
-  const [px, py] = project(ux * along, uy * along, up);
+  const [ox, oy] = projectRaw(0, 0, 0);
+  const [px, py] = projectRaw(ux * along, uy * along, up);
   return [px - ox, py - oy];
 }
 

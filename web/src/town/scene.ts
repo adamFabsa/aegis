@@ -1,6 +1,6 @@
 // Static map geometry (from the spec / Main.dc mockup) and sprite metadata.
 import type { Building, BuildingKind, BuildingStatus, Pack } from './types';
-import { project } from './iso';
+import { depthOf, project } from './iso';
 
 export const HILLS_PATH =
   'M560,0 L1000,0 L1000,285 C930,255 880,218 820,206 C760,196 700,152 640,122 C608,102 584,62 560,0 Z';
@@ -88,12 +88,12 @@ export function previousVariant(pack: Pack, variant: string): string | null {
 
 /** The Blender ground plate (blender/build_ground.py): where it sits in the view box, and which file. */
 export const GROUND_PLATE = { x: 0, y: 96, w: 1440, h: 872 };
-export function groundUrl(pack: Pack, lite: boolean): string {
-  return `${import.meta.env.BASE_URL}sprites/ground_${pack}${lite ? '_lite' : ''}.webp`;
+export function groundUrl(pack: Pack, lite: boolean, rotation = 0): string {
+  return `${import.meta.env.BASE_URL}sprites/ground_${pack}${rotation ? `_r${rotation}` : ''}${lite ? '_lite' : ''}.webp`;
 }
 
-export function spriteUrl(kind: BuildingKind, variant: string): string {
-  return `${import.meta.env.BASE_URL}sprites/${kind}_${variant}.webp`;
+export function spriteUrl(kind: BuildingKind, variant: string, rotation = 0): string {
+  return `${import.meta.env.BASE_URL}sprites/${kind}_${variant}${rotation ? `_r${rotation}` : ''}.webp`;
 }
 
 // ---------------------------------------------------------------- vegetation (deterministic)
@@ -201,7 +201,7 @@ function parkAlong(b: Building, all: Building[], road: 0 | 1 | 2, lane: number, 
     const [ex, ey] = project(x, y);
     const box = { x0: ex - 22, x1: ex + 22, y0: ey - 20, y1: ey + 4 };
     return !front.some((o) => {
-      if (o.x + o.w / 2 + o.y + o.h / 2 <= x + y) return false; // behind the engine: drawn first
+      if (depthOf(o.x + o.w / 2, o.y + o.h / 2) <= depthOf(x, y)) return false; // behind the engine: drawn first
       const r = screenBox(o);
       return box.x0 < r.x1 && box.x1 > r.x0 && box.y0 < r.y1 && box.y1 > r.y0;
     });

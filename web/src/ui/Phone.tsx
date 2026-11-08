@@ -64,7 +64,7 @@ function ResidentView({ sim, buildings, persons, tasks, onReply, initialPerson }
         {p.status === 'out' && <Bubble from="lantern">You are out and checked in. Shelter A has water, beds and medical staff.</Bubble>}
         {p.status === 'left_behind' && <Bubble from="lantern">We lost contact with you. Firefighters have your floor and room.</Bubble>}
       </div>
-      {canAnswer && p.status !== 'claimed' && (
+      {canAnswer && p.status === 'pinged' && (
         <div className="phone-actions">
           <div className="phone-btns">
             <button type="button" className="btn primary" onClick={() => onReply(p.id, 'safe')}>I'm safe</button>

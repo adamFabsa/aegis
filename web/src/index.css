@@ -290,7 +290,7 @@ h2, p { margin: 0; }
 
   .zoom { top: calc(12px + env(safe-area-inset-top)); transform: none; right: 8px; }
   .zoom button { width: 36px; height: 36px; }
-  .zoom button:not(:last-child) { display: none; } /* pinch to zoom; keep only "show whole map" */
+  .zoom button:not(:last-child):not(.rot) { display: none; } /* pinch to zoom; keep turning and "show whole map" */
   .zoom button + button { border-top: 0; }
 
   .panel {
@@ -455,3 +455,7 @@ h2, p { margin: 0; }
   .wind small { display: none; }
   .wind svg { width: 18px; height: 18px; }
 }
+
+/* the town turning: a short settle so the jump between views reads as a camera move */
+.town-svg.turning { animation: turn-in 0.42s cubic-bezier(.2, .8, .2, 1); }
+@keyframes turn-in { from { opacity: 0.25; transform: scale(0.97); } to { opacity: 1; transform: none; } }

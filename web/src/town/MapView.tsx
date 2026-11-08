@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Town } from './Town';
+import { useAssetVersion } from './assets';
 import type { Building, FireCell, Pack, Sim } from './types';
 import type { Unit } from './mockWorld';
-import { VIEW_H, VIEW_W, project } from './iso';
+import { VIEW_H, VIEW_W, project, unproject } from './iso';
 import { SPRITE, spriteScale } from './scene';
 
 interface Cam { x: number; y: number; k: number } // viewBox top-left (svg units) + zoom (px per unit)
@@ -22,6 +23,9 @@ interface MapViewProps {
   rightInset?: number;
   /** wide screens: reopen the phone beside the map */
   onPhone?: () => void;
+  /** view rotation in 90 degree steps, and how to change it */
+  rotation?: number;
+  onRotate?: (dir: 1 | -1) => void;
   lite?: boolean;
   units?: Unit[];
 }
@@ -71,7 +75,7 @@ function clampCam(c: Cam, w: number, h: number, I: Ins): Cam {
   return { k, x: cx - mx / k, y: cy - my / k };
 }
 
-export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect, topInset = 0, bottomInset = 0, leftInset = 0, rightInset = 0, onPhone, lite = false, units }: MapViewProps) {
+export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect, topInset = 0, bottomInset = 0, leftInset = 0, rightInset = 0, onPhone, rotation = 0, onRotate, lite = false, units }: MapViewProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [userCam, setUserCam] = useState<Cam | null>(null);
@@ -206,6 +210,34 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
     animateTo(clampCam(centerOn(c.k, sx, sy, L.w, L.h, L.I), L.w, L.h, L.I));
   }, [animateTo]);
 
+  // When the town turns, keep the spot that was in the middle of the view in the middle, and fade the turn.
+  const lastRot = useRef(rotation);
+  useLayoutEffect(() => {
+    const prev = lastRot.current;
+    if (prev === rotation) return;
+    lastRot.current = rotation;
+    const c = camRef.current;
+    if (!c) return;
+    const B = band(w, h, I);
+    const [mx, my] = unproject(c.x + B.mx / c.k, c.y + B.my / c.k, prev);
+    const [nx, ny] = project(mx, my);
+    setUserCam(clampCam(centerOn(c.k, nx, ny, w, h, I), w, h, I));
+    const el = svgRef.current;
+    if (el) { el.classList.remove('turning'); void el.getBoundingClientRect(); el.classList.add('turning'); }
+  }, [rotation, w, h, I]);
+
+  // Q / E turn the town
+  useEffect(() => {
+    if (!onRotate) return;
+    const on = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.closest?.('input, textarea, select')) return;
+      if (e.key === 'q' || e.key === 'Q') onRotate(-1);
+      if (e.key === 'e' || e.key === 'E') onRotate(1);
+    };
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
+  }, [onRotate]);
+
   // Marker size only changes in steps, so pinch-zoom does not re-render the town every frame.
   const tagScale = cam ? Math.round(Math.min(2.6, Math.max(1, 0.8 / cam.k)) * 5) / 5 : 1;
   const viewBox = cam ? `${cam.x.toFixed(1)} ${cam.y.toFixed(1)} ${(w / cam.k).toFixed(1)} ${(h / cam.k).toFixed(1)}` : `0 0 ${VIEW_W} ${VIEW_H}`;
@@ -216,9 +248,10 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
     svgRef.current?.setAttribute('viewBox', viewBox);
   });
   const ready = cam !== null;
+  const assets = useAssetVersion();
   const town = useMemo(
-    () => (ready ? <Town sim={sim} buildings={buildings} fireCells={fireCells} pack={pack} selectedId={selectedId} onSelect={select} svgRef={svgRef} tagScale={tagScale} lite={lite} units={units} /> : null),
-    [ready, sim, buildings, fireCells, pack, selectedId, select, tagScale, lite, units],
+    () => (ready ? <Town sim={sim} buildings={buildings} fireCells={fireCells} pack={pack} selectedId={selectedId} onSelect={select} svgRef={svgRef} tagScale={tagScale} lite={lite} units={units} rotation={rotation} assets={assets} /> : null),
+    [ready, sim, buildings, fireCells, pack, selectedId, select, tagScale, lite, units, rotation, assets],
   );
 
   return (
@@ -242,6 +275,16 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
           <button type="button" aria-label="Show phone" onClick={onPhone}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5" /><path d="M11 18.5h2" /></svg>
           </button>
+        )}
+        {onRotate && (
+          <>
+            <button type="button" className="rot" aria-label="Turn the view left (Q)" title="Turn left (Q)" onClick={() => onRotate(-1)}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6" /><path d="M4 4v4.5h4.5" /></svg>
+            </button>
+            <button type="button" className="rot" aria-label="Turn the view right (E)" title="Turn right (E)" onClick={() => onRotate(1)}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6" /><path d="M20 4v4.5h-4.5" /></svg>
+            </button>
+          </>
         )}
         <button type="button" aria-label="Zoom in" onClick={() => zoomButton(1.35)}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
