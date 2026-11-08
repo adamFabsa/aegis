@@ -18,12 +18,6 @@ function rng(seed: number) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-/** a stable number from a name (staff have names, not ids) */
-export function seedOf(text: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
-  return h >>> 0;
-}
 
 export type PortraitTone = 'ok' | 'warn' | 'bad' | 'idle';
 const RING: Record<PortraitTone, string> = { ok: '#3DD68C', warn: '#F2A93B', bad: '#FF5A4E', idle: 'rgba(255,255,255,0.10)' };
