@@ -22,5 +22,12 @@ export const config = {
   geminiConcurrency: Math.max(1, Number(env('GEMINI_CONCURRENCY', '2')) || 2),
   // Client-side pacing. Free tier is ~5 requests/minute; raise on a paid key.
   geminiRpm: Math.max(1, Number(env('GEMINI_RPM', '5')) || 5),
+  // Which model answers: 'gemini' (default) or 'claude'. Both make the same structured-JSON calls.
+  provider: (env('AI_PROVIDER', 'gemini').toLowerCase() === 'claude' ? 'claude' : 'gemini') as 'claude' | 'gemini',
+  claudeModel: env('CLAUDE_MODEL', 'claude-opus-5-5'),
+  // Triage and two-sentence notes are short, well-specified tasks: low effort keeps replies fast.
+  claudeEffort: env('CLAUDE_EFFORT', 'low') as 'low' | 'medium' | 'high' | 'xhigh' | 'max',
+  claudeConcurrency: Math.max(1, Number(env('CLAUDE_CONCURRENCY', '4')) || 4),
+  claudeRpm: Math.max(1, Number(env('CLAUDE_RPM', '50')) || 50),
   logLevel: env('LOG_LEVEL', 'info'),
 };

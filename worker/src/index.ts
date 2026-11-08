@@ -5,6 +5,7 @@
  * Numbers never come from Gemini: notes are written from word-only facts and rejected if they contain digits.
  */
 import { config } from './config';
+import { missingKey, providerName } from './gemini';
 import { ReplyClassifier } from './classify';
 import { ExplanationWriter } from './explain';
 import { errMsg, log } from './log';
@@ -13,8 +14,9 @@ import { NotConnectedError } from './reducerErrors';
 import { readWorkerToken, saveWorkerToken } from './spacetime';
 import { WorkerState } from './state';
 
-if (!config.geminiApiKey) {
-  log.error('GEMINI_API_KEY is missing — copy worker/.env.example to worker/.env and set it.');
+const missing = missingKey();
+if (missing) {
+  log.error(`${missing} is missing (AI_PROVIDER=${config.provider}) — copy worker/.env.example to worker/.env and set it.`);
   process.exit(1);
 }
 
@@ -142,5 +144,5 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('unhandledRejection', (e) => log.error('unhandled rejection', { error: errMsg(e) }));
 
-log.info('Lantern Gemini worker starting', { model: config.geminiModel, concurrency: config.geminiConcurrency });
+log.info('Lantern AI worker starting', { provider: providerName() });
 connect();

@@ -1,6 +1,15 @@
 import { GoogleGenAI } from '@google/genai';
+import { claudeJson } from './claude';
 import { config } from './config';
 import { errMsg, log } from './log';
+
+/** The model provider the worker talks to (AI_PROVIDER), for logs and startup checks. */
+export const providerName = () => (config.provider === 'claude' ? `Claude (${config.claudeModel})` : `Gemini (${config.geminiModel})`);
+/** Missing credentials for the chosen provider, or undefined when ready. */
+export function missingKey(): string | undefined {
+  if (config.provider === 'claude') return process.env.ANTHROPIC_API_KEY?.trim() || process.env.ANTHROPIC_AUTH_TOKEN?.trim() ? undefined : 'ANTHROPIC_API_KEY';
+  return config.geminiApiKey ? undefined : 'GEMINI_API_KEY';
+}
 
 let client: GoogleGenAI | undefined;
 function ai(): GoogleGenAI {
@@ -22,12 +31,13 @@ let active = 0;
 let lastStart = 0;
 let pausedUntil = 0;
 let pumpTimer: NodeJS.Timeout | undefined;
-const minGapMs = () => Math.ceil(60_000 / config.geminiRpm);
+const minGapMs = () => Math.ceil(60_000 / (config.provider === 'claude' ? config.claudeRpm : config.geminiRpm));
+const maxActive = () => (config.provider === 'claude' ? config.claudeConcurrency : config.geminiConcurrency);
 
 function pump() {
   clearTimeout(pumpTimer);
   pumpTimer = undefined;
-  while (queue.length && active < config.geminiConcurrency) {
+  while (queue.length && active < maxActive()) {
     const wait = Math.max(pausedUntil, lastStart + minGapMs()) - Date.now();
     if (wait > 0) {
       pumpTimer = setTimeout(pump, wait);
@@ -63,6 +73,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // ── model selection: primary, then fallback while the primary's daily quota is exhausted ──
 const exhaustedUntil = new Map<string, number>();
 function pickModel(): string | undefined {
+  if (config.provider === 'claude') return config.claudeModel;
   const models = [config.geminiModel, config.geminiFallbackModel].filter((m, i, a): m is string => !!m && a.indexOf(m) === i);
   return models.find((m) => (exhaustedUntil.get(m) ?? 0) <= Date.now());
 }
@@ -84,7 +95,7 @@ function retryAfterMs(e: unknown): number | undefined {
 function retryable(e: unknown): boolean {
   const s = status(e);
   if (s !== undefined) return s === 429 || s >= 500;
-  return /rate|quota|unavailable|overloaded|timeout|ECONNRESET|ETIMEDOUT|fetch failed/i.test(errMsg(e));
+  return /rate|quota|unavailable|overloaded|timeout|ECONNRESET|ETIMEDOUT|fetch failed|connection error/i.test(errMsg(e));
 }
 
 /** Short message for logs (Gemini errors are long JSON blobs). */
@@ -114,6 +125,11 @@ export async function generateJson<T>(opts: {
     try {
       return await schedule(opts.priority ?? 1, async () => {
         const started = Date.now();
+        if (config.provider === 'claude') {
+          const out = await claudeJson<T>({ system: opts.system, prompt: opts.prompt, schema: opts.schema });
+          log.debug(`claude ${opts.label} ok`, { ms: Date.now() - started, model: out.model });
+          return out.data;
+        }
         const res = await ai().models.generateContent({
           model,
           contents: opts.prompt,

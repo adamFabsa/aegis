@@ -6,6 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { classifyReply } from './classify';
 import { config } from './config';
+import { missingKey, providerName } from './gemini';
 import { buildFacts, validateNote, writeNote } from './explain';
 import { errMsg, log } from './log';
 import type { Building, Fix, Person } from './module_bindings/types';
@@ -56,11 +57,12 @@ async function notes() {
   }
 }
 
-if (!config.geminiApiKey) {
-  log.error('GEMINI_API_KEY missing in worker/.env');
+const missing = missingKey();
+if (missing) {
+  log.error(`${missing} missing in worker/.env (AI_PROVIDER=${config.provider})`);
   process.exit(1);
 }
-log.info('selftest', { model: config.geminiModel });
+log.info('selftest', { provider: providerName() });
 await replies();
 await notes();
 log[failures ? 'error' : 'info'](failures ? `${failures} failure(s)` : 'all Gemini checks passed');

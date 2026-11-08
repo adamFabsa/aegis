@@ -196,7 +196,7 @@ function AdvisorView(props: PhoneProps) {
       </div>
       {advice.note && (
         <blockquote className="ai-note">
-          <span className="ai-note-by">{props.workerOnline ? `Gemini on ${advice.note.building}` : `Why ${advice.note.building} is at risk`}</span>
+          <span className="ai-note-by">{props.workerOnline ? `Lantern AI on ${advice.note.building}` : `Why ${advice.note.building} is at risk`}</span>
           {advice.note.text}
         </blockquote>
       )}
@@ -229,7 +229,7 @@ function AdvisorView(props: PhoneProps) {
         </button>
       )}
       {sim.phase === 'ended' && <p className="ai-tag">Like a good neighbor, Lantern was there, before the fire.</p>}
-      <p className="ai-foot">Risk from a model trained on 132,522 CAL FIRE damage inspections · fire calibrated to the 2025 Eaton Fire{props.workerOnline ? ' · notes and replies read by Gemini' : ''}</p>
+      <p className="ai-foot">Risk from a model trained on 132,522 CAL FIRE damage inspections · fire calibrated to the 2025 Eaton Fire{props.workerOnline ? ' · notes and replies read by the AI worker' : ''}</p>
     </div>
   );
 }
