@@ -2,11 +2,10 @@
 // (stem + numbered diamond) with map-style halo lettering, and the streets get people and cars.
 import { useEffect, useRef, type CSSProperties } from 'react';
 import type { Building, Pack, Sim } from './types';
-import { PeopleDefs, RouteVehicle, VehicleSprite } from './vehicles';
-import { TRAFFIC, enginePark, headingOf, personStyle, vehLook, vehOffset, type Heading } from './vehicleData';
+import { PeopleDefs, RouteVehicle } from './vehicles';
+import { TRAFFIC, personStyle, vehLook, vehOffset, type Heading } from './vehicleData';
 import { depthOf, project } from './iso';
-import { SPRITE, STAGING, evacRoute, spriteScale, unitRoute } from './scene';
-import type { Unit } from './mockWorld';
+import { SPRITE, evacRoute, spriteScale } from './scene';
 import { STATUS_COLORS } from './palettes';
 
 type IconName = 'shield' | 'alert' | 'flame' | 'walk' | 'check' | 'x' | 'house';
@@ -185,10 +184,16 @@ const vanBeacon = (hd: Heading) => {
   );
 };
 
-export function StreetLife({ buildings, phase, pack }: { buildings: Building[]; phase: Sim['phase']; pack: Pack }) {
+/**
+ * `fadeFrom`: the look and phase the map just left. While it fades, the everyday traffic of the prep
+ * phase keeps driving and dissolves instead of vanishing the moment the fire starts.
+ */
+export function StreetLife({ buildings, phase, pack, fadeFrom }: { buildings: Building[]; phase: Sim['phase']; pack: Pack; fadeFrom?: { phase: Sim['phase']; pack: Pack; epoch: number } | null }) {
   const shelter = buildings.find((b) => b.kind === 'shelter');
   const evacuating = buildings.filter((b) => b.status === 'evacuating');
   const look = vehLook(pack);
+  const prepLeaving = phase !== 'prep' && fadeFrom?.phase === 'prep';
+  const prepLook = prepLeaving ? vehLook(fadeFrom.pack) : look;
   return (
     <g style={{ pointerEvents: 'none' }}>
       <PeopleDefs />
@@ -197,35 +202,42 @@ export function StreetLife({ buildings, phase, pack }: { buildings: Building[]; 
       </defs>
 
       {/* fire: drivers clear the roads, people on the street run for the nearest door and disappear inside */}
-      {phase !== 'prep' && LANES.flatMap((lane, li) => [0, 1].map((k) => {
-        const route = restOf(lane, ((k * 0.5 + li * 0.21) % 1) * 0.75);
-        return <RouteVehicle key={`fc${li}${k}`} route={route} model={TRAFFIC[(li * 2 + k) % TRAFFIC.length]} look={look} dur={Math.max(1.8, pathLen(route) / 150)} once fade />;
-      }))}
-      {phase !== 'prep' && SIDEWALK_LOOPS.flatMap((loop, li) => [0, 1].map((k) => {
-        const from = pointAt(loop, (k * 0.5 + li * 0.13) % 1);
-        const doors = buildings.filter((b) => b.status !== 'lost' && b.status !== 'burning').map((b) => [b.x + b.w / 2, b.y + b.h + 2] as [number, number]);
-        const to = doors.reduce((best, p) => (Math.hypot(p[0] - from[0], p[1] - from[1]) < Math.hypot(best[0] - from[0], best[1] - from[1]) ? p : best), doors[0] ?? from);
-        return <OneShot key={`fp${li}${k}`} href="#pedRun" style={personStyle(li * 2 + k)} d={pathOf([from, to])} dur={Math.max(1.6, pathLen([from, to]) / 46)} />;
-      }))}
+      {phase !== 'prep' && (
+        <g className="fx-in">
+          {LANES.flatMap((lane, li) => [0, 1].map((k) => {
+            const route = restOf(lane, ((k * 0.5 + li * 0.21) % 1) * 0.75);
+            return <RouteVehicle key={`fc${li}${k}`} route={route} model={TRAFFIC[(li * 2 + k) % TRAFFIC.length]} look={look} dur={Math.max(1.8, pathLen(route) / 150)} once fade />;
+          }))}
+          {SIDEWALK_LOOPS.flatMap((loop, li) => [0, 1].map((k) => {
+            const from = pointAt(loop, (k * 0.5 + li * 0.13) % 1);
+            const doors = buildings.filter((b) => b.status !== 'lost' && b.status !== 'burning').map((b) => [b.x + b.w / 2, b.y + b.h + 2] as [number, number]);
+            const to = doors.reduce((best, p) => (Math.hypot(p[0] - from[0], p[1] - from[1]) < Math.hypot(best[0] - from[0], best[1] - from[1]) ? p : best), doors[0] ?? from);
+            return <OneShot key={`fp${li}${k}`} href="#pedRun" style={personStyle(li * 2 + k)} d={pathOf([from, to])} dur={Math.max(1.6, pathLen([from, to]) / 46)} />;
+          }))}
+        </g>
+      )}
 
-      {/* everyday traffic while the town is preparing */}
-      {phase === 'prep' && LANES.flatMap((lane, li) => {
-        const dur = pathLen(lane) / 34;
-        return [0, 1].map((k) => (
-          <RouteVehicle key={`c${li}${k}`} route={lane} model={TRAFFIC[(li * 2 + k) % TRAFFIC.length]} look={look} dur={dur} begin={(k * dur) / 2 + li * 3} />
-        ));
-      })}
-
-      {/* residents out for a walk while the town is preparing */}
-      {phase === 'prep' && SIDEWALK_LOOPS.flatMap((loop, li) => {
-        const d = pathOf(loop);
-        const dur = pathLen(loop) / 9;
-        return [0, 1].map((k) => (
-          <use key={`w${li}${k}`} href="#ped" style={personStyle(li * 2 + k)}>
-            <animateMotion path={d} dur={`${dur}s`} begin={`${-((k * 0.5 + li * 0.13) % 1) * dur}s`} repeatCount="indefinite" />
-          </use>
-        ));
-      })}
+      {/* everyday traffic and residents out for a walk while the town is preparing
+          (SMIL runs on the document clock, so the cars keep their places across the remount) */}
+      {(phase === 'prep' || prepLeaving) && (
+        <g key={prepLeaving ? `out${fadeFrom.epoch}` : 'prep'} className={prepLeaving ? 'pack-out' : 'fx-in'}>
+          {LANES.flatMap((lane, li) => {
+            const dur = pathLen(lane) / 34;
+            return [0, 1].map((k) => (
+              <RouteVehicle key={`c${li}${k}`} route={lane} model={TRAFFIC[(li * 2 + k) % TRAFFIC.length]} look={prepLook} dur={dur} begin={(k * dur) / 2 + li * 3} />
+            ));
+          })}
+          {SIDEWALK_LOOPS.flatMap((loop, li) => {
+            const d = pathOf(loop);
+            const dur = pathLen(loop) / 9;
+            return [0, 1].map((k) => (
+              <use key={`w${li}${k}`} href="#ped" style={personStyle(li * 2 + k)}>
+                <animateMotion path={d} dur={`${dur}s`} begin={`${-((k * 0.5 + li * 0.13) % 1) * dur}s`} repeatCount="indefinite" />
+              </use>
+            ));
+          })}
+        </g>
+      )}
 
       {/* evacuations: residents walk out in a column, those who need help go in wheelchairs pushed by staff, vans shuttle */}
       {evacuating.map((b) => {
@@ -253,144 +265,3 @@ export function StreetLife({ buildings, phase, pack }: { buildings: Building[]; 
   );
 }
 
-// ------------------------------------------------------------------ fire units (incident command)
-/** Red and blue light bar on an engine's cab roof, flashing. */
-const lightBar = (hd: Heading) => {
-  const [lx, ly] = vehOffset(hd, 12.2, 12.8);
-  return (
-    <g>
-      <circle cx={lx} cy={ly} r="11" fill="url(#beacon)"><animate attributeName="opacity" values="0.7;0.1;0.7" dur="0.5s" repeatCount="indefinite" /></circle>
-      <circle cx={lx - 1.2} cy={ly} r="1.1" fill="#FF3B30"><animate attributeName="opacity" values="1;0.15;1" dur="0.5s" repeatCount="indefinite" /></circle>
-      <circle cx={lx + 1.2} cy={ly + 0.4} r="1.1" fill="#4C8DFF"><animate attributeName="opacity" values="0.15;1;0.15" dur="0.5s" repeatCount="indefinite" /></circle>
-    </g>
-  );
-};
-
-/**
- * A fire stream: water leaves the deck gun, arcs under gravity (a parabola), breaks into droplets
- * along the way, hits the building in a burst of spray, runs down the wall and hangs as mist.
- */
-function HoseStream({ sx, sy, tx, ty, lift, seed, lite }: { sx: number; sy: number; tx: number; ty: number; lift: number; seed: number; lite: boolean }) {
-  // quadratic Bezier with its apex `lift` above the higher end: the shape of a jet under gravity
-  const dist = Math.hypot(tx - sx, ty - sy);
-  const qx = (sx + tx) / 2 + (tx - sx) * 0.12;
-  const qy = Math.min(sy, ty) - 10 - dist * 0.14 + lift * 0.1;
-  const d = `M${sx.toFixed(1)} ${sy.toFixed(1)} Q ${qx.toFixed(1)} ${qy.toFixed(1)} ${tx.toFixed(1)} ${ty.toFixed(1)}`;
-  const j = (n: number) => ((seed * 9301 + n * 49297) % 233280) / 233280; // stable jitter
-  const drops = lite ? 6 : 14;
-  const splash = lite ? 5 : 10;
-  return (
-    <g style={{ pointerEvents: 'none' }}>
-      {/* the jet: a soft spray envelope around a bright core that flickers as it breaks up */}
-      {!lite && <path d={d} stroke="#CFEFFF" strokeWidth="5.5" fill="none" strokeLinecap="round" opacity="0.18" filter="url(#blur2)" />}
-      <path d={d} stroke="url(#jet)" strokeWidth="2.2" fill="none" strokeLinecap="round" opacity="0.85">
-        <animate attributeName="stroke-width" values="2.2;1.6;2.4;1.9;2.2" dur="0.5s" repeatCount="indefinite" />
-      </path>
-      <path d={d} stroke="#F4FBFF" strokeWidth="0.9" fill="none" strokeLinecap="round" strokeDasharray="7 5 2 6" opacity="0.9">
-        <animate attributeName="stroke-dashoffset" from="40" to="0" dur="0.35s" repeatCount="indefinite" />
-      </path>
-      {/* droplets riding the stream, spreading a little as they fly */}
-      {Array.from({ length: drops }, (_, i) => (
-        <circle key={`d${i}`} r={0.6 + j(i) * 0.7} fill="#E9F7FF" opacity="0.9">
-          <animateMotion path={d} dur={`${0.55 + j(i + 3) * 0.2}s`} begin={`${-i * 0.06}s`} repeatCount="indefinite" />
-          <animateTransform attributeName="transform" type="translate" values={`0 0;${(j(i + 7) - 0.5) * 6} ${(j(i + 9) - 0.2) * 5}`} dur={`${0.55 + j(i + 3) * 0.2}s`} begin={`${-i * 0.06}s`} repeatCount="indefinite" additive="sum" />
-        </circle>
-      ))}
-      {/* impact: spray bursts out and falls back */}
-      <g transform={`translate(${tx.toFixed(1)} ${ty.toFixed(1)})`}>
-        {Array.from({ length: splash }, (_, i) => {
-          const ang = -Math.PI * (0.1 + 0.8 * j(i + 20));
-          const dist = 8 + j(i + 30) * 14;
-          const ex = Math.cos(ang) * dist;
-          const ey = Math.sin(ang) * dist * 0.7;
-          const dur = 0.5 + j(i + 40) * 0.4;
-          return (
-            <circle key={`s${i}`} r={0.6 + j(i + 50) * 0.8} fill="#F2FAFF">
-              <animateMotion path={`M0 0 Q ${(ex * 0.6).toFixed(1)} ${(ey - 6).toFixed(1)} ${ex.toFixed(1)} ${(ey + 10).toFixed(1)}`} dur={`${dur}s`} begin={`${-j(i + 60) * dur}s`} repeatCount="indefinite" />
-              <animate attributeName="opacity" values="0.95;0.7;0" dur={`${dur}s`} begin={`${-j(i + 60) * dur}s`} repeatCount="indefinite" />
-            </circle>
-          );
-        })}
-        {/* water running down the wall */}
-        {!lite && [0, 1, 2].map((i) => (
-          <circle key={`r${i}`} r="0.7" fill="#D8F0FF">
-            <animateMotion path={`M${(i - 1) * 5} 2 L ${(i - 1) * 5 + 1} 34`} dur={`${0.9 + i * 0.25}s`} begin={`${-i * 0.3}s`} repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0;0.8;0.5;0" dur={`${0.9 + i * 0.25}s`} begin={`${-i * 0.3}s`} repeatCount="indefinite" />
-          </circle>
-        ))}
-        {/* mist hanging where the water hits */}
-        <ellipse rx="16" ry="10" fill="url(#mist)" opacity="0.8">
-          <animate attributeName="rx" values="13;20;13" dur="1.3s" repeatCount="indefinite" />
-          <animate attributeName="ry" values="8;12;8" dur="1.3s" repeatCount="indefinite" />
-          <animate attributeName="opacity" values="0.55;0.85;0.55" dur="1.3s" repeatCount="indefinite" />
-        </ellipse>
-      </g>
-    </g>
-  );
-}
-
-/** Parked engine sprite, depth-sorted with the buildings by Town. */
-export function ParkedEngine({ b, all, pack }: { b: Building; all: Building[]; pack: Pack }) {
-  const { x, y, hd } = enginePark(b, all);
-  const [ex, ey] = project(x, y);
-  return <VehicleSprite model="engine" hd={hd} look={vehLook(pack)} x={ex} y={ey} />;
-}
-
-/**
- * Fire units in two layers: 'under' (engines at staging and on the road, drawn below the buildings so
- * a building in front hides them) and 'over' (light bars, hoses and mist, which must stay visible).
- */
-export function FireUnits({ units, buildings, tickSeconds, pack, layer, lite = false }: { units: Unit[]; buildings: Building[]; tickSeconds: number; pack: Pack; layer: 'under' | 'over'; lite?: boolean }) {
-  const ready = units.filter((u) => u.status === 'ready');
-  const look = vehLook(pack);
-  if (layer === 'under') {
-    return (
-      <g style={{ pointerEvents: 'none' }}>
-        <defs>
-          <radialGradient id="beacon"><stop offset="0" stopColor="#FF5A4E" stopOpacity="0.8" /><stop offset="1" stopColor="#FF5A4E" stopOpacity="0" /></radialGradient>
-          <radialGradient id="mist"><stop offset="0" stopColor="#E4F5FF" stopOpacity="0.75" /><stop offset="0.6" stopColor="#CFEFFF" stopOpacity="0.3" /><stop offset="1" stopColor="#CFEFFF" stopOpacity="0" /></radialGradient>
-          <linearGradient id="jet" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#FFFFFF" /><stop offset="0.7" stopColor="#CDEBFF" /><stop offset="1" stopColor="#A9DEFF" stopOpacity="0.6" /></linearGradient>
-        </defs>
-        {/* engines parked side by side at the staging lot, noses toward the street */}
-        {ready.map((u, i) => {
-          const [x, y] = project(STAGING[0] - 28 + i * 28, STAGING[1] + 26);
-          return <VehicleSprite key={`r${u.id}`} model="engine" hd={headingOf([0, 0], [0, -1])} look={look} x={x} y={y} />;
-        })}
-        {/* driving back: the route in reverse, light bar off */}
-        {units.filter((u) => u.status === 'returning').map((u) => {
-          const b = buildings.find((x) => x.id === u.targetId);
-          if (!b) return null;
-          return <RouteVehicle key={`b${u.id}-${b.id}-${u.travelTicks}`} route={[...unitRoute(b, buildings)].reverse()} model="engine" look={look} dur={u.travelTicks * tickSeconds} once />;
-        })}
-        {units.filter((u) => u.status === 'enroute').map((u) => {
-          const b = buildings.find((x) => x.id === u.targetId);
-          if (!b) return null;
-          return <RouteVehicle key={`m${u.id}-${b.id}`} route={unitRoute(b, buildings)} model="engine" look={look} dur={u.travelTicks * tickSeconds} once overlay={lightBar} />;
-        })}
-      </g>
-    );
-  }
-  return (
-    <g style={{ pointerEvents: 'none' }}>
-      {units.filter((u) => u.status === 'onscene').map((u) => {
-        const b = buildings.find((x) => x.id === u.targetId);
-        if (!b) return null;
-        const { x, y, hd } = enginePark(b, buildings);
-        const [ex, ey] = project(x, y);
-        const [nx, ny] = vehOffset(hd, -6, 13);
-        const [rx, ry] = project(b.x + b.w / 2, b.y + b.h / 2, SPRITE[b.kind].roof * spriteScale(b));
-        const sx = ex + nx;
-        const sy = ey + ny;
-        const cy = Math.min(sy, ry) - 40;
-        return (
-          <g key={`s${u.id}`}>
-            <g transform={`translate(${ex} ${ey})`}>{lightBar(hd)}</g>
-            {[0, 1].map((k) => (
-              <HoseStream key={k} sx={sx} sy={sy} tx={rx + (k ? 16 : -12)} ty={ry + (k ? 4 : -2)} lift={(cy - Math.min(sy, ry)) + (k ? -6 : 0)} seed={u.id * 2 + k} lite={lite} />
-            ))}
-          </g>
-        );
-      })}
-    </g>
-  );
-}

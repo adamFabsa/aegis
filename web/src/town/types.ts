@@ -89,5 +89,8 @@ export interface Task {
   auto?: boolean;
 }
 
+/** The frame the map just left (look, phase, buildings, fire cells): dissolved over the new one for a moment. */
+export interface Ghost { pack: Pack; phase: Phase; buildings: Building[]; cells: FireCell[]; epoch: number }
+
 /** Mirrors the spec's result table. */
 export interface ScenarioResult { peopleSafe: number; peopleTotal: number; buildingsLost: number; damageUsd: number; claims: number }

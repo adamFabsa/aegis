@@ -396,6 +396,44 @@ h2, p { margin: 0; }
 .wind b { font-size: 13px; color: var(--text); }
 .wind small { font-size: 11px; color: var(--muted); }
 
+/* ------------------------------------------------------------------ smooth transitions: the old look dissolves over the new */
+.pack-out { animation: pack-out 2s ease-in-out forwards; pointer-events: none; }
+@keyframes pack-out { from { opacity: 1; } to { opacity: 0; } }
+.fx-in { animation: fx-in 1.4s ease; }
+@keyframes fx-in { from { opacity: 0; } }
+.pack-veil { position: absolute; inset: 0; pointer-events: none; }
+/* the burning front flickers as one layer (one animation, not one per cell) */
+.cell-ignite { animation: cell-ignite 0.9s ease-out forwards; }
+.front-flicker { animation: front-flicker 1.3s ease-in-out infinite alternate; }
+@keyframes front-flicker { from { opacity: 1; } to { opacity: 0.74; } }
+.glow-flicker { animation: glow-flicker 1.9s ease-in-out infinite alternate; }
+@keyframes glow-flicker { 0% { opacity: 1; } 30% { opacity: 0.8; } 55% { opacity: 0.96; } 80% { opacity: 0.72; } 100% { opacity: 0.9; } }
+
+/* fire engines: one sprite per heading, shown by the heading the engine is driving */
+.truck .hd { display: none; }
+.truck[data-hd="e"] .hd-e, .truck[data-hd="w"] .hd-w, .truck[data-hd="s"] .hd-s, .truck[data-hd="n"] .hd-n { display: inline; }
+.truck[data-lights="off"] .bar, .truck[data-lights="off"] .wash { display: none; }
+.hose-in { animation: fx-in 0.9s ease 0.45s both; }
+
+/* wind in the world: gust lines drifting downwind */
+.wind-streak { fill: none; stroke-linecap: round; opacity: 0; animation-name: wind-drift; animation-timing-function: linear; animation-iteration-count: infinite; }
+@keyframes wind-drift {
+  0% { transform: translateX(calc(var(--d) * -0.5)); opacity: 0; }
+  22% { opacity: var(--o); }
+  72% { opacity: var(--o); }
+  100% { transform: translateX(calc(var(--d) * 0.5)); opacity: 0; }
+}
+.zoom { transition: right 0.65s cubic-bezier(.65, 0, .35, 1); }
+.zoom .wind-cell { width: 40px; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 7px 0 6px; color: #9DC0FF; border-bottom: 1px solid var(--border); line-height: 1.05; cursor: default; }
+.wind-cell svg { transition: transform 0.6s ease; }
+.wind-cell b { font-size: 11px; font-weight: 800; color: var(--text); }
+.wind-cell small { font-size: 9.5px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 760px) { .zoom .wind-cell { width: 36px; } .wind-cell small { font-size: 9px; } }
+@media (prefers-reduced-motion: reduce) {
+  .wind-streak { animation: none; opacity: calc(var(--o) * 0.6); }
+  .pack-out { animation-duration: 0.6s; }
+}
+
 /* ------------------------------------------------------------------ risk note, names, comparison */
 .note { background: rgba(242, 169, 59, 0.06); border-left: 2px solid var(--amber); padding: 2px 0 10px 12px; border-radius: 0 10px 10px 0; }
 .note p, .names p { font-size: 13px; line-height: 1.5; color: var(--text); margin-top: 8px; }
