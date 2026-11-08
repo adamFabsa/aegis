@@ -1,58 +1,42 @@
 import { useEffect, useRef, useState } from 'react';
-import { Town } from './town/Town';
-import { statusTag } from './town/status';
+import { MapView } from './town/MapView';
 import { useMockWorld } from './town/mockWorld';
 import { PALETTES, STATUS_COLORS } from './town/palettes';
 import type { Pack } from './town/types';
+import { Header } from './ui/Header';
+import { BuildingCard } from './ui/BuildingCard';
 
 type Look = 'auto' | Pack;
-
-function fmtMin(m: number): string {
-  if (m < 0 || !Number.isFinite(m)) return '—';
-  const h = Math.floor(m / 60);
-  const mm = Math.round(m % 60);
-  return h ? `${h}h ${String(mm).padStart(2, '0')}m` : `${mm}m`;
-}
-
-function fmtClock(min: number): string {
-  const h = Math.floor(min / 60);
-  return `T+${h}:${String(min % 60).padStart(2, '0')}`;
-}
-
-function LanternMark() {
-  return (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#F2A93B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M9 3h6" /><path d="M12 3v2" />
-      <path d="M7 8a5 5 0 0 1 10 0v8a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3z" />
-      <path d="M12 10c1.2 1.3 1.6 2.4 1 3.6a1.2 1.2 0 0 1-2 0c-.6-1.2-.2-2.3 1-3.6z" />
-      <path d="M9 21h6" />
-    </svg>
-  );
-}
+const LOOKS: { id: Look; label: string }[] = [
+  { id: 'auto', label: 'Auto' },
+  { id: 'night', label: 'Night' },
+  { id: 'dusk', label: 'Dusk' },
+  { id: 'maquette', label: 'Model' },
+];
 
 export default function App() {
   const world = useMockWorld();
-  const { sim, buildings, cells } = world;
+  const { sim, buildings, cells, approved } = world;
   const [look, setLook] = useState<Look>(() => {
     const l = new URLSearchParams(window.location.search).get('look');
     return l === 'night' || l === 'dusk' || l === 'maquette' ? l : 'auto';
   });
-  const [selectedId, setSelectedId] = useState<number | null>(12);
+  // phones start with the whole map visible; desktop opens Building 12's card
+  const [selectedId, setSelectedId] = useState<number | null>(() => {
+    const sel = new URLSearchParams(window.location.search).get('select');
+    return sel ? Number(sel) : window.innerWidth >= 760 ? 12 : null;
+  });
 
-  // On phones the town is wider than the screen: start the pan centred on the map.
-  const stageRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = stageRef.current;
-    if (el && el.scrollWidth > el.clientWidth) el.scrollLeft = (el.scrollWidth - el.clientWidth) * 0.55;
-  }, []);
-
-  // Demo deep link: ?phase=fire&ticks=30&evac=12&prep=12&look=night
+  // Demo deep link: ?phase=fire&ticks=30&evac=12&prep=12&look=night&select=12
   const booted = useRef(false);
   useEffect(() => {
     if (booted.current) return;
     booted.current = true;
     const q = new URLSearchParams(window.location.search);
-    for (const id of (q.get('prep') ?? '').split(',').filter(Boolean)) world.togglePrepared(Number(id));
+    for (const id of (q.get('prep') ?? '').split(',').filter(Boolean)) {
+      world.approveFix(Number(id), 'van');
+      world.approveFix(Number(id), 'brush');
+    }
     if (q.get('phase') === 'fire') {
       world.setPhase('fire');
       for (const id of (q.get('evac') ?? '').split(',').filter(Boolean)) world.startEvacuation(Number(id));
@@ -72,91 +56,45 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="topbar">
-        <div className="brand">
-          <LanternMark />
-          <div>
-            <div className="brand-name">Lantern</div>
-            <div className="brand-sub">Eaton Fire replay · simulated neighborhood</div>
-          </div>
-        </div>
+      <Header
+        sim={sim} safe={safe} total={total} atRisk={atRisk} lost={lost}
+        onPhase={world.setPhase}
+        onTogglePause={world.togglePause}
+        onReset={() => { world.reset(); setSelectedId(window.innerWidth >= 760 ? 12 : null); }}
+      />
 
-        <div className="controls">
-          <div className="seg" role="group" aria-label="Phase">
-            <button type="button" className={sim.phase === 'prep' ? 'on' : ''} onClick={() => world.setPhase('prep')}>Prep</button>
-            <button type="button" className={sim.phase !== 'prep' ? 'on fire' : ''} onClick={() => sim.phase === 'prep' && world.setPhase('fire')}>Fire</button>
-          </div>
-          <div className="seg" role="group" aria-label="Look">
-            {(['auto', 'night', 'dusk', 'maquette'] as Look[]).map((l) => (
-              <button key={l} type="button" className={look === l ? 'on' : ''} onClick={() => setLook(l)}>
-                {l === 'auto' ? 'Auto' : PALETTES[l].label}
-              </button>
+      <main className={`main ${selected ? 'has-card' : ''}`} style={{ background: PALETTES[pack].bg }}>
+        <MapView sim={sim} buildings={buildings} fireCells={cells} pack={pack} selectedId={selectedId} onSelect={setSelectedId}>
+          <div className="map-chrome looks" role="group" aria-label="Look">
+            {LOOKS.map((l) => (
+              <button key={l.id} type="button" className={look === l.id ? 'on' : ''} onClick={() => setLook(l.id)}>{l.label}</button>
             ))}
           </div>
-          <div className="clock" aria-live="polite">{fmtClock(sim.simMinutes)}</div>
-          {sim.phase === 'fire' && (
-            <button type="button" className="ghost" onClick={world.togglePause}>{sim.running ? 'Pause' : 'Resume'}</button>
-          )}
-          <button type="button" className="ghost" onClick={() => { world.reset(); setSelectedId(12); }}>Reset</button>
-        </div>
-
-        <div className="counters">
-          <div className="counter"><span className="num" style={{ color: STATUS_COLORS.green }}>{safe}/{total}</span><span className="lbl">People out</span></div>
-          <div className="counter"><span className="num" style={{ color: atRisk ? STATUS_COLORS.red : undefined }}>{atRisk}</span><span className="lbl">At risk</span></div>
-          <div className="counter"><span className="num" style={{ color: lost ? STATUS_COLORS.gray : undefined }}>{lost}</span><span className="lbl">Lost</span></div>
-        </div>
-      </header>
-
-      <main className="stage-wrap">
-        <div className="stage" ref={stageRef} style={{ background: PALETTES[pack].bg }}>
-          <Town sim={sim} buildings={buildings} fireCells={cells} pack={pack} selectedId={selectedId} onSelect={setSelectedId} />
-          <div className="wind-chip">Wind toward SW · {sim.windMph} mph</div>
-          <div className="sim-note">Simulated neighborhood · local mock sim until Spacetime is connected</div>
-        </div>
+          <div className="map-chrome wind" aria-label="Wind">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M3 8h11a3 3 0 1 0-3-3" /><path d="M3 12h16a3 3 0 1 1-3 3" /><path d="M3 16h7" /></svg>
+            SW · {sim.windMph} mph
+          </div>
+          <div className="map-chrome legend" aria-label="Legend">
+            <span><i style={{ background: STATUS_COLORS.green }} />Prepared · clear</span>
+            <span><i style={{ background: STATUS_COLORS.amber }} />Evacuating</span>
+            <span><i style={{ background: STATUS_COLORS.red }} />Behind · burning</span>
+            <span><i style={{ background: STATUS_COLORS.gray }} />Lost</span>
+          </div>
+          {!selected && <div className="map-hint">Tap a building</div>}
+        </MapView>
 
         {selected && (
-          <aside className="card" aria-label={`${selected.name} details`}>
-            <div className="card-head">
-              <h2>{selected.name}</h2>
-              {(() => {
-                const t = statusTag(selected, sim.phase);
-                return <span className="chip" style={{ color: t.color, borderColor: t.color }}>{t.text}</span>;
-              })()}
-            </div>
-            <div className="card-kind">{selected.kind} · {selected.residents} residents · {selected.needsHelp} need help · {selected.staff} staff · {selected.vans} van{selected.vans === 1 ? '' : 's'}</div>
-
-            {selected.kind === 'shelter' ? (
-              <p className="muted">Evacuation destination for every building.</p>
-            ) : sim.phase === 'prep' ? (
-              <>
-                <div className="metrics">
-                  <div><span className="lbl">Risk</span><span className="big">{Math.round(selected.risk)}</span></div>
-                  <div><span className="lbl">Evacuation needs</span><span className="big">{fmtMin(selected.evacNeededMin)}</span></div>
-                </div>
-                <button type="button" className={selected.prepared ? 'btn ghost' : 'btn primary'} onClick={() => world.togglePrepared(selected.id)}>
-                  {selected.prepared ? 'Undo prep fixes' : 'Approve prep fixes (van + brush)'}
-                </button>
-                {selected.prepared && <div className="badge">Prepared · better insurance rating</div>}
-              </>
-            ) : (
-              <>
-                <div className="metrics">
-                  <div><span className="lbl">Fire arrives in</span><span className="big" style={{ color: STATUS_COLORS.red }}>{fmtMin(selected.fireEtaMin)}</span></div>
-                  <div><span className="lbl">Evacuation needs</span><span className="big">{fmtMin(selected.evacNeededMin)}</span></div>
-                </div>
-                {!selected.evacStarted && selected.status !== 'lost' && selected.status !== 'burning' ? (
-                  <button type="button" className="btn primary" onClick={() => world.startEvacuation(selected.id)}>Start evacuation</button>
-                ) : (
-                  <div className="progress" aria-label="Evacuation progress">
-                    <div className="bar"><div style={{ width: `${(100 * selected.peopleOut) / Math.max(1, selected.residents)}%` }} /></div>
-                    <span>{selected.peopleOut} of {selected.residents} out</span>
-                  </div>
-                )}
-              </>
-            )}
-          </aside>
+          <BuildingCard
+            b={selected}
+            sim={sim}
+            approved={approved[selected.id] ?? []}
+            onApprove={(k) => world.approveFix(selected.id, k)}
+            onEvacuate={() => world.startEvacuation(selected.id)}
+            onClose={() => setSelectedId(null)}
+          />
         )}
       </main>
+      <footer className="simnote">Simulated neighborhood · fire calibrated to the Eaton Fire · local mock until Spacetime is connected</footer>
     </div>
   );
 }

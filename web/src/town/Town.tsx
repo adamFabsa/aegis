@@ -15,6 +15,10 @@ interface TownProps {
   pack: Pack;
   selectedId: number | null;
   onSelect: (id: number | null) => void;
+  /** Camera window into the 1440 x 980 board (set by MapView). */
+  viewBox?: string;
+  /** Screen-constant scale for status tags so they stay readable when zoomed out. */
+  tagScale?: number;
 }
 
 const LOT_STRIPES =
@@ -242,7 +246,7 @@ function BuildingSprite({ b, pack, selected, onSelect }: { b: Building; pack: Pa
   );
 }
 
-export function Town({ sim, buildings, fireCells, pack, selectedId, onSelect }: TownProps) {
+export function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, viewBox, tagScale = 1 }: TownProps) {
   const P = PALETTES[pack];
   // plants only depend on building footprints, which never change during a run
   const footprintKey = buildings.map((b) => `${b.x},${b.y},${b.w},${b.h}`).join('|');
@@ -306,7 +310,7 @@ export function Town({ sim, buildings, fireCells, pack, selectedId, onSelect }: 
 
   return (
     <svg
-      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+      viewBox={viewBox ?? `0 0 ${VIEW_W} ${VIEW_H}`}
       preserveAspectRatio="xMidYMid meet"
       className="town-svg"
       role="img"
@@ -396,7 +400,7 @@ export function Town({ sim, buildings, fireCells, pack, selectedId, onSelect }: 
           const label = `${b.name}`;
           const width = 30 + (label.length + tag.text.length + 3) * 6.6;
           return (
-            <g key={`t${b.id}`} transform={`translate(${tx} ${ty})`}>
+            <g key={`t${b.id}`} transform={`translate(${tx} ${ty}) scale(${tagScale})`}>
               <rect x={-width / 2} y="-13" width={width} height="26" rx="13" fill="rgba(11,15,23,0.88)" stroke={tag.color} strokeWidth={selectedId === b.id ? 2 : 1} />
               <circle cx={-width / 2 + 14} cy="0" r="4" fill={tag.color} />
               <text x={-width / 2 + 24} y="4.2" fontSize="12" fontWeight="600" fill="#EEF1F7" fontFamily="Inter, system-ui, sans-serif">

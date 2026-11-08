@@ -30,6 +30,18 @@ const SEED: Seed[] = [
   [99, 'Shelter A', 'shelter', 440, 505, 140, 60, 0, 0, 2, 0, 10, 8_000_000],
 ];
 
+/** Prep fixes from spec §5. riskDrop values are placeholders until A's DINS model fills them. */
+export type FixKey = 'van' | 'brush' | 'vents' | 'roof';
+export interface Fix { key: FixKey; name: string; cost: number; riskDrop: number; addVans: number }
+export const FIXES: Fix[] = [
+  { key: 'van', name: 'Second evacuation van', cost: 48_000, riskDrop: 0, addVans: 1 },
+  { key: 'brush', name: 'Clear brush to 30 ft', cost: 12_000, riskDrop: 44, addVans: 0 },
+  { key: 'vents', name: 'Ember-resistant vents', cost: 9_000, riskDrop: 10, addVans: 0 },
+  { key: 'roof', name: 'Class A roof', cost: 140_000, riskDrop: 15, addVans: 0 },
+];
+/** Reference fire arrival used by the "prepared" rule (Building 12 ≈ 1h50m in the spec). */
+export const REFERENCE_ETA_MIN = 120;
+
 function evacNeeded(needsHelp: number, staff: number, vans: number) {
   const rate = 0.5 * staff + 2 * vans;
   return rate > 0 ? 20 + (60 * needsHelp) / rate : needsHelp > 0 ? 600 : 20;
@@ -132,11 +144,11 @@ function fireTicks(cells: FireCell[], dirDeg: number): Float64Array {
   return dist;
 }
 
-interface World { sim: Sim; buildings: Building[]; cells: FireCell[]; burnCount: Record<number, number> }
+interface World { sim: Sim; buildings: Building[]; cells: FireCell[]; burnCount: Record<number, number>; approved: Record<number, FixKey[]> }
 
 function freshWorld(): World {
   const buildings = seedBuildings();
-  return { sim: seedSim(), buildings, cells: seedCells(buildings), burnCount: {} };
+  return { sim: seedSim(), buildings, cells: seedCells(buildings), burnCount: {}, approved: {} };
 }
 
 function step(w: World): World {
@@ -204,7 +216,7 @@ function step(w: World): World {
     sim.phase = 'ended';
     sim.running = false;
   }
-  return { sim, buildings, cells, burnCount };
+  return { ...w, sim, buildings, cells, burnCount };
 }
 
 export function useMockWorld() {
@@ -219,11 +231,17 @@ export function useMockWorld() {
   const setPhase = useCallback((phase: Phase) => {
     setWorld((w) => {
       if (phase === 'prep') {
+        // back to prep: reset the fire but keep the fixes the manager already paid for
         const fresh = freshWorld();
-        return { ...fresh, buildings: fresh.buildings.map((b) => {
-          const old = w.buildings.find((o) => o.id === b.id)!;
-          return { ...b, prepared: old.prepared, risk: old.risk, vans: old.vans, evacNeededMin: old.evacNeededMin };
-        }) };
+        return {
+          ...fresh,
+          approved: w.approved,
+          sim: { ...fresh.sim, budgetLeft: w.sim.budgetLeft },
+          buildings: fresh.buildings.map((b) => {
+            const old = w.buildings.find((o) => o.id === b.id)!;
+            return { ...b, prepared: old.prepared, risk: old.risk, vans: old.vans, evacNeededMin: old.evacNeededMin };
+          }),
+        };
       }
       if (phase === 'fire') {
         const cells = w.cells.map((c) => ({ ...c }));
@@ -245,19 +263,23 @@ export function useMockWorld() {
     }));
   }, []);
 
-  const togglePrepared = useCallback((id: number) => {
-    setWorld((w) => ({
-      ...w,
-      buildings: w.buildings.map((b) => {
-        if (b.id !== id) return b;
-        if (b.prepared) {
-          const s = SEED.find((x) => x[0] === id)!;
-          return { ...b, prepared: false, risk: b.baseRisk, vans: s[10], evacNeededMin: evacNeeded(b.needsHelp, b.staff, s[10]) };
-        }
-        const vans = b.vans + 1;
-        return { ...b, prepared: true, risk: Math.max(5, b.baseRisk - 47), vans, evacNeededMin: evacNeeded(b.needsHelp, b.staff, vans) };
-      }),
-    }));
+  /** Spec reducer approve_fix: check budget, apply risk drop / extra van, recompute prepared. */
+  const approveFix = useCallback((id: number, key: FixKey) => {
+    setWorld((w) => {
+      const b = w.buildings.find((x) => x.id === id);
+      const fix = FIXES.find((f) => f.key === key);
+      const list = w.approved[id] ?? [];
+      if (!b || !fix || w.sim.phase !== 'prep' || list.includes(key) || w.sim.budgetLeft < fix.cost) return w;
+      const vans = b.vans + fix.addVans;
+      const risk = Math.max(5, b.risk - fix.riskDrop);
+      const evac = evacNeeded(b.needsHelp, b.staff, vans);
+      return {
+        ...w,
+        sim: { ...w.sim, budgetLeft: w.sim.budgetLeft - fix.cost },
+        approved: { ...w.approved, [id]: [...list, key] },
+        buildings: w.buildings.map((x) => (x.id === id ? { ...x, vans, risk, evacNeededMin: evac, prepared: risk < 40 && evac < REFERENCE_ETA_MIN } : x)),
+      };
+    });
   }, []);
 
   /** Jump ahead n ticks instantly (demo / screenshot helper). */
@@ -272,5 +294,5 @@ export function useMockWorld() {
   const togglePause = useCallback(() => setWorld((w) => (w.sim.phase === 'fire' ? { ...w, sim: { ...w.sim, running: !w.sim.running } } : w)), []);
   const reset = useCallback(() => setWorld(freshWorld()), []);
 
-  return { ...world, setPhase, startEvacuation, togglePrepared, togglePause, reset, advance };
+  return { ...world, setPhase, startEvacuation, approveFix, togglePause, reset, advance };
 }
