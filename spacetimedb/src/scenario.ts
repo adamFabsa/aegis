@@ -234,6 +234,12 @@ export function withIgnition(cur: S.Seed, cx: number, cy: number): S.Seed {
   let nearBuilding = false;
   for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const k = at(x + dx, y + dy); if (k >= 0 && owner[k] >= 0) nearBuilding = true; }
   if (c < 0 || (p.fuel[c] ?? 0) <= 0 || nearBuilding) throw new Error('nothing to burn there: pick grass or brush, not a road or a building');
+  // and not at someone's door: a fire that starts a few minutes from a building tests nothing
+  const NEAR = 3;
+  for (let dy = -NEAR; dy <= NEAR; dy++) for (let dx = -NEAR; dx <= NEAR; dx++) {
+    const k = at(x + dx, y + dy);
+    if (k >= 0 && owner[k] >= 0) throw new Error(`too close to ${cur.buildings[owner[k]].name}: start the fire at least ${NEAR} cells from any building`);
+  }
   const block = ignitionBlock(p, owner, x, y);
   return withOutlook({ ...cur, params: { ...p, ignition: block } });
 }

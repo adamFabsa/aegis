@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useRef, useState, type ReactNode } from 'react';
+import { forwardRef, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Building, FireCell, Pack, Person, ScenarioResult, Sim, Task } from '../town/types';
 import type { LogEvent, Unit } from '../town/mockWorld';
 import type { BuildingProfile, FixView, Measure, PreparedRule } from '../town/world';
@@ -8,6 +8,7 @@ import { STATUS_COLORS } from '../town/palettes';
 import { statusTag } from '../town/status';
 import { spriteUrl, spriteVariant } from '../town/scene';
 import { KIND_LABEL, fmtClock, fmtMin, fmtUsd } from './format';
+import { EventLine } from './EventFaces';
 
 /** "1h 18m" → "1h18", for one-line list rows */
 function fmtShort(min: number): string {
@@ -118,13 +119,19 @@ function Stats({ items }: { items: { label: string; value: ReactNode; tone?: 'ok
   );
 }
 
-function Ticker({ events }: { events: LogEvent[] }) {
+/** Resident name → person, for the portraits on incident lines. */
+function usePeople(persons: Person[]) {
+  return useMemo(() => new Map(persons.map((x) => [x.name, x])), [persons]);
+}
+
+function Ticker({ events, persons, buildings }: { events: LogEvent[]; persons: Person[]; buildings: Building[] }) {
+  const people = usePeople(persons);
   const e = events[0];
   if (!e) return null;
   return (
     <p className={`ticker ${e.tone}`} aria-live="polite">
       <span className="ticker-dot" aria-hidden="true" />
-      <span key={e.id} className="ticker-text">{e.text}</span>
+      <span key={e.id} className="ticker-text"><EventLine text={e.text} people={people} buildings={buildings} /></span>
     </p>
   );
 }
@@ -349,7 +356,8 @@ function Structure({ b }: { b: Building }) {
   );
 }
 
-function Log({ events, sim }: { events: LogEvent[]; sim: Sim }) {
+function Log({ events, sim, persons, buildings }: { events: LogEvent[]; sim: Sim; persons: Person[]; buildings: Building[] }) {
+  const people = usePeople(persons);
   if (!events.length) return null;
   // the log carries ticks; the sim's own minutes per tick so far turn them into the top bar's clock (speed changes)
   const perTick = sim.tick > 0 ? sim.simMinutes / sim.tick : sim.minutesPerTick;
@@ -360,7 +368,7 @@ function Log({ events, sim }: { events: LogEvent[]; sim: Sim }) {
         {events.slice(0, 8).map((e) => (
           <li key={e.id} className={e.tone}>
             <time>{fmtClock(Math.min(sim.simMinutes, Math.round(e.tick * perTick)))}</time>
-            <span>{e.text}</span>
+            <EventLine text={e.text} people={people} buildings={buildings} />
           </li>
         ))}
       </ol>
@@ -396,7 +404,7 @@ function fireHead(p: DockProps, tab: Tab, setTab: (t: Tab) => void): ReactNode {
         )}
         {p.phone && <button type="button" role="tab" aria-selected={tab === 'phone'} className={tab === 'phone' ? 'on' : ''} onClick={() => setTab('phone')}>Phone</button>}
       </div>
-      <Ticker events={p.events} />
+      <Ticker events={p.events} persons={p.persons} buildings={p.buildings} />
     </>
   );
 }
@@ -484,7 +492,7 @@ function incident(p: DockProps): ReactNode {
           );
         })}
       </ul>
-      <Log events={p.events} sim={sim} />
+      <Log events={p.events} sim={sim} persons={p.persons} buildings={p.buildings} />
     </>
   );
 }
@@ -582,6 +590,21 @@ function results(p: DockProps): View {
             </tbody>
           </table>
         )}
+        {w && wo && (() => {
+          // A tie is a real outcome; say why instead of leaving the table to look broken.
+          if (w.peopleSafe !== wo.peopleSafe || w.buildingsLost !== wo.buildingsLost || Math.abs(w.damageUsd - wo.damageUsd) > 1) return null;
+          const prepped = list.some((b) => b.risk < b.baseRisk - 0.05);
+          const behind = list.map((b) => ({ b, n: p.persons.filter((x) => x.buildingId === b.id && x.status === 'left_behind').length })).filter((x) => x.n > 0);
+          return (
+            <p className="tie-note">
+              <b>Same outcome both ways.</b>{' '}
+              {prepped ? 'The fixes were on buildings this fire never reached, ' : 'No fixes were approved before the fire, '}
+              so the same fire burned the same buildings.
+              {behind.length > 0 && <> {behind.map((x) => `${x.n} at ${x.b.name}`).join(', ')} could not get out in time with or without Aegis: the fire reached them before an evacuation could finish.</>}
+              {' '}Approve the plan, or start the fire farther from town, to see the difference.
+            </p>
+          );
+        })()}
         <p className="hint">Without Aegis: the same fire with no fixes, no fire units, and evacuation only once the fire is 10 minutes away. Simulated neighborhood; fire calibrated to the real Eaton Fire.</p>
         <h3 className="section">Every building</h3>
         <ul className="list">

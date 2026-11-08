@@ -59,7 +59,8 @@ function Bubble({ from, children }: { from: 'lantern' | 'me'; children: React.Re
   return <p className={`bubble ${from}`}>{children}</p>;
 }
 
-function ResidentView({ sim, buildings, persons, tasks, onReply, initialPerson }: PhoneProps) {
+function ResidentView(props: PhoneProps) {
+  const { sim, buildings, persons, tasks, onReply, initialPerson } = props;
   const [pid, setPid] = useState(() => initialPerson ?? persons.find((p) => p.name === 'Maria R.')?.id ?? persons[0]?.id ?? 0);
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -116,11 +117,18 @@ function ResidentView({ sim, buildings, persons, tasks, onReply, initialPerson }
           </form>
         </div>
       )}
+      {sim.phase !== 'prep' && (
+        <>
+          <h4 className="phone-h">Residents who need attention · tap to open their chat</h4>
+          <AlertGroups {...props} mode="resident" pickedId={pid} onPick={(id) => { setPid(id); setError(null); }} />
+        </>
+      )}
     </div>
   );
 }
 
-function StaffView({ buildings, persons, tasks, onClaim, onDone, initialStaff }: PhoneProps) {
+function StaffView(props: PhoneProps) {
+  const { buildings, persons, tasks, onClaim, onDone, initialStaff } = props;
   // each name once: the generated rosters can repeat a first name across buildings
   const crew = useMemo(() => {
     const seen = new Set<string>();
@@ -130,10 +138,8 @@ function StaffView({ buildings, persons, tasks, onClaim, onDone, initialStaff }:
   }, [buildings]);
   const [me, setMe] = useState(initialStaff ?? crew[0]?.names[0] ?? 'Alex');
   const [error, setError] = useState<string | null>(null);
-  const [showAll, setShowAll] = useState(false);
   const open = tasks.filter((t) => !t.done).sort((a, b) => b.priority - a.priority || a.createdTick - b.createdTick);
   const mine = open.filter((t) => t.claimedBy === me);
-  const rest = open.filter((t) => t.claimedBy !== me);
   const row = (t: Task) => {
     const p = persons.find((x) => x.id === t.personId);
     const b = buildings.find((x) => x.id === t.buildingId);
@@ -159,13 +165,12 @@ function StaffView({ buildings, persons, tasks, onClaim, onDone, initialStaff }:
         onChange={(n) => { setMe(n); setError(null); }}
         items={crew.flatMap(({ b, names }) => names.map((n): PickItem => {
           const jobs = open.filter((t) => t.claimedBy === n).length;
-          return { id: n, name: n, group: b.name, sub: `On duty at ${b.name}`, seed: seedOf(n), attention: true, tone: jobs ? 'warn' : 'idle', tag: jobs ? `${jobs} task${jobs === 1 ? '' : 's'}` : undefined };
+          return { id: n, name: n, group: b.name, sub: jobs ? 'On a rescue' : 'On duty', seed: seedOf(n), attention: true, tone: jobs ? 'warn' : 'idle', tag: jobs ? `${jobs} task${jobs === 1 ? '' : 's'}` : undefined };
         }))} />
       {error && <p className="phone-error" role="alert">{error}</p>}
       {mine.length > 0 && <><h4 className="phone-h">Your tasks</h4><ul className="tasks">{mine.map(row)}</ul></>}
-      <h4 className="phone-h">Open tasks · most urgent first</h4>
-      {rest.length ? <ul className="tasks">{(showAll ? rest : rest.slice(0, 5)).map(row)}</ul> : <p className="phone-empty">No one is waiting for help right now.</p>}
-      {rest.length > 5 && <button type="button" className="pick-more" onClick={() => setShowAll((v) => !v)}>{showAll ? 'Show fewer' : `Show ${rest.length - 5} more`}</button>}
+      <h4 className="phone-h">Who needs help · by building</h4>
+      <AlertGroups {...props} mode="staff" me={me} />
     </div>
   );
 }
@@ -279,15 +284,18 @@ function AdvisorView(props: PhoneProps) {
   );
 }
 
-type Role = 'advisor' | 'alerts' | 'resident' | 'staff';
+type Role = 'advisor' | 'resident' | 'staff';
 
 const STATUS_PILL: Record<string, [string, string]> = {
   behind: ['Behind', 'bad'], burning: ['On fire', 'bad'], lost: ['Lost', 'bad'], evacuating: ['Evacuating', 'warn'], clear: ['All out', 'ok'],
 };
 
-/** Alerts for the people, building by building: who needs someone, who hasn't answered, who has help coming. */
-function AlertsView(props: PhoneProps) {
-  const { sim, buildings, persons, tasks } = props;
+/**
+ * Alerts for the people, building by building: who needs someone, who hasn't answered, who has help coming.
+ * Residents tab: tap a person to open their chat. Staff tab: the task board (Claim / Done, send on-site staff).
+ */
+function AlertGroups(props: PhoneProps & { mode: 'resident' | 'staff'; me?: string; pickedId?: number; onPick?: (personId: number) => void }) {
+  const { sim, buildings, persons, tasks, mode, me } = props;
   const alerts = useMemo(() => buildingAlerts(sim, buildings, persons, tasks), [sim, buildings, persons, tasks]);
   const [open, setOpen] = useState<Set<number>>(() => new Set());
   const [busy, setBusy] = useState<Set<number>>(() => new Set());
@@ -301,15 +309,20 @@ function AlertsView(props: PhoneProps) {
       if (typeof r === 'string' && !/already claimed/.test(r)) { setError(r); break; }
     }
   };
+  const act = async (fn: () => Promise<string | null | void> | string | null | void) => {
+    setError(null);
+    const r = await fn();
+    if (typeof r === 'string') setError(r);
+  };
   if (sim.phase === 'prep') {
-    return <div className="phone-body"><p className="phone-empty al-empty">No alerts yet. When the fire starts, Aegis lists every resident who needs someone here, building by building.</p></div>;
+    return <p className="phone-empty al-empty">No alerts yet. When the fire starts, Aegis lists every resident who needs someone here, building by building.</p>;
   }
   const list = buildings
     .map((b) => ({ b, a: alerts.get(b.id) }))
     .filter((x): x is { b: Building; a: NonNullable<typeof x.a> } => !!x.a)
     .sort((x, y) => y.a.leftBehind - x.a.leftBehind || y.a.needHelp - x.a.needHelp || y.a.noReply - x.a.noReply);
   if (!list.length) {
-    return <div className="phone-body"><p className="phone-empty al-empty">All clear: nobody is waiting for help right now.</p></div>;
+    return <p className="phone-empty al-empty">All clear: nobody is waiting for help right now.</p>;
   }
   const row = (pa: PersonAlert, b: Building) => {
     const p = pa.person;
@@ -318,22 +331,28 @@ function AlertsView(props: PhoneProps) {
       : pa.kind === 'no_reply' ? `No reply · ${Math.round(pa.minutes)}m`
         : pa.kind === 'left_behind' ? 'Firefighters notified'
           : p.replyText ? `“${p.replyText.slice(0, 40)}”` : `No reply · ${Math.round(pa.minutes)}m`;
+    const mine = mode === 'staff' && pa.claimedBy !== undefined && staffName(pa.claimedBy) === me;
+    let action: React.ReactNode = <span className={`pick-tag ${tone}`}>{ALERT_LABEL[pa.kind]}</span>;
+    if (mode === 'staff' && pa.taskId !== undefined) {
+      if (pa.kind === 'needs_help') action = <button type="button" className="btn small urgent" onClick={(e) => { e.stopPropagation(); void act(() => props.onClaim(pa.taskId!, me ?? 'Alex')); }}>Claim</button>;
+      else if (mine) action = <button type="button" className="btn small" onClick={(e) => { e.stopPropagation(); void act(() => props.onDone(pa.taskId!)); }}>Done</button>;
+    }
+    const pick = mode === 'resident' && props.onPick ? () => props.onPick!(p.id) : undefined;
     return (
-      <li key={p.id} className={`al-row ${pa.kind}`}>
+      <li key={p.id} className={`al-row ${pa.kind} ${pick ? 'tap' : ''} ${props.pickedId === p.id ? 'on' : ''}`} onClick={pick} role={pick ? 'button' : undefined} tabIndex={pick ? 0 : undefined}
+        onKeyDown={pick ? (e) => { if (e.key === 'Enter') pick(); } : undefined}>
         <Portrait seed={p.id} size={34} older={b.kind === 'senior'} tone={tone} />
         <span className="al-text">
           <b>{p.name}</b>
           <small>{b.kind === 'homes' ? '' : `Floor ${p.floor}`}{p.note ? `${b.kind === 'homes' ? '' : ' · '}${p.note}` : ''}</small>
-          <small className="al-detail">{detail}</small>
+          <small className="al-detail">{mine ? 'You are on the way' : detail}</small>
         </span>
-        {pa.kind === 'needs_help' && pa.taskId !== undefined && props.onAssign
-          ? <button type="button" className="btn small urgent" disabled={busy.has(pa.taskId)} onClick={() => void send([pa.taskId!])}>{busy.has(pa.taskId) ? 'Sent…' : 'Send staff'}</button>
-          : <span className={`pick-tag ${tone}`}>{ALERT_LABEL[pa.kind]}</span>}
+        {action}
       </li>
     );
   };
   return (
-    <div className="phone-body al">
+    <div className="al">
       {error && <p className="phone-error" role="alert">{error}</p>}
       {list.map(({ b, a }) => {
         const [pill, pillTone] = STATUS_PILL[b.status] ?? ['', ''];
@@ -355,7 +374,7 @@ function AlertsView(props: PhoneProps) {
             <ul className="al-list">{shown.map((x) => row(x, b))}</ul>
             <div className="al-foot">
               {a.people.length > 3 && <button type="button" className="pick-more" onClick={() => setOpen((s) => { const n = new Set(s); if (n.has(b.id)) n.delete(b.id); else n.add(b.id); return n; })}>{expanded ? 'Show fewer' : `+${a.people.length - 3} more`}</button>}
-              {waiting.length > 1 && props.onAssign && <button type="button" className="btn small urgent al-all" disabled={waiting.every((id) => busy.has(id))} onClick={() => void send(waiting)}>Send staff to all {waiting.length}</button>}
+              {mode === 'staff' && waiting.length > 1 && props.onAssign && <button type="button" className="btn small urgent al-all" disabled={waiting.every((id) => busy.has(id))} onClick={() => void send(waiting)}>Send staff to all {waiting.length}</button>}
             </div>
           </section>
         );
@@ -375,8 +394,7 @@ export function Phone(props: PhoneProps & { framed?: boolean; onClose?: () => vo
   }, [props.sim, props.buildings, props.persons, props.tasks]);
   const tabs: { id: Role; label: string; count?: number }[] = [
     ...(hasAdvisor ? [{ id: 'advisor' as const, label: 'AI coach' }] : []),
-    { id: 'alerts', label: 'Alerts', count: urgent || undefined },
-    { id: 'resident', label: 'Resident' },
+    { id: 'resident', label: 'Residents', count: urgent || undefined },
     { id: 'staff', label: 'Staff', count: openTasks || undefined },
   ];
   const inner = (
@@ -395,7 +413,7 @@ export function Phone(props: PhoneProps & { framed?: boolean; onClose?: () => vo
           ))}
         </div>
         <div className="phone-view" key={role}>
-          {role === 'advisor' ? <AdvisorView {...props} /> : role === 'alerts' ? <AlertsView {...props} /> : role === 'resident' ? <ResidentView {...props} /> : <StaffView {...props} />}
+          {role === 'advisor' ? <AdvisorView {...props} /> : role === 'resident' ? <ResidentView {...props} /> : <StaffView {...props} />}
         </div>
       </div>
     </>

@@ -796,3 +796,16 @@ h2, p { margin: 0; }
 .mk-alert-ping { pointer-events: none; transform-box: fill-box; transform-origin: center; animation: mk-ping 1.6s ease-out infinite; }
 @keyframes mk-ping { from { transform: scale(1); opacity: 0.95; } to { transform: scale(2); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .mk-alert-ping { animation: none; opacity: 0; } }
+
+/* ------------------------------------------------------------------ alerts inside Residents / Staff, portraits on incident lines */
+.al-row.tap { cursor: pointer; transition: background 0.15s ease; }
+.al-row.tap:hover { background: rgba(255, 255, 255, 0.06); }
+.al-row.on { background: rgba(242, 169, 59, 0.1); box-shadow: inset 0 0 0 1px rgba(242, 169, 59, 0.35); }
+.ev-line { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.ev-faces { display: inline-flex; align-items: center; flex: none; }
+.ev-faces.two .portrait + .portrait { margin-left: -7px; box-shadow: 0 0 0 2px var(--panel); border-radius: 50%; }
+.ev-text { min-width: 0; }
+.ticker-text .ev-line { vertical-align: middle; }
+.log li .ev-line { align-items: flex-start; }
+.log li .ev-faces { margin-top: -2px; }
+.tie-note { font-size: 13px; line-height: 1.45; color: #D7E3FA; background: rgba(138, 180, 248, 0.08); border-left: 3px solid #8AB4F8; border-radius: 0 10px 10px 0; padding: 8px 10px; margin: 10px 0 4px; }
