@@ -5,9 +5,9 @@ import { generateJson, geminiErr } from './gemini';
 import { errMsg, log } from './log';
 import { reducerFailure } from './reducerErrors';
 import type { WorkerState } from './state';
-import type { Building, Fix } from './module_bindings/types';
+import type { Building, BuildingProfile, Fix } from './module_bindings/types';
 
-// ───────────── seed: construction features + A's template note (the building table has neither) ─────────────
+// ───────────── seed file: fallback only, for a module without building_profile rows ─────────────
 
 interface SeedBuilding {
   id: number;
@@ -30,6 +30,19 @@ function loadSeed() {
   }
 }
 loadSeed();
+
+// ───────────── the module's template notes (seed, reset and every new scenario write one) ─────────────
+
+/** "Risk 64 if an Eaton-like fire reaches it — driven by …. Biggest single fix: Class A roof (−20)." */
+const RISK_TEMPLATE = /^Risk \d+(?:\.\d+)? if an? [^.]*fire reaches it\b/;
+/** "Shelter A is the evacuation destination. Model risk 38." */
+const SHELTER_TEMPLATE = /\bis the evacuation destination\. Model risk \d+(?:\.\d+)?\.?$/;
+
+/** A note the module wrote from its model (seed / reset / new scenario), not one the worker wrote (those have no digits). */
+export function isTemplate(text: string): boolean {
+  const t = text.trim();
+  return RISK_TEMPLATE.test(t) || SHELTER_TEMPLATE.test(t);
+}
 
 // ───────────── facts (all words — numbers stay in code) ─────────────
 
@@ -55,28 +68,83 @@ function era(year: unknown): string | undefined {
   return 'built to current wildfire building codes';
 }
 
-function describeFeature(key: string, value: string | number): string | undefined {
-  if (key === 'yearBuilt' || key === 'floors') return undefined;
-  const v = String(value);
-  if (key === 'vents') {
-    if (v.includes('>')) return 'coarse mesh vent screens that let embers through';
-    if (v.includes('<=')) return 'fine ember-resistant mesh vent screens';
-  }
-  const clean = v.replace(/\d/g, '').replace(/\s+/g, ' ').trim();
-  return clean ? clean : undefined;
+/**
+ * Plain words for a construction feature, in the risk model's vocabulary ('Wood/Combustible', 'Coarse mesh (>1/8in)',
+ * 'Stucco/Brick/Cement', …) and the pipeline seed's older one ('Wood', 'Mesh Screen > 1/8"', 'Stucco Brick Cement').
+ * Matched on the lower-cased value; first match wins, so the more specific pattern comes first.
+ */
+const PHRASES: Record<string, Array<[RegExp, string]>> = {
+  roof: [
+    [/wood|combustible|shake/, 'combustible wood roof'],
+    [/fire.?resist|class a/, 'fire-resistant roof'],
+    [/asphalt|composition/, 'asphalt shingle roof'],
+    [/tile|concrete|clay/, 'tile or concrete roof'],
+    [/metal/, 'metal roof'],
+  ],
+  vents: [
+    [/unscreened|no screen/, 'unscreened vents that let embers in'],
+    [/no vents?\b/, 'no exterior vents'],
+    [/>|coarse/, 'coarse mesh vent screens that let embers through'],
+    [/<|fine|ember/, 'fine ember-resistant mesh vent screens'],
+    [/screen|mesh/, 'screened vents of unknown mesh size'],
+  ],
+  eaves: [
+    [/unenclosed|open|exposed/, 'open eaves that can trap embers'],
+    [/no eaves/, 'no eaves'],
+    [/enclosed|boxed/, 'enclosed eaves'],
+  ],
+  siding: [
+    [/wood|combustible|vinyl/, 'combustible wood siding'],
+    [/ignition|resist/, 'ignition-resistant siding'],
+    [/stucco|brick|cement|masonry/, 'stucco, brick or cement siding'],
+    [/metal/, 'metal siding'],
+  ],
+  windows: [
+    [/single/, 'single-pane windows that can break in the heat'],
+    [/multi|double|dual|tempered/, 'multi-pane windows'],
+  ],
+};
+
+/** Words only: sizes, units and other digits never reach the facts (notes are rejected if they carry numbers). */
+function words(v: string): string {
+  return v
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[\d"<>=+]/g, ' ')
+    .replace(/\s*\/\s*/g, ' or ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 }
 
-/** The model's top drivers, from A's template ("driven by roof: wood/combustible, vents: coarse mesh (>1/8in), …"). */
-function modelDrivers(template: string | undefined, features: SeedBuilding['features']): string[] {
-  const m = template?.match(/driven by (.+?)\.\s/);
+export function describeFeature(key: string, value: string | number): string | undefined {
+  if (key === 'yearBuilt' || key === 'floors' || typeof value !== 'string') return undefined;
+  const v = value.trim().toLowerCase();
+  if (!v || v === 'unknown') return undefined;
+  for (const [re, phrase] of PHRASES[key] ?? []) if (re.test(v)) return phrase;
+  return words(v) || undefined;
+}
+
+const PROFILE_FEATURES = ['roof', 'vents', 'eaves', 'windows', 'siding'] as const;
+
+/**
+ * The model's top drivers from the module's template ("driven by roof: wood/combustible, vents: coarse mesh (>1/8in),
+ * year built: 1960-1989."), in plain words: ['combustible wood roof', 'coarse mesh vent screens …', 'age: older …'].
+ */
+function modelDrivers(template: string | undefined, yearBuilt: number | undefined): string[] {
+  const m = template?.match(/driven by (.+?)\.(?:\s|$)/);
   if (!m) return [];
   return m[1]
     .split(/,\s*/)
-    .map((d) => (/^year built/i.test(d) ? `age: ${era(features?.yearBuilt) ?? 'older construction'}` : d.replace(/\s*\([^)]*\)/g, '').trim()))
+    .map((d) => {
+      const [, key = '', value = ''] = d.match(/^\s*([^:]+):\s*(.*)$/) ?? [];
+      const k = key.trim().toLowerCase();
+      if (k === 'year built') return `age: ${era(yearBuilt) ?? era(Number(value.match(/\d{4}/)?.[0])) ?? 'older construction'}`;
+      return (k && describeFeature(k, value)) || words(d);
+    })
     .filter((d) => d && !/\d/.test(d));
 }
 
-interface Facts {
+export interface Facts {
   buildingType: string;
   riskLevel: string;
   modelTopRiskDrivers: string[];
@@ -87,33 +155,56 @@ interface Facts {
   fixesRankedByModel: Array<{ name: string; effect: string; alreadyApproved: boolean }>;
 }
 
-export function buildFacts(b: Building, fixes: Fix[]): Facts {
-  const s = seed.get(b.id);
+/**
+ * Word-only facts for one building, from the live database: construction and age from its building_profile row
+ * (rewritten by every new scenario), the model's drivers from its template note, risk, residents and fixes from the
+ * building and fix rows. The seed file is used only when there is no profile row (a module without that table).
+ * `template`: the module's template for this building (defaults to the row's text; ignored unless it is one).
+ */
+export function buildFacts(b: Building, fixes: Fix[], profile?: BuildingProfile, template: string = b.explanation): Facts {
+  const s = profile ? undefined : seed.get(b.id);
+  const features: Record<string, string | number> = profile
+    ? Object.fromEntries(PROFILE_FEATURES.map((k) => [k, profile[k]]))
+    : { ...(s?.features ?? {}) };
   const construction: Record<string, string> = {};
-  for (const [k, v] of Object.entries(s?.features ?? {})) {
+  for (const [k, v] of Object.entries(features)) {
     const d = describeFeature(k, v);
     if (d) construction[k] = d;
   }
+  const seedYear = s?.features?.yearBuilt;
+  const yearBuilt = profile ? profile.yearBuilt || undefined : typeof seedYear === 'number' ? seedYear : undefined;
+  const driversFrom = isTemplate(template) ? template : s?.explanation;
+  // At seed the module puts the scenario's reference fire arrival in fireEtaMin (−1 = not expected to reach it).
   const eta = b.fireEtaMin > 0 ? b.fireEtaMin : s?.referenceFireEtaMin;
   const ranked = [...fixes]
     .filter((f) => f.riskDrop > 0 || f.addVans > 0)
-    .sort((a, z) => z.riskDrop - a.riskDrop)
+    .sort((a, z) => z.riskDrop - a.riskDrop || a.id - z.id)
     .map((f, i) => ({
       name: f.name,
       effect: f.addVans > 0 && f.riskDrop <= 0 ? 'speeds up evacuation (does not change ignition risk)' : i === 0 ? 'largest drop in ignition risk' : 'lowers ignition risk',
       alreadyApproved: f.approved,
     }));
   return {
-    buildingType: KIND[b.kind] ?? b.kind.replace(/\d/g, ''),
+    buildingType: KIND[b.kind] ?? (words(b.kind) || 'building'),
     riskLevel: riskBand(b.risk),
-    modelTopRiskDrivers: modelDrivers(s?.explanation, s?.features),
+    modelTopRiskDrivers: modelDrivers(driversFrom, yearBuilt),
     construction,
-    age: era(s?.features?.yearBuilt),
+    age: era(yearBuilt),
     hasResidentsWhoNeedHelpMoving: b.needsHelp > 0,
     evacuationSlowerThanFire: typeof eta === 'number' && eta > 0 && b.evacNeededMin > 0 ? b.evacNeededMin > eta : undefined,
     fixesRankedByModel: ranked,
   };
 }
+
+const sha = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex').slice(0, 20);
+/** Cache key: exactly the facts a note is written from. */
+export const factsHash = (f: Facts): string => sha(f);
+/**
+ * Which world the facts describe: what a new scenario rebuilds (construction, age, residents, the fix list) and a run
+ * never changes. Approving a fix or the fire getting closer keeps the basis; a new scenario changes it.
+ */
+export const factsBasis = (f: Facts): string =>
+  sha([f.buildingType, f.construction, f.age ?? '', f.hasResidentsWhoNeedHelpMoving, f.fixesRankedByModel.map((x) => x.name).sort()]);
 
 // ───────────── Gemini ─────────────
 
@@ -169,27 +260,55 @@ export async function writeNote(b: Building, facts: Facts): Promise<string | und
 export interface ExplainDeps {
   building(id: number): Building | undefined;
   fixes(buildingId: number): Fix[];
+  /** The building's building_profile row: its construction in the current scenario. */
+  profile(buildingId: number): BuildingProfile | undefined;
   setExplanation(buildingId: number, text: string): Promise<void>;
   onAuthFailure(): void;
+  /** Writes a note from facts; defaults to the AI provider (tests pass a stub). */
+  writeNote?(b: Building, facts: Facts): Promise<string | undefined>;
 }
+
+const profileKey = (p: BuildingProfile | undefined) => (p ? [p.roof, p.vents, p.eaves, p.windows, p.siding, p.yearBuilt].join('|') : '');
 
 export class ExplanationWriter {
   private queue = new Set<number>();
   private pumping = false;
+  /** The last module template seen per building (with the construction it describes): the model's drivers, once a note replaced it. */
+  private templates = new Map<number, { text: string; profile: string }>();
 
   constructor(private readonly state: WorkerState, private readonly deps: ExplainDeps) {}
 
-  /** Empty, or still A's seed template (seed/reset restore it) → Gemini should write it. */
+  /** Facts for the building as the database has it now. */
+  facts(b: Building): Facts {
+    const profile = this.deps.profile(b.id);
+    const kept = this.templates.get(b.id);
+    const template = isTemplate(b.explanation) ? b.explanation : kept && kept.profile === profileKey(profile) ? kept.text : undefined;
+    return buildFacts(b, this.deps.fixes(b.id), profile, template);
+  }
+
+  /**
+   * Write a note when the text is empty or still one of the module's templates (seed, reset and every new scenario
+   * write one), or when it is a note this worker sent about a different world (one that landed just after a new scenario).
+   */
   needsNote(b: Building): boolean {
     if (b.kind === 'shelter') return false;
     const text = b.explanation.trim();
-    return !text || text === seed.get(b.id)?.explanation?.trim();
+    if (!text || isTemplate(text) || text === seed.get(b.id)?.explanation?.trim()) return true;
+    const sent = this.state.explanation(b.id);
+    return !!sent?.basis && sent.text === text && sent.basis !== factsBasis(this.facts(b));
   }
 
+  /** A building or its building_profile row changed (new scenario, reset, fix, fire): queue it if it needs a note. */
   observe(b: Building) {
+    if (isTemplate(b.explanation)) this.templates.set(b.id, { text: b.explanation.trim(), profile: profileKey(this.deps.profile(b.id)) });
     if (!this.needsNote(b)) return;
     this.queue.add(b.id);
     void this.pump();
+  }
+
+  /** Resolves once every queued building has been handled (tests). */
+  async idle(): Promise<void> {
+    while (this.pumping || this.queue.size) await new Promise((r) => setTimeout(r, 5));
   }
 
   private async pump() {
@@ -209,15 +328,15 @@ export class ExplanationWriter {
   private async handle(id: number) {
     const b = this.deps.building(id);
     if (!b || !this.needsNote(b)) return;
-    const facts = buildFacts(b, this.deps.fixes(id));
-    const hash = createHash('sha256').update(JSON.stringify(facts)).digest('hex').slice(0, 20);
-    let text = this.state.explanation(id)?.hash === hash ? this.state.explanation(id)!.text : undefined;
+    const facts = this.facts(b);
+    const hash = factsHash(facts);
+    let text = this.state.note(hash);
     if (text) {
       log.info('reusing cached note (same facts)', { buildingId: id });
     } else {
       log.info('writing building note', { buildingId: id, name: b.name, riskLevel: facts.riskLevel });
       try {
-        text = await writeNote(b, facts);
+        text = await (this.deps.writeNote ?? writeNote)(b, facts);
       } catch (e) {
         log.error('gemini explanation failed; keeping current text', { buildingId: id, error: geminiErr(e) });
         return;
@@ -226,10 +345,18 @@ export class ExplanationWriter {
         log.warn('no valid note after retries; keeping current text', { buildingId: id });
         return;
       }
-      this.state.setExplanation(id, { hash, text });
+      this.state.setNote(hash, text); // still right for these facts, even if the world moved on meanwhile
     }
     const now = this.deps.building(id);
     if (!now || !this.needsNote(now)) return; // someone else filled it meanwhile
+    // A new scenario, reset or approved fix while the model was writing: this note is for facts the building no
+    // longer has. Drop it and write one for the current facts instead.
+    if (factsHash(this.facts(now)) !== hash) {
+      log.info('facts changed while the note was being written; not writing the stale note', { buildingId: id });
+      this.queue.add(id);
+      return;
+    }
+    this.state.setExplanation(id, { hash, text, basis: factsBasis(facts) });
     try {
       await this.deps.setExplanation(id, text);
       log.info('set_explanation ok', { buildingId: id, text });

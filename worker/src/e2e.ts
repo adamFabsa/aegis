@@ -1,18 +1,22 @@
 /**
  * End-to-end test of the worker against a DISPOSABLE database (it resets the sim and starts a fire).
  *   SPACETIME_SERVER=http://127.0.0.1:3000 SPACETIME_DATABASE=<test db> SPACETIME_TOKEN=<admin token> npm run e2e
- * Flow: register_worker → worker writes Gemini notes → fire + evacuation → residents text → worker classifies
- * (cant_move / needs_medical applied, unclear left alone) → restarted worker re-classifies nothing. ~3 min, ~10 Gemini calls.
+ * Flow: register_worker → worker writes notes → scenario #7, then #11 while #7's notes are in flight → every note is
+ * rewritten from #11's construction → back to the Eaton demo from the cache → fire + evacuation → residents text →
+ * worker classifies (cant_move / needs_medical applied, unclear left alone) → restarted worker re-classifies nothing.
+ * ~4 min, ~25 model calls. Without a key or quota: E2E_STUB_MODEL=1 (a local stand-in model, see stubModel.ts).
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { config, WORKER_DIR } from './config';
-import { validateNote } from './explain';
+import { buildFacts, factsBasis, isTemplate, validateNote } from './explain';
 import { errMsg, log } from './log';
 import type { DbConnection } from './module_bindings';
 import { openConnection } from './spacetime';
+import type { ExplanationRecord } from './state';
+import { startStubModel, type StubModel } from './stubModel';
 import { readFileSync } from 'node:fs';
 
 const MARIA = 1201, ROBERT = 1202, RAJ = 1203;
@@ -33,7 +37,8 @@ if (!adminToken) {
 }
 
 const tmp = mkdtempSync(join(tmpdir(), 'lantern-e2e-'));
-const childEnv = { ...process.env, WORKER_TOKEN_FILE: join(tmp, 'token'), WORKER_STATE_FILE: join(tmp, 'state.json') };
+const childEnv: NodeJS.ProcessEnv = { ...process.env, WORKER_TOKEN_FILE: join(tmp, 'token'), WORKER_STATE_FILE: join(tmp, 'state.json') };
+let stub: StubModel | undefined;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let failures = 0;
 const check = (ok: boolean, what: string, data?: Record<string, unknown>) => {
@@ -71,11 +76,16 @@ function subscribeAll(conn: DbConnection) {
 }
 
 async function main() {
+  if (process.env.E2E_STUB_MODEL === '1') {
+    stub = await startStubModel();
+    Object.assign(childEnv, { AI_PROVIDER: 'claude', ANTHROPIC_API_KEY: 'stub', ANTHROPIC_AUTH_TOKEN: '', ANTHROPIC_BASE_URL: stub.url });
+    log.info('E2E_STUB_MODEL=1: the worker talks to a local stand-in model (no AI calls)', { url: stub.url });
+  }
   const seed = JSON.parse(readFileSync(config.seedBuildings, 'utf8')) as { buildings: Array<{ id: number; kind: string; explanation: string; fixes: Array<{ name: string }> }> };
   const { conn: admin } = await openConnection(adminToken);
   await subscribeAll(admin);
-  await admin.reducers.resetSim({});
-  log.info('reset sim (explanations back to seed templates)');
+  await admin.reducers.newScenario({ number: 0 });
+  log.info('back to the Eaton demo map (explanations back to seed templates)');
 
   // Record each test resident's first status after being pinged.
   const firstAfterPing = new Map<number, string>();
@@ -102,6 +112,48 @@ async function main() {
     check(!problem && text !== b.explanation, `note for building ${b.id} has no invented numbers`, { text, problem });
   }
   check(admin.db.building.id.find(99)?.explanation === seed.buildings.find((b) => b.id === 99)?.explanation, 'shelter note left alone');
+
+  // 2b. random scenarios rebuild construction, risk, fixes and every template. Switch to #11 while #7's notes are
+  //     still being written: each final note must be the worker's, written from #11's building_profile rows.
+  //     (Texts may repeat across scenarios, so "written for this scenario" is read from the worker's state file.)
+  const sentNotes = (): Record<string, ExplanationRecord> => {
+    try {
+      return (JSON.parse(readFileSync(childEnv.WORKER_STATE_FILE!, 'utf8')) as { explanations?: Record<string, ExplanationRecord> }).explanations ?? {};
+    } catch {
+      return {};
+    }
+  };
+  /** The row shows the worker's note, and the worker wrote it from the building's current scenario facts. */
+  const current = (id: number, sent = sentNotes()) => {
+    const row = admin.db.building.id.find(id);
+    if (!row || !row.explanation.trim() || isTemplate(row.explanation)) return false;
+    const fixes = [...admin.db.fix.iter()].filter((f) => f.buildingId === id);
+    const rec = sent[id];
+    return rec?.text === row.explanation && rec.basis === factsBasis(buildFacts(row, fixes, admin.db.buildingProfile.buildingId.find(id) ?? undefined));
+  };
+  const allCurrent = () => {
+    const sent = sentNotes();
+    return targets.every((b) => current(b.id, sent));
+  };
+  const eatonNotes = new Map(targets.map((b) => [b.id, admin.db.building.id.find(b.id)?.explanation ?? '']));
+  await admin.reducers.newScenario({ number: 7 });
+  await waitFor('a first scenario #7 note', () => targets.some((b) => current(b.id)), 2 * 60_000);
+  await admin.reducers.newScenario({ number: 11 });
+  log.info('scenario #7, then #11 while #7 notes were still being written');
+  check(await waitFor('scenario #11 notes', allCurrent, 6 * 60_000), 'worker rewrote every note for scenario #11');
+  await sleep(4000); // a late #7 note would have landed (and been replaced) by now
+  await waitFor('scenario #11 notes (settled)', allCurrent, 2 * 60_000);
+  const sent = sentNotes();
+  for (const b of targets) {
+    const row = admin.db.building.id.find(b.id)!;
+    const problem = validateNote(row.explanation, [...admin.db.fix.iter()].filter((f) => f.buildingId === b.id).map((f) => f.name));
+    check(!problem && current(b.id, sent), `scenario #11 note for building ${b.id} is written from its new construction`, { text: row.explanation, problem });
+  }
+  const mark = lines.length;
+  await admin.reducers.newScenario({ number: 0 });
+  const eatonAgain = () => targets.every((b) => admin.db.building.id.find(b.id)?.explanation === eatonNotes.get(b.id));
+  check(await waitFor('Eaton demo notes again', eatonAgain, 2 * 60_000), 'back to the Eaton demo: the same notes as before');
+  check(!lines.slice(mark).some((l) => l.includes('writing building note')), 'back to the Eaton demo: notes came from the cache (no model calls)');
 
   // 3. fire + evacuation + free-text replies
   await admin.reducers.setSpeed({ minutesPerTick: 1 });
@@ -144,6 +196,8 @@ main()
   })
   .finally(() => {
     rmSync(tmp, { recursive: true, force: true });
+    if (stub) log.info('stub model requests', { notes: stub.requests.filter((r) => r.kind === 'note').length, triage: stub.requests.filter((r) => r.kind === 'triage').length });
+    void stub?.close();
     log[failures ? 'error' : 'info'](failures ? `e2e: ${failures} failure(s)` : 'e2e: all checks passed');
     setTimeout(() => process.exit(failures ? 1 : 0), 300);
   });
