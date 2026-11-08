@@ -162,6 +162,7 @@ export interface FireParams {
   autoStartEtaMin: number; // evacuation starts by itself when fire is this close (both scenarios)
   escalateMin: number; // pinged with no reply this long → urgent task
   autoClaimDelayTicks: number; // open tasks are left for humans this many ticks before on-site staff take them
+  claimWindowSkipEtaMin?: number; // …except when the fire is this close (default 30): then on-site staff act at once
   autoReplyPerMin: number; // simulated mobile residents answer "I'm safe" at this rate
   silentPersonIds: number[]; // never reply (e.g. Robert K.)
 
@@ -238,6 +239,19 @@ export interface World {
   people: PersonRow[];
   tasks: TaskRow[];
   cells: FireCellRow[]; // any order; the engine indexes by id
+  /**
+   * Sim-minute each resident was pinged (person id → minute). Keeps escalation deadlines and evacuation
+   * progress exact when the speed changes mid-evacuation. The module persists it in the private
+   * engine_state table; if absent, the engine falls back to (tick − pingedAtTick) × minutesPerTick.
+   */
+  pingedAtMinute?: Record<number, number>;
+}
+
+/** Sim-minute a resident was pinged (exact if recorded, else reconstructed from ticks at the current speed). */
+function pingMinute(world: World, x: PersonRow): number {
+  const m = world.pingedAtMinute?.[x.id];
+  if (m !== undefined) return m;
+  return world.sim.simMinutes - (world.sim.tick - x.pingedAtTick) * Math.max(1, world.sim.minutesPerTick);
 }
 
 export type Rng = () => number;
@@ -857,17 +871,17 @@ export function stepSimulation(world: World, p: FireParams, rngSrc: RngSource, o
     if (!b.evacStarted) {
       const near = b.status === 'burning' || (b.fireEtaMin >= 0 && b.fireEtaMin <= p.autoStartEtaMin);
       if (!near) continue;
-      startEvacuationRows(b, ppl, sim.tick);
+      startEvacuationRows(world, b, ppl);
       d.buildings.add(b);
       for (const x of ppl) d.people.add(x);
       d.events.push(b.status === 'burning' ? `${b.name} is on fire — evacuation started` : `Fire ${fmtMin(b.fireEtaMin)} from ${b.name} — evacuation started`);
     }
 
     // Minutes since this building's evacuation started.
-    let startTick = Infinity;
-    for (const x of ppl) if (x.status !== 'inside' && x.pingedAtTick < startTick) startTick = x.pingedAtTick;
-    if (!Number.isFinite(startTick)) startTick = sim.tick;
-    const elapsed = Math.max(0, (sim.tick - startTick) * mpt);
+    let startMin = Infinity;
+    for (const x of ppl) if (x.status !== 'inside') startMin = Math.min(startMin, pingMinute(world, x));
+    if (!Number.isFinite(startMin)) startMin = sim.simMinutes;
+    const elapsed = Math.max(0, sim.simMinutes - startMin);
     const capacity = (Math.max(0, elapsed - p.evacBaseMin) * helpRatePerHour(b, p, extraFor(b))) / 60;
     const allowedFlow = Math.floor(elapsed * p.mobilePerMin);
 
@@ -906,7 +920,7 @@ export function stepSimulation(world: World, p: FireParams, rngSrc: RngSource, o
       const escalated: PersonRow[] = [];
       for (const x of ppl) {
         if (x.status !== 'pinged') continue;
-        if ((sim.tick - x.pingedAtTick) * mpt < p.escalateMin) continue;
+        if (sim.simMinutes - pingMinute(world, x) < p.escalateMin) continue;
         const existing = tasksByPerson.get(x.id) ?? [];
         if (existing.some((t) => t.kind === 'help_person')) continue;
         const t: TaskRow = { id: 0n, kind: 'help_person', buildingId: b.id, personId: x.id, priority: taskPriority(x, b, p), claimedBy: '', done: false, createdTick: sim.tick };
@@ -965,8 +979,10 @@ export function stepSimulation(world: World, p: FireParams, rngSrc: RngSource, o
         }
       }
       if (inProgress.length === 0) {
+        // Humans get a claim window — unless the fire is about to reach the building, then nobody waits.
+        const fireNear = b.status === 'burning' || (b.fireEtaMin >= 0 && b.fireEtaMin <= (p.claimWindowSkipEtaMin ?? 30));
         const open = bTasks
-          .filter((t) => t.claimedBy === '' && sim.tick - t.createdTick >= p.autoClaimDelayTicks)
+          .filter((t) => t.claimedBy === '' && (fireNear || sim.tick - t.createdTick >= p.autoClaimDelayTicks))
           .filter((t) => {
             const x = byPerson.get(t.personId);
             return !!x && (x.status === 'cant_move' || (x.status === 'pinged' && x.needsHelp));
@@ -1058,15 +1074,30 @@ function updateBuildingDerived(b: BuildingRow, ppl: PersonRow[], p: FireParams, 
 // ───────────────────────────── Actions (call from reducers) ─────────────────────────────
 
 /** Mutates building + its people. Only 'inside' residents are pinged (repliers keep their state). */
-function startEvacuationRows(b: BuildingRow, ppl: PersonRow[], tick: number): void {
+function startEvacuationRows(world: World, b: BuildingRow, ppl: PersonRow[]): void {
   b.evacStarted = true;
   if (b.status !== 'burning' && b.status !== 'lost') b.status = 'evacuating';
   for (const x of ppl) {
     if (x.status === 'inside') {
       x.status = 'pinged';
-      x.pingedAtTick = tick;
+      x.pingedAtTick = world.sim.tick;
+      if (world.pingedAtMinute) world.pingedAtMinute[x.id] = world.sim.simMinutes;
     }
   }
+}
+
+/**
+ * Recompute peopleOut / evacNeededMin / status for one building (or all) right after a reducer changed
+ * people or tasks, so screens update before the next tick. Returns the buildings that changed.
+ */
+export function refreshDerived(world: World, p: FireParams, buildingId?: number): BuildingRow[] {
+  const changed: BuildingRow[] = [];
+  for (const b of world.buildings) {
+    if (buildingId !== undefined && b.id !== buildingId) continue;
+    const ppl = world.people.filter((x) => x.buildingId === b.id);
+    if (updateBuildingDerived(b, ppl, p, [])) changed.push(b);
+  }
+  return changed;
 }
 
 /**
@@ -1079,7 +1110,7 @@ export function startEvacuation(world: World, buildingId: number, p: FireParams)
   if (b.evacStarted) return { error: 'evacuation already started', people: [], events: [] };
   if (b.status === 'lost') return { error: 'building already lost', people: [], events: [] };
   const ppl = world.people.filter((x) => x.buildingId === b.id);
-  startEvacuationRows(b, ppl, world.sim.tick);
+  startEvacuationRows(world, b, ppl);
   b.evacNeededMin = Math.round(evacNeededMin(b, ppl, p));
   return { building: b, people: ppl, events: [`Evacuation started: ${b.name} (${ppl.length} residents pinged)`] };
 }
@@ -1256,7 +1287,7 @@ export function buildWorldFromSeed(seed: Seed): SeededWorld {
   for (const b of seed.buildings) {
     for (const f of b.fixes) fixes.push({ id: f.id, buildingId: b.id, name: f.name, costUsd: f.costUsd, riskDrop: f.riskDrop, addVans: f.addVans, approved: false });
   }
-  return { sim, buildings, people, tasks: [], cells: freshCells(p), fixes };
+  return { sim, buildings, people, tasks: [], cells: freshCells(p), fixes, pingedAtMinute: {} };
 }
 
 export function freshCells(p: FireParams): FireCellRow[] {
@@ -1315,7 +1346,7 @@ export function computeResults(world: World, p: FireParams, scenario: string): R
 
 /** Run the current world to the end instantly (e.g. an "End & compare" button). Mutates world. */
 export function fastForward(world: World, p: FireParams, rngSrc: RngSource, opts: StepOptions = {}): void {
-  const o: StepOptions = { etaRuns: 6, ...opts };
+  const o: StepOptions = { ...opts }; // same ETA settings as the live tick, so outcomes match a live run
   for (let i = 0; i < 100000 && world.sim.phase === 'fire'; i++) {
     world.sim.running = true;
     stepSimulation(world, p, rngSrc, o);
@@ -1335,8 +1366,8 @@ export function runBaseline(seed: Seed, opts: { fireSeed?: number; runs?: number
   for (let r = 0; r < R; r++) {
     const world = buildWorldFromSeed(seed);
     if (opts.minutesPerTick) world.sim.minutesPerTick = opts.minutesPerTick;
-    startFire(world, p, s0 + r, { etaRuns: 8 });
-    fastForward(world, p, s0 + r, { mode: 'baseline', etaRuns: 6 });
+    startFire(world, p, s0 + r); // identical settings to the live run: same fire, same ETAs
+    fastForward(world, p, s0 + r, { mode: 'baseline' });
     const res = computeResults(world, p, 'without_lantern');
     acc.peopleSafe += res.peopleSafe;
     acc.peopleTotal += res.peopleTotal;

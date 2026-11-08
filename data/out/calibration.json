@@ -346,7 +346,7 @@
       "rule": "fire closest to the 40-fire average with-vs-without difference",
       "seed": 20250111,
       "average": {
-        "dSafe": 7.3,
+        "dSafe": 7.725,
         "dLost": 0.75,
         "dDmg": 12.832500000000001
       },

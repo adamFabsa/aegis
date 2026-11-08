@@ -234,6 +234,20 @@ test('same seed = same fire at any speed (so the baseline really is the same fir
   for (const mpt of [2, 5, 10]) assert.deepEqual(burnAt(mpt), ref, `fire differs at ${mpt} min/tick`);
 });
 
+test('escalation deadline is exact in sim-minutes even when the speed changes mid-evacuation', () => {
+  const w = buildWorldFromSeed(SEED);
+  startFire(w, P, 9);
+  startEvacuation(w, 12, P); // Robert K. (silent) pinged at minute 0
+  for (let i = 0; i < 4; i++) stepSimulation(w, P, 9); // 2 min/tick → minute 8
+  w.sim.minutesPerTick = 1;
+  const robertTaskAt: number[] = [];
+  for (let i = 0; i < 8; i++) {
+    const r = stepSimulation(w, P, 9);
+    if (r.tasksNew.some((t) => t.personId === 1202)) robertTaskAt.push(w.sim.simMinutes);
+  }
+  assert.deepEqual(robertTaskAt, [P.escalateMin], `escalated at minute ${robertTaskAt.join(',')} (expected exactly ${P.escalateMin})`);
+});
+
 test('an urgent task stays urgent after someone claims it', () => {
   const w = buildWorldFromSeed(SEED);
   startFire(w, P, 4);
@@ -245,6 +259,18 @@ test('an urgent task stays urgent after someone claims it', () => {
   for (let i = 0; i < 8; i++) stepSimulation(w, P, 4);
   assert.equal(t.priority, 3);
   assert.equal(t.claimedBy, 'Alex', 'on-site staff never take over a human claim');
+});
+
+test('Lantern with nobody touching anything never saves fewer people than no Lantern (same fire)', () => {
+  for (let i = 0; i < 10; i++) {
+    const s = 3000 + i;
+    const w = buildWorldFromSeed(SEED);
+    startFire(w, P, s);
+    while (w.sim.phase === 'fire') stepSimulation(w, P, s);
+    const withL = computeResults(w, P, 'with_lantern').peopleSafe;
+    const without = runBaseline(SEED, { fireSeed: s }).peopleSafe;
+    assert.ok(withL >= without, `fire ${s}: with ${withL} < without ${without}`);
+  }
 });
 
 test('baseline is the same fire, deterministic, and never better on people than an early evacuation', () => {

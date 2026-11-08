@@ -1,0 +1,103 @@
+/** Integration test against a disposable database. Replaces its seed and restores the default at the end. */
+import assert from 'node:assert/strict';
+import { adminToken, connect, subscribe } from './connect';
+import { readSeed } from './seed';
+import type { DbConnection } from '../web/src/module_bindings';
+
+const MARIA = 1201; // wheelchair, Building 12
+const ROBERT = 1202; // oxygen, never answers on his own
+const MOBILE = 1210; // a Building 12 resident who can walk out
+const clients: DbConnection[] = [];
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+async function waitFor(test: () => boolean, label: string, timeout = 25000) {
+  const start = Date.now();
+  while (!test()) {
+    if (Date.now() - start > timeout) throw new Error(`Timed out: ${label}`);
+    await sleep(50);
+  }
+}
+async function client(token?: string) {
+  const c = await connect(token);
+  clients.push(c);
+  await subscribe(c);
+  return c;
+}
+try {
+  const admin = await client(adminToken()), a = await client(), b = await client(), worker = await client();
+  // A slow, short fire so the scripted checks below run in a quiet world.
+  const seed = readSeed();
+  seed.params.maxSimMinutes = 30;
+  seed.params.burnSteps = 200;
+  seed.params.buildingBurnSteps = 250;
+  seed.params.baseSpread = 0.001;
+  seed.params.spotP = 0;
+  await admin.reducers.seedWorld({ json: JSON.stringify(seed) });
+  await waitFor(() => admin.db.person.count() === 260n, 'seed subscription');
+  assert.equal(admin.db.fireCell.count(), 1550n);
+  assert.equal(admin.db.sim.id.find(0)!.phase, 'prep');
+  await assert.rejects(a.reducers.seedWorld({ json: JSON.stringify(seed) }), /administrator only/);
+  await assert.rejects(a.reducers.registerWorker({ identity: a.identity! }), /administrator only/);
+  await assert.rejects(a.reducers.setExplanation({ buildingId: 12, text: 'bad' }), /worker only/);
+  await admin.reducers.registerWorker({ identity: worker.identity! });
+  await worker.reducers.setExplanation({ buildingId: 12, text: 'Smoke-test explanation.' });
+  const initialBudget = admin.db.sim.id.find(0)!.budgetLeft;
+  await admin.reducers.approveFix({ fixId: 121 });
+  await waitFor(() => admin.db.fix.id.find(121)!.approved, 'fix subscription');
+  assert.equal(admin.db.building.id.find(12)!.vans, 2);
+  assert.equal(admin.db.sim.id.find(0)!.budgetLeft, initialBudget - 48000);
+  await assert.rejects(admin.reducers.approveFix({ fixId: 121 }), /already approved/);
+  const invalidSeed = { ...seed, people: [] };
+  await assert.rejects(admin.reducers.seedWorld({ json: JSON.stringify(invalidSeed) }), /Occupancy mismatch/);
+  assert.equal(admin.db.fix.id.find(121)!.approved, true);
+  await admin.reducers.setPhase({ phase: 'fire' });
+  await assert.rejects(admin.reducers.approveFix({ fixId: 122 }), /prep/);
+  await assert.rejects(admin.reducers.setSpeed({ minutesPerTick: 0 }), /1–60/);
+  await admin.reducers.startEvacuation({ buildingId: 12 });
+  await waitFor(() => a.db.person.id.find(MARIA)?.status === 'pinged', 'cross-client check-in');
+  await a.reducers.replyCheckin({ personId: MARIA, choice: 'cant_move', text: '' });
+  await waitFor(() => [...a.db.task.iter()].some((t) => t.personId === MARIA), 'Maria help task');
+  const task = [...a.db.task.iter()].find((t) => t.personId === MARIA)!;
+  assert.equal(task.priority, 3);
+  await a.reducers.replyCheckin({ personId: MARIA, choice: 'cant_move', text: '' });
+  assert.equal([...a.db.task.iter()].filter((t) => t.personId === MARIA && !t.done).length, 1);
+  const claims = await Promise.allSettled([
+    a.reducers.claimTask({ taskId: task.id, staffName: 'Alex' }),
+    b.reducers.claimTask({ taskId: task.id, staffName: 'Blair' }),
+  ]);
+  assert.equal(claims.filter((r) => r.status === 'fulfilled').length, 1);
+  const winner = claims[0].status === 'fulfilled' ? a : b, loser = winner === a ? b : a;
+  await assert.rejects(loser.reducers.completeTask({ taskId: task.id }), /claiming staff member/);
+  await winner.reducers.completeTask({ taskId: task.id });
+  await waitFor(() => admin.db.person.id.find(MARIA)?.status === 'out', 'completed rescue');
+  await assert.rejects(winner.reducers.completeTask({ taskId: task.id }), /already done/);
+  await a.reducers.replyCheckin({ personId: ROBERT, choice: 'text', text: 'I need oxygen and cannot walk' });
+  await assert.rejects(a.reducers.setReplyClass({ personId: ROBERT, choice: 'safe' }), /worker only/);
+  await worker.reducers.setReplyClass({ personId: ROBERT, choice: 'needs_medical' });
+  await waitFor(() => admin.db.person.id.find(ROBERT)?.status === 'cant_move', 'worker classification');
+  assert.ok([...admin.db.task.iter()].some((t) => t.personId === ROBERT && !t.done && t.priority === 3), 'Robert has an urgent task');
+  await a.reducers.replyCheckin({ personId: MOBILE, choice: 'safe', text: '' });
+  // The next tick may already walk a safe resident out; either way they are accounted for exactly once.
+  await waitFor(() => ['safe', 'out'].includes(admin.db.person.id.find(MOBILE)!.status), 'safe confirmation');
+  await Promise.allSettled([a.reducers.replyCheckin({ personId: MOBILE, choice: 'safe', text: '' })]);
+  const b12 = admin.db.building.id.find(12)!;
+  assert.ok(b12.peopleOut <= b12.residents, 'no double counting');
+  assert.equal([...admin.db.task.iter()].filter((t) => t.personId === MOBILE && !t.done).length, 0);
+  await admin.reducers.setSpeed({ minutesPerTick: 10 });
+  await waitFor(() => [...admin.db.eventLog.iter()].some((e) => e.text.includes('no reply')), 'scheduled escalation');
+  await waitFor(() => admin.db.sim.id.find(0)?.phase === 'ended', 'scheduled simulation end');
+  assert.ok(admin.db.sim.id.find(0)!.tick > 0);
+  assert.ok(admin.db.result.scenario.find('with_lantern'));
+  await admin.reducers.runBaseline({});
+  await waitFor(() => !!admin.db.result.scenario.find('without_lantern'), 'baseline result');
+  assert.equal(admin.db.result.scenario.find('without_lantern')!.peopleTotal, 260);
+  await admin.reducers.resetSim({});
+  await waitFor(() => admin.db.sim.id.find(0)?.phase === 'prep', 'reset');
+  assert.equal(admin.db.task.count(), 0n);
+  assert.equal(admin.db.result.count(), 0n);
+  assert.equal(admin.db.building.id.find(12)!.vans, 1);
+  assert.equal(admin.db.sim.id.find(0)!.budgetLeft, 500000);
+  await admin.reducers.seedWorld({ json: JSON.stringify(readSeed()) });
+  console.log('PASS: seed rollback, authorization, fixes, cross-client check-ins, atomic competing claims, rescue ownership, worker writes, scheduled escalation/end, baseline and reset.');
+} finally {
+  for (const c of clients) c.disconnect();
+}

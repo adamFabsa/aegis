@@ -1,14 +1,14 @@
-# Simulation engine — how to wire it (for C) and what the fields mean (for B)
+# Simulation engine — how the module uses it, and what the fields mean (for B)
 
 `spacetimedb/src/sim.ts` is the whole simulation as **pure functions** (no `ctx`, no `Date`, no
 `Math.random`, no I/O). `spacetimedb/src/seed_data.ts` is generated from `seed/*.json` and exports `SEED`
-(buildings, people, fire params), so reducers can seed/reset without an admin script.
-Tests: `node --experimental-strip-types --test spacetimedb/tests/sim.test.ts` (14 tests, ~0.6 s).
+(buildings, people, fire params); the module's `init` loads it, so a fresh publish is playable.
+Tests: `npm test` (engine + preview, 20 tests).
 
-**A complete module that already does all of this, tested on a local SpacetimeDB 2.14.1 server, is in
-[`docs/spacetime-reference/`](../docs/spacetime-reference/README.md)** (every reducer, 1 s scheduled tick at
-~0.9 ms/tick, atomic claims under a 10-way race, two live clients in sync). Copy it or crib from it.
-`preview/index.html` runs the same engine in a browser (see `preview/README.md`).
+**The live module is [`spacetimedb/src/index.ts`](src/index.ts)** (Part C's reducers, auth and claim ownership,
+driving this engine) — its contract for B and D is [`docs/backend.md`](../docs/backend.md). The recipes below
+are what it does, kept here as the engine's integration guide. `preview/index.html` runs the same engine in a
+browser (see `preview/README.md`).
 
 The row interfaces in `sim.ts` (`SimRow`, `BuildingRow`, `PersonRow`, `TaskRow`, `FixRow`, `FireCellRow`,
 `ResultRow`) match the tables in LANTERN_SPEC §4 field-for-field. **Rows from `ctx.db` are readonly —

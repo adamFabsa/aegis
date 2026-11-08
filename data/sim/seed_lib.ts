@@ -152,6 +152,7 @@ export function defaultParams(): FireParams {
     autoStartEtaMin: 10,
     escalateMin: 10,
     autoClaimDelayTicks: 15,
+    claimWindowSkipEtaMin: 30,
     autoReplyPerMin: 0.3,
     silentPersonIds: [],
     evacBaseMin: 10,

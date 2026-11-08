@@ -54,7 +54,7 @@ Caveat to say out loud: DINS covers structures inside fire perimeters; this is a
 ## Simulated results (same fire, with vs without Lantern)
 
 Averaged over 40 simulated Eaton-calibrated fires, playing the demo (van + brush on Building 12, van on
-Building 9, recommended fixes, evacuate the four threatened buildings at once): **+7.3 people safe, 0.75 fewer
+Building 9, recommended fixes, evacuate the four threatened buildings at once): **+7.7 people safe, 0.75 fewer
 buildings lost, $12.8M less damage** vs the same fire with no prep, late evacuation and no check-ins. The demo
 fire (`fireSeed` 20250111) is the one closest to that average (+7 people, 1 building, $8.4M), not the best one.
 

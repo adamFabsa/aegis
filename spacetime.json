@@ -1,0 +1,8 @@
+{
+  "database": "lantern",
+  "server": "http://127.0.0.1:3000",
+  "module-path": "./spacetimedb",
+  "generate": [
+    { "language": "typescript", "out-dir": "./web/src/module_bindings" }
+  ]
+}
