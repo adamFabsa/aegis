@@ -261,7 +261,13 @@ function fireAdvice(input: AdvisorInput): Advice {
   const clear = buildings.filter((b) => real(b) && b.status === 'clear');
   if (clear.length) items.push({ id: 'clear', rank: 300, tone: 'good', title: `${clear.map((b) => b.name).join(', ')}: everyone out`, why: 'Accounted for at Shelter A.' });
   const onScene = units.filter((u) => u.status === 'onscene');
-  if (onScene.length) items.push({ id: 'engines', rank: 310, tone: 'info', title: onScene.map((u) => `${u.name} at ${byB.get(u.targetId ?? 0)?.name ?? '…'}`).join(' · '), why: 'Water on the buildings.' });
+  if (onScene.length) {
+    const spraying = onScene.filter((u) => byB.get(u.targetId ?? 0)?.status === 'burning').length;
+    items.push({
+      id: 'engines', rank: 310, tone: 'info', title: onScene.map((u) => `${u.name} at ${byB.get(u.targetId ?? 0)?.name ?? '…'}`).join(' · '),
+      why: spraying === onScene.length ? 'Water on the burning buildings.' : spraying ? 'Water on the burning buildings; the others are standing by.' : 'Standing by: hoses go on if the building catches.',
+    });
+  }
 
   items.sort((a, c) => a.rank - c.rank);
   // accounted for: of the residents told to leave, how many are out or confirmed safe

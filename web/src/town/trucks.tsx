@@ -256,13 +256,16 @@ function Engines({ units, buildings, tickSeconds, pack, rotation }: { units: Uni
   );
 }
 
-/** Water on the building once an engine is on scene: fades in as the engine settles at the curb. */
+/**
+ * Water on the building only once it is actually burning. An engine sent ahead of the fire parks with its lights
+ * on and the crew standing by; the hoses fade in the moment the building catches.
+ */
 function Hoses({ units, buildings, lite }: { units: Unit[]; buildings: Building[]; lite: boolean }) {
   return (
     <g style={{ pointerEvents: 'none' }}>
       {units.filter((u) => u.status === 'onscene').map((u) => {
         const b = buildings.find((x) => x.id === u.targetId);
-        if (!b) return null;
+        if (!b || b.status !== 'burning') return null;
         const { x, y, hd } = enginePark(b, buildings);
         const [ex, ey] = project(x, y);
         const [nx, ny] = vehOffset(hd, -6, 13);

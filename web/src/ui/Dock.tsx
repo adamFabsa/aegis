@@ -494,7 +494,7 @@ function fireDetail(p: DockProps, b: Building): View {
         <Thumb b={b} pack={pack} hero />
         {b.kind !== 'shelter' && <Structure b={b} />}
         {b.kind !== 'shelter' && b.status !== 'lost' && b.status !== 'clear' && <Race b={b} />}
-        {u && <p className="unit-line"><TruckIcon /> {u.name} {u.status === 'enroute' ? 'is on the way' : 'is on scene, water on the building'}</p>}
+        {u && <p className="unit-line"><TruckIcon /> {u.name} {u.status === 'enroute' ? 'is on the way' : b.status === 'burning' ? 'is on scene, water on the building' : 'is on scene, crew standing by'}</p>}
         {b.evacStarted && (
           <div className="progress">
             <div className="progress-row"><span>Residents out</span><b>{b.peopleOut} of {b.residents}</b></div>

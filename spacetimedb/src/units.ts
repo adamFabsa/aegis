@@ -117,7 +117,7 @@ export function stepUnits(units: UnitRow[], buildings: BuildingLike[]): { change
       if (u.ticksLeft <= 0) {
         u.status = 'onscene';
         u.ticksLeft = 0;
-        events.push(`${u.name} on scene at ${b.name}, water on the building`);
+        events.push(b.status === 'burning' ? `${u.name} on scene at ${b.name}, water on the building` : `${u.name} on scene at ${b.name}, crew standing by`);
       }
       changed.add(u);
     }

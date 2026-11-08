@@ -125,8 +125,27 @@ try {
   assert.ok([...admin.db.mitigation.iter()].every((m) => !/approved/.test(m.note)), 'reset restores the checklist');
   assert.equal(admin.db.sim.id.find(0)!.budgetLeft, 500000);
   assert.ok([...admin.db.unit.iter()].every((u) => u.status === 'ready' && u.targetId === 0), 'reset parks every engine');
+  // Random scenarios: same town, new world; any client may roll one; reset replays it; 0 = the demo map.
+  const demoRisks = [...admin.db.building.iter()].map((x) => x.baseRisk).join(',');
+  await a.reducers.newScenario({ number: 4242 });
+  await waitFor(() => admin.db.scenario.id.find(0)?.number === 4242, 'scenario row');
+  await waitFor(() => [...admin.db.building.iter()].map((x) => x.baseRisk).join(',') !== demoRisks, 'buildings re-scored');
+  assert.equal(admin.db.scenario.id.find(0)!.label, 'Scenario #4242');
+  assert.equal(admin.db.sim.id.find(0)!.phase, 'prep');
+  const scenarioRisks = [...admin.db.building.iter()].map((x) => x.baseRisk).join(',');
+  await assert.rejects(a.reducers.setIgnition({ cellX: 999, cellY: 0 }), /nothing to burn/);
+  const before = admin.db.scenario.id.find(0)!;
+  await b.reducers.setIgnition({ cellX: 44, cellY: 3 });
+  await waitFor(() => admin.db.scenario.id.find(0)!.picked, 'picked fire start');
+  assert.notEqual(admin.db.scenario.id.find(0)!.ignitionX, before.ignitionX + 0.123);
+  assert.equal([...admin.db.building.iter()].map((x) => x.baseRisk).join(','), scenarioRisks, 'moving the fire keeps the construction');
+  await admin.reducers.resetSim({});
+  await waitFor(() => admin.db.scenario.id.find(0)!.number === 4242 && admin.db.scenario.id.find(0)!.picked, 'reset keeps the scenario');
+  await a.reducers.newScenario({ number: 0 });
+  await waitFor(() => admin.db.scenario.id.find(0)!.number === 0, 'back to the demo map');
+  assert.equal([...admin.db.building.iter()].map((x) => x.baseRisk).join(','), demoRisks);
   await admin.reducers.seedWorld({ json: JSON.stringify(readSeed()) });
-  console.log('PASS: seed rollback, authorization, presence, insurer checklist, fixes, cross-client check-ins, atomic competing claims, rescue ownership, worker writes, coach staff assignment, fire engines, scheduled escalation/end, baseline and reset.');
+  console.log('PASS: seed rollback, authorization, presence, insurer checklist, fixes, cross-client check-ins, atomic competing claims, rescue ownership, worker writes, coach staff assignment, fire engines, random scenarios and picked fire starts, scheduled escalation/end, baseline and reset.');
 } finally {
   for (const c of clients) c.disconnect();
 }
