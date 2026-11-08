@@ -1,5 +1,6 @@
 // Map markers and street life. Deliberately no pills/badges: buildings get a slim waypoint
 // (stem + numbered diamond) with map-style halo lettering, and the streets get people and cars.
+import { useEffect, useRef } from 'react';
 import type { Building, Sim } from './types';
 import { project } from './iso';
 import { SPRITE, evacRoute, spriteScale } from './scene';
@@ -131,6 +132,34 @@ const LANES: [number, number][][] = [
 ];
 const CAR_COLORS = ['#C9CED6', '#8C2F2F', '#2F4C7A', '#E8E6E0', '#3B4A3F', '#6B6F78'];
 
+/** Point a fraction f of the way along a polyline (map space). */
+function pointAt(pts: [number, number][], f: number): [number, number] {
+  const seg: number[] = [];
+  let total = 0;
+  for (let i = 1; i < pts.length; i++) { const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); seg.push(d); total += d; }
+  let t = (((f % 1) + 1) % 1) * total;
+  for (let i = 0; i < seg.length; i++) {
+    if (t <= seg[i]) { const u = t / seg[i]; return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * u, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * u]; }
+    t -= seg[i];
+  }
+  return pts[pts.length - 1];
+}
+
+/** Plays once when it mounts (fire just started): moves along d, then fades out and stays hidden. */
+function OneShot({ href, color, d, dur }: { href: string; color?: string; d: string; dur: number }) {
+  const motion = useRef<SVGAnimationElement>(null);
+  const fade = useRef<SVGAnimationElement>(null);
+  useEffect(() => {
+    try { motion.current?.beginElement(); fade.current?.beginElement(); } catch { /* SMIL unavailable: element simply stays hidden */ }
+  }, []);
+  return (
+    <use href={href} color={color} opacity="0">
+      <animateMotion ref={motion} path={d} dur={`${dur}s`} begin="indefinite" fill="freeze" />
+      <animate ref={fade} attributeName="opacity" values="1;1;0" keyTimes="0;0.85;1" dur={`${dur}s`} begin="indefinite" fill="freeze" />
+    </use>
+  );
+}
+
 export function StreetLife({ buildings, phase }: { buildings: Building[]; phase: Sim['phase'] }) {
   const shelter = buildings.find((b) => b.kind === 'shelter');
   const evacuating = buildings.filter((b) => b.status === 'evacuating');
@@ -148,6 +177,20 @@ export function StreetLife({ buildings, phase }: { buildings: Building[]; phase:
           </line>
           <rect x="-1.5" y="-7.8" width="3" height="4.6" rx="1.2" fill="currentColor" />
           <circle cx="0" cy="-9.3" r="1.45" fill="#E2B892" />
+        </g>
+        {/* running: faster stride, leaning forward */}
+        <g id="pedRun">
+          <ellipse cx="0.6" cy="0" rx="2.2" ry="0.8" fill="#000" opacity="0.3" />
+          <g transform="rotate(-12 0 0)">
+            <line x1="0" y1="-3.6" x2="0" y2="0" stroke="#232838" strokeWidth="1.2" strokeLinecap="round">
+              <animateTransform attributeName="transform" type="rotate" values="-38 0 -3.6;38 0 -3.6;-38 0 -3.6" dur="0.28s" repeatCount="indefinite" />
+            </line>
+            <line x1="0" y1="-3.6" x2="0" y2="0" stroke="#2E3446" strokeWidth="1.2" strokeLinecap="round">
+              <animateTransform attributeName="transform" type="rotate" values="38 0 -3.6;-38 0 -3.6;38 0 -3.6" dur="0.28s" repeatCount="indefinite" />
+            </line>
+            <rect x="-1.5" y="-7.8" width="3" height="4.6" rx="1.2" fill="currentColor" />
+            <circle cx="0" cy="-9.3" r="1.45" fill="#E2B892" />
+          </g>
         </g>
         <g id="car">
           <ellipse cx="1" cy="0.5" rx="7" ry="2" fill="#000" opacity="0.3" />
@@ -170,8 +213,21 @@ export function StreetLife({ buildings, phase }: { buildings: Building[]; phase:
         </g>
       </defs>
 
-      {/* traffic keeps moving in every phase */}
-      {LANES.flatMap((lane, li) => {
+      {/* fire: drivers clear the roads, people on the street run for the nearest door and disappear inside */}
+      {phase !== 'prep' && LANES.flatMap((lane, li) => [0, 1].map((k) => {
+        const from = pointAt(lane, ((k * 0.5 + li * 0.21) % 1) * 0.8);
+        const d = pathOf([from, lane[lane.length - 1]]);
+        return <OneShot key={`fc${li}${k}`} href="#car" color={CAR_COLORS[(li * 2 + k) % CAR_COLORS.length]} d={d} dur={Math.max(1.8, pathLen([from, lane[lane.length - 1]]) / 160)} />;
+      }))}
+      {phase !== 'prep' && SIDEWALK_LOOPS.flatMap((loop, li) => [0, 1].map((k) => {
+        const from = pointAt(loop, (k * 0.5 + li * 0.13) % 1);
+        const doors = buildings.filter((b) => b.status !== 'lost' && b.status !== 'burning').map((b) => [b.x + b.w / 2, b.y + b.h + 2] as [number, number]);
+        const to = doors.reduce((best, p) => (Math.hypot(p[0] - from[0], p[1] - from[1]) < Math.hypot(best[0] - from[0], best[1] - from[1]) ? p : best), doors[0] ?? from);
+        return <OneShot key={`fp${li}${k}`} href="#pedRun" color={SHIRTS[(li * 3 + k) % SHIRTS.length]} d={pathOf([from, to])} dur={Math.max(1.6, pathLen([from, to]) / 46)} />;
+      }))}
+
+      {/* everyday traffic while the town is preparing */}
+      {phase === 'prep' && LANES.flatMap((lane, li) => {
         const d = pathOf(lane);
         const dur = pathLen(lane) / 34;
         return [0, 1].map((k) => (
@@ -202,7 +258,7 @@ export function StreetLife({ buildings, phase }: { buildings: Building[]; phase:
         return (
           <g key={`e${b.id}`}>
             {Array.from({ length: 9 }, (_, i) => (
-              <use key={i} href="#ped" color={i === 4 ? STATUS_COLORS.amber : SHIRTS[i % SHIRTS.length]}>
+              <use key={i} href={i === 4 ? '#ped' : '#pedRun'} color={i === 4 ? STATUS_COLORS.amber : SHIRTS[i % SHIRTS.length]}>
                 <animateMotion path={d} dur={`${walk}s`} begin={`${(-i * walk) / 9}s`} repeatCount="indefinite" />
               </use>
             ))}

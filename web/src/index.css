@@ -241,8 +241,10 @@ h2, p { margin: 0; }
   .icon-btn { width: 36px; height: 36px; }
   .menu { width: min(290px, calc(100vw - 16px)); }
 
-  .zoom { top: 76px; transform: none; right: 8px; }
-  .zoom button { width: 38px; height: 38px; }
+  .zoom { top: 64px; transform: none; right: 8px; }
+  .zoom button { width: 36px; height: 36px; }
+  .zoom button:not(:last-child) { display: none; } /* pinch to zoom; keep only "show whole map" */
+  .zoom button + button { border-top: 0; }
 
   .dock {
     left: 0; right: 0; bottom: 0; transform: none; width: 100%; max-height: 54vh;
@@ -252,7 +254,15 @@ h2, p { margin: 0; }
   .dock-head { flex-wrap: wrap; gap: 10px; }
   .dock-head > .btn { width: 100%; }
   .dock h2 { font-size: 19px; }
-  .fix-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fix-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .fix { padding: 9px 10px; gap: 2px; border-radius: 13px; }
+  .fix-name { font-size: 13px; }
+  .fix-check { width: 18px; height: 18px; }
+  .bcard { padding: 10px 12px; }
+  .bcard-risk { font-size: 26px; height: 30px; }
+  .kpis.wide .kpi { padding: 8px 12px; }
+  .row { min-height: 50px; padding: 8px 10px; }
+  .feed { padding: 7px 10px; font-size: 12px; }
   .result-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .result-grid dd { font-size: 22px; }
   .kpis:not(.wide) { width: 100%; justify-content: flex-start; }
@@ -263,4 +273,11 @@ h2, p { margin: 0; }
 @media (min-width: 761px) {
   .dock { max-height: min(40vh, 400px); }
   .rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+}
+
+/* short phones: give the map a little more of the screen */
+@media (max-width: 760px) and (max-height: 700px) {
+  .dock { max-height: 50vh; gap: 10px; }
+  .dock h2 { font-size: 18px; }
+  .dock-head > .btn { min-height: 42px; padding: 9px 14px; }
 }

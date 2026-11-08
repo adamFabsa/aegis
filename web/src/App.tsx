@@ -66,6 +66,8 @@ export default function App() {
   }, []);
 
   const pack: Pack = look === 'auto' ? (sim.phase === 'prep' ? 'dusk' : 'night') : look;
+  // Phones and reduced-motion users get the lighter effects path (no noise textures, blur or blend modes).
+  const [lite] = useState(() => window.innerWidth < 760 || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
   const selected = buildings.find((b) => b.id === selectedId) ?? null;
   const startFire = () => { setSelectedId(null); world.setPhase('fire'); };
   const prepare = () => { setSelectedId(null); world.setPhase('prep'); };
@@ -75,7 +77,7 @@ export default function App() {
       <MapView
         sim={sim} buildings={buildings} fireCells={cells} pack={pack}
         selectedId={selectedId} onSelect={setSelectedId}
-        topInset={insets.top} bottomInset={insets.bottom}
+        topInset={insets.top} bottomInset={insets.bottom} lite={lite}
       >
         <div ref={topRef} className="top-slot">
           <TopBar

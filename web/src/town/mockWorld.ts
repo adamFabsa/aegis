@@ -150,6 +150,7 @@ export interface LogEvent { id: number; tick: number; text: string; tone: 'info'
 interface World { sim: Sim; buildings: Building[]; cells: FireCell[]; burnCount: Record<number, number>; approved: Record<number, FixKey[]>; events: LogEvent[] }
 
 let eventSeq = 1;
+const hm = (m: number) => { const h = Math.floor(m / 60); const r = Math.round(m % 60); return h ? `${h}h ${String(r).padStart(2, '0')}m` : `${r}m`; };
 function log(events: LogEvent[], tick: number, text: string, tone: LogEvent['tone']): LogEvent[] {
   return [{ id: eventSeq++, tick, text, tone }, ...events].slice(0, 40);
 }
@@ -224,7 +225,7 @@ function step(w: World): World {
   for (const b of buildings) {
     const before = w.buildings.find((x) => x.id === b.id)!.status;
     if (before === b.status) continue;
-    if (b.status === 'behind') events = log(events, sim.tick, `${b.name} is behind: fire in ${Math.round(b.fireEtaMin)}m, evacuation needs ${Math.round(b.evacNeededMin)}m`, 'warn');
+    if (b.status === 'behind') events = log(events, sim.tick, `${b.name} is behind: fire in ${hm(b.fireEtaMin)}, evacuation needs ${hm(b.evacNeededMin)}`, 'warn');
     else if (b.status === 'burning') events = log(events, sim.tick, `${b.name} caught fire`, 'bad');
     else if (b.status === 'lost') events = log(events, sim.tick, `${b.name} was lost${b.residents - b.peopleOut > 0 ? `, ${b.residents - b.peopleOut} still inside` : ''}`, 'bad');
     else if (b.status === 'clear') events = log(events, sim.tick, `${b.name} is clear: everyone is out`, 'good');

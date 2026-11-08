@@ -1,4 +1,4 @@
-import { memo, useMemo, type ReactNode } from 'react';
+import { memo, useMemo, type ReactNode, type Ref } from 'react';
 import type { Building, FireCell, Pack, Sim } from './types';
 import { CELL, GROUND_MATRIX, MAP_H, MAP_W, OX, OY, VIEW_H, VIEW_W, pointsAttr, project, projectVec, windVector } from './iso';
 import {
@@ -15,8 +15,10 @@ interface TownProps {
   pack: Pack;
   selectedId: number | null;
   onSelect: (id: number | null) => void;
-  /** Camera window into the 1440 x 980 board (set by MapView). */
-  viewBox?: string;
+  /** MapView moves the camera by writing the viewBox straight onto this element (no React re-render). */
+  svgRef?: Ref<SVGSVGElement>;
+  /** Phones: skip noise textures, blur and blend modes that are expensive to re-rasterize while panning. */
+  lite?: boolean;
   /** Screen-constant scale for status tags so they stay readable when zoomed out. */
   tagScale?: number;
 }
@@ -99,6 +101,10 @@ function Defs({ P }: { P: GroundPalette }) {
         <stop offset="0.45" stopColor="#FF5A1F" stopOpacity="0.18" />
         <stop offset="1" stopColor="#FF5A1F" stopOpacity="0" />
       </radialGradient>
+      {/* smoke puffs are soft radial gradients: same look as a blur filter at a fraction of the cost */}
+      <radialGradient id="smokePlume"><stop offset="0" stopColor={P.smoke} stopOpacity="0.9" /><stop offset="0.55" stopColor={P.smoke} stopOpacity="0.45" /><stop offset="1" stopColor={P.smoke} stopOpacity="0" /></radialGradient>
+      <radialGradient id="smokeDark"><stop offset="0" stopColor="#2A2627" stopOpacity="0.95" /><stop offset="0.6" stopColor="#2A2627" stopOpacity="0.4" /><stop offset="1" stopColor="#2A2627" stopOpacity="0" /></radialGradient>
+      <radialGradient id="smokeGray"><stop offset="0" stopColor="#6B6460" stopOpacity="0.9" /><stop offset="0.6" stopColor="#6B6460" stopOpacity="0.35" /><stop offset="1" stopColor="#6B6460" stopOpacity="0" /></radialGradient>
       <radialGradient id="roofGlow">
         <stop offset="0" stopColor="#FF8A3D" stopOpacity="0.75" />
         <stop offset="0.5" stopColor="#FF5A1F" stopOpacity="0.28" />
@@ -154,10 +160,10 @@ function Defs({ P }: { P: GroundPalette }) {
   );
 }
 
-const StaticGround = memo(function StaticGround({ P }: { P: GroundPalette }) {
+const StaticGround = memo(function StaticGround({ P, lite }: { P: GroundPalette; lite: boolean }) {
   return (
     <>
-      <polygon points="575,160 1430,660 884,975 10,470" fill="#000" opacity="0.35" filter="url(#blur20)" />
+      <polygon points="575,160 1430,660 884,975 10,470" fill="#000" opacity={lite ? 0.22 : 0.35} filter={lite ? undefined : 'url(#blur20)'} />
       <g transform={`translate(${OX} ${OY})`}>
         <g transform={`matrix(0.866 0.5 0 1 ${-0.866 * MAP_H} ${0.5 * MAP_H})`}>
           <rect width={MAP_W} height="22" fill={P.slabFront} />
@@ -174,9 +180,13 @@ const StaticGround = memo(function StaticGround({ P }: { P: GroundPalette }) {
       </g>
       <g transform={GROUND_MATRIX}>
         <rect width={MAP_W} height={MAP_H} fill={P.ground} />
-        <rect width={MAP_W} height={MAP_H} fill="#000" filter="url(#patches)" opacity={P.patchOp} />
-        <rect width={MAP_W} height={MAP_H} fill="#fff" filter="url(#patchesHi)" opacity={P.patchOp * 0.6} />
-        <rect width={MAP_W} height={MAP_H} fill="#000" filter="url(#grain)" opacity={P.grainOp} />
+        {!lite && (
+          <>
+            <rect width={MAP_W} height={MAP_H} fill="#000" filter="url(#patches)" opacity={P.patchOp} />
+            <rect width={MAP_W} height={MAP_H} fill="#fff" filter="url(#patchesHi)" opacity={P.patchOp * 0.6} />
+            <rect width={MAP_W} height={MAP_H} fill="#000" filter="url(#grain)" opacity={P.grainOp} />
+          </>
+        )}
         <rect x={PARK.x} y={PARK.y} width={PARK.w} height={PARK.h} rx="14" fill={P.lawn} />
         <rect x={PARK.x} y={PARK.y} width={PARK.w} height={PARK.h} rx="14" fill="url(#mow)" opacity={P.patchOp > 0.3 ? 0.45 : 1} />
         <rect x={PARK.x} y={PARK.y} width={PARK.w} height={PARK.h} rx="14" fill="none" stroke={P.curb} strokeWidth="2" opacity="0.6" />
@@ -184,19 +194,19 @@ const StaticGround = memo(function StaticGround({ P }: { P: GroundPalette }) {
         <ellipse cx="128" cy="86" rx="44" ry="26" fill="none" stroke={P.sidewalk} strokeWidth="3" />
         <path d="M24 150 C 110 120 220 190 334 136" stroke={P.sidewalk} strokeWidth="5" fill="none" />
         <path d={HILLS_PATH} fill="url(#brush)" />
-        <path d="M600 22 C 700 60 820 66 1000 40 M640 92 C 740 122 860 150 1000 140 M720 162 C 800 178 900 204 1000 232" stroke={P.brushHi} strokeWidth="5" fill="none" opacity="0.35" filter="url(#blur4)" />
+        <path d="M600 22 C 700 60 820 66 1000 40 M640 92 C 740 122 860 150 1000 140 M720 162 C 800 178 900 204 1000 232" stroke={P.brushHi} strokeWidth="5" fill="none" opacity="0.35" filter={lite ? undefined : 'url(#blur4)'} />
         {/* elevation lip: a shaded band just inside the hills edge and a soft cast shadow onto the town side */}
         <g clipPath="url(#hillsClip)">
-          <path d={HILLS_EDGE} stroke="#000" strokeWidth="26" fill="none" opacity={P.lipOp} filter="url(#blur4)" />
-          <path d={HILLS_EDGE} stroke={P.brushHi} strokeWidth="6" fill="none" opacity="0.35" transform="translate(-6 -6)" filter="url(#blur2)" />
+          <path d={HILLS_EDGE} stroke="#000" strokeWidth="26" fill="none" opacity={P.lipOp * (lite ? 0.6 : 1)} filter={lite ? undefined : 'url(#blur4)'} />
+          <path d={HILLS_EDGE} stroke={P.brushHi} strokeWidth="6" fill="none" opacity="0.35" transform="translate(-6 -6)" filter={lite ? undefined : 'url(#blur2)'} />
         </g>
-        <path d={HILLS_EDGE} stroke={P.brushD} strokeWidth="4" fill="none" opacity="0.7" filter="url(#blur2)" />
+        <path d={HILLS_EDGE} stroke={P.brushD} strokeWidth="4" fill="none" opacity="0.7" filter={lite ? undefined : 'url(#blur2)'} />
         {LOTS.map((l, i) => <rect key={i} x={l.x} y={l.y} width={l.w} height={l.h} rx="4" fill={P.lot} />)}
         <path d={LOT_STRIPES} stroke={P.roadLine} strokeWidth="1.4" />
         {SIDEWALKS.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={P.sidewalk} />)}
         {SIDEWALKS.map((r, i) => <rect key={`c${i}`} x={r.x} y={r.y} width={r.w} height={r.h} fill="none" stroke={P.curb} strokeWidth="1.5" opacity="0.7" />)}
         {ROADS.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={P.road} />)}
-        {ROADS.map((r, i) => <rect key={`a${i}`} x={r.x} y={r.y} width={r.w} height={r.h} fill="#fff" filter="url(#asphalt)" opacity={P.asphaltOp} />)}
+        {!lite && ROADS.map((r, i) => <rect key={`a${i}`} x={r.x} y={r.y} width={r.w} height={r.h} fill="#fff" filter="url(#asphalt)" opacity={P.asphaltOp} />)}
         {ROADS.map((r, i) => <rect key={`e${i}`} x={r.x} y={r.y} width={r.w} height={r.h} fill="none" stroke="#000" strokeWidth="2" opacity="0.25" />)}
         <path d={ROAD_LINES} stroke={P.roadLine} strokeWidth="1.6" strokeDasharray="12 10" fill="none" />
         <path d={CROSSWALKS} stroke={P.roadLine} strokeWidth="3" opacity="0.8" />
@@ -208,7 +218,7 @@ const StaticGround = memo(function StaticGround({ P }: { P: GroundPalette }) {
   );
 });
 
-function BuildingSprite({ b, pack, selected, onSelect }: { b: Building; pack: Pack; selected: boolean; onSelect: (id: number) => void }) {
+function BuildingSprite({ b, pack, selected, onSelect, lite }: { b: Building; pack: Pack; selected: boolean; onSelect: (id: number) => void; lite: boolean }) {
   const s = spriteScale(b);
   const cx = b.x + b.w / 2;
   const cy = b.y + b.h / 2;
@@ -237,14 +247,14 @@ function BuildingSprite({ b, pack, selected, onSelect }: { b: Building; pack: Pa
       />
       {b.status === 'burning' && (
         <g style={{ pointerEvents: 'none' }}>
-          <ellipse cx={rx} cy={ry} rx={0.433 * (b.w + b.h) + 24} ry={0.25 * (b.w + b.h) + 30} fill="url(#roofGlow)" style={{ mixBlendMode: 'screen' }}>
+          <ellipse cx={rx} cy={ry} rx={0.433 * (b.w + b.h) + 24} ry={0.25 * (b.w + b.h) + 30} fill="url(#roofGlow)" style={lite ? undefined : { mixBlendMode: 'screen' }}>
             <animate attributeName="opacity" values="0.8;1;0.85;1;0.8" dur="1.3s" repeatCount="indefinite" />
           </ellipse>
           {roofPts.map(([px, py], i) => (
             <use key={i} href={`#${FLAMES[i % 3]}`} transform={`translate(${px} ${py}) scale(${i % 4 === 0 ? 1.5 : 1.1})`} />
           ))}
           {[0, 1, 2].map((i) => (
-            <circle key={i} cx={roofPts[i * 2][0]} cy={ry - 12} r="10" fill="#2A2627" filter="url(#blur8)">
+            <circle key={i} cx={roofPts[i * 2][0]} cy={ry - 12} r="10" fill="url(#smokeDark)">
               <animate attributeName="r" values="8;38" dur="5s" begin={`${-i * 1.6}s`} repeatCount="indefinite" />
               <animate attributeName="opacity" values="0;0.75;0" dur="5s" begin={`${-i * 1.6}s`} repeatCount="indefinite" />
               <animateMotion path="M0 0 C -30 -40 -80 -70 -150 -95" dur="5s" begin={`${-i * 1.6}s`} repeatCount="indefinite" />
@@ -255,7 +265,7 @@ function BuildingSprite({ b, pack, selected, onSelect }: { b: Building; pack: Pa
       {b.status === 'lost' && (
         <g style={{ pointerEvents: 'none' }}>
           {[0, 1].map((i) => (
-            <circle key={i} cx={roofPts[i * 3][0]} cy={ry - 10} r="8" fill="#6B6460" filter="url(#blur8)">
+            <circle key={i} cx={roofPts[i * 3][0]} cy={ry - 10} r="8" fill="url(#smokeGray)">
               <animate attributeName="r" values="6;26" dur="8s" begin={`${-i * 4}s`} repeatCount="indefinite" />
               <animate attributeName="opacity" values="0;0.45;0" dur="8s" begin={`${-i * 4}s`} repeatCount="indefinite" />
               <animateMotion path="M0 0 C -20 -40 -50 -70 -100 -100" dur="8s" begin={`${-i * 4}s`} repeatCount="indefinite" />
@@ -278,7 +288,7 @@ function BuildingSprite({ b, pack, selected, onSelect }: { b: Building; pack: Pa
   );
 }
 
-export function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, viewBox, tagScale = 1 }: TownProps) {
+export const Town = memo(function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, svgRef, tagScale = 1, lite = false }: TownProps) {
   const P = PALETTES[pack];
   // plants only depend on building footprints, which never change during a run
   const footprintKey = buildings.map((b) => `${b.x},${b.y},${b.w},${b.h}`).join('|');
@@ -338,12 +348,12 @@ export function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, vi
     items.push({
       depth: b.x + b.w / 2 + b.y + b.h / 2,
       key: `b${b.id}`,
-      node: <BuildingSprite b={b} pack={pack} selected={selectedId === b.id} onSelect={onSelect} />,
+      node: <BuildingSprite b={b} pack={pack} selected={selectedId === b.id} onSelect={onSelect} lite={lite} />,
     });
   }
   let flameCount = 0;
   for (const c of burning) {
-    if (flameCount > 260 || c.fuel < 0.3) continue;
+    if (flameCount > (lite ? 90 : 260) || c.fuel < 0.3) continue;
     const mx = c.x * CELL + CELL / 2;
     const my = c.y * CELL + CELL / 2;
     if (inBuilding(mx, my)) continue;
@@ -358,7 +368,8 @@ export function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, vi
 
   return (
     <svg
-      viewBox={viewBox ?? `0 0 ${VIEW_W} ${VIEW_H}`}
+      ref={svgRef}
+      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
       preserveAspectRatio="xMidYMid meet"
       className="town-svg"
       role="img"
@@ -366,13 +377,13 @@ export function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, vi
       onClick={() => onSelect(null)}
     >
       <Defs P={P} />
-      <StaticGround P={P} />
+      <StaticGround P={P} lite={lite} />
 
       {/* ground-level dynamic layer: fire cells, rings, routes */}
       <g transform={GROUND_MATRIX}>
         {fireOn && <circle cx={fcx} cy={fcy} r="300" fill="url(#groundGlow)" opacity={P.glowOp} />}
-        <path d={cellPath(burned)} fill="url(#ash)" filter="url(#blur2)" opacity="0.92" />
-        <path d={cellPath(burning)} fill="#FF5A1F" filter="url(#blur2)">
+        <path d={cellPath(burned)} fill="url(#ash)" filter={lite ? undefined : 'url(#blur2)'} opacity="0.92" />
+        <path d={cellPath(burning)} fill="#FF5A1F" filter={lite ? undefined : 'url(#blur2)'}>
           <animate attributeName="opacity" values="0.75;1;0.8;0.95;0.75" dur="1.4s" repeatCount="indefinite" />
         </path>
         {buildings.map((b) => {
@@ -406,7 +417,7 @@ export function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, vi
       {fireOn && (
         <g style={{ pointerEvents: 'none' }}>
           {[0, 1, 2, 3, 4, 5].map((i) => (
-            <circle key={i} cx={gsx} cy={gsy} r="30" fill={P.smoke} filter="url(#blur20)">
+            <circle key={i} cx={gsx} cy={gsy} r="30" fill="url(#smokePlume)">
               <animate attributeName="r" values="26;120" dur="11s" begin={`${-i * 1.8}s`} repeatCount="indefinite" />
               <animate attributeName="opacity" values={`0;${P.smokeOp};0`} dur="11s" begin={`${-i * 1.8}s`} repeatCount="indefinite" />
               <animateMotion path={smokePath} dur="11s" begin={`${-i * 1.8}s`} repeatCount="indefinite" />
@@ -418,7 +429,7 @@ export function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, vi
               <animate attributeName="opacity" values="1;1;0" dur={`${3 + (i % 3)}s`} begin={`${-i * 0.6}s`} repeatCount="indefinite" />
             </circle>
           ))}
-          <ellipse cx={gsx} cy={gsy} rx="460" ry="300" fill="url(#fireGlow)" opacity={P.glowOp} style={{ mixBlendMode: 'screen' }}>
+          <ellipse cx={gsx} cy={gsy} rx="460" ry="300" fill="url(#fireGlow)" opacity={P.glowOp * (lite ? 0.7 : 1)} style={lite ? undefined : { mixBlendMode: 'screen' }}>
             <animate attributeName="rx" values="440;470;450;440" dur="2.6s" repeatCount="indefinite" />
           </ellipse>
         </g>
@@ -428,4 +439,4 @@ export function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, vi
       <Markers buildings={buildings} phase={sim.phase} scale={tagScale} selectedId={selectedId} />
     </svg>
   );
-}
+});

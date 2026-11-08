@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Town } from './Town';
 import type { Building, FireCell, Pack, Sim } from './types';
 import { VIEW_H, VIEW_W, project } from './iso';
@@ -17,6 +17,7 @@ interface MapViewProps {
   /** Screen pixels covered by floating chrome; the camera frames the town in the space between. */
   topInset?: number;
   bottomInset?: number;
+  lite?: boolean;
 }
 
 const PHONE = 760;
@@ -57,7 +58,7 @@ function clampCam(c: Cam, w: number, h: number, top = 0, bottom = 0): Cam {
   return { k, x: cx - w / (2 * k), y: cy - (top + vh / 2) / k };
 }
 
-export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect, children, topInset = 0, bottomInset = 0 }: MapViewProps) {
+export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect, children, topInset = 0, bottomInset = 0, lite = false }: MapViewProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [userCam, setUserCam] = useState<Cam | null>(null);
@@ -140,17 +141,37 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
 
   const zoomButton = (f: number) => zoomAt(w / 2, h / 2, f);
 
-  // On phones the details sheet covers the lower half: pan the tapped building into the space above it.
-  const select = (id: number | null) => {
-    onSelect(id);
+  // Latest layout values for the stable select callback below.
+  const live = useRef({ w, h, topInset, bottomInset, buildings, onSelect });
+  useLayoutEffect(() => {
+    live.current = { w, h, topInset, bottomInset, buildings, onSelect };
+  });
+
+  // Tapping a building (on the map or in the panel) pans it into the free space above the panel.
+  const select = useCallback((id: number | null) => {
+    const L = live.current;
+    L.onSelect(id);
     const c = camRef.current;
-    const b = id == null ? null : buildings.find((x) => x.id === id);
+    const b = id == null ? null : L.buildings.find((x) => x.id === id);
     if (!c || !b) return;
     const [sx, sy] = project(b.x + b.w / 2, b.y + b.h / 2, (SPRITE[b.kind].roof * spriteScale(b)) / 2);
-    setUserCam(clampCam(centerOn(c.k, sx, sy, w, h, topInset, bottomInset), w, h, topInset, bottomInset));
-  };
-  const tagScale = cam ? Math.min(2.6, Math.max(1, 0.8 / cam.k)) : 1;
+    setUserCam(clampCam(centerOn(c.k, sx, sy, L.w, L.h, L.topInset, L.bottomInset), L.w, L.h, L.topInset, L.bottomInset));
+  }, []);
+
+  // Marker size only changes in steps, so pinch-zoom does not re-render the town every frame.
+  const tagScale = cam ? Math.round(Math.min(2.6, Math.max(1, 0.8 / cam.k)) * 5) / 5 : 1;
   const viewBox = cam ? `${cam.x.toFixed(1)} ${cam.y.toFixed(1)} ${(w / cam.k).toFixed(1)} ${(h / cam.k).toFixed(1)}` : `0 0 ${VIEW_W} ${VIEW_H}`;
+
+  // Panning writes the viewBox directly instead of re-rendering hundreds of SVG nodes.
+  const svgRef = useRef<SVGSVGElement>(null);
+  useLayoutEffect(() => {
+    svgRef.current?.setAttribute('viewBox', viewBox);
+  });
+  const ready = cam !== null;
+  const town = useMemo(
+    () => (ready ? <Town sim={sim} buildings={buildings} fireCells={fireCells} pack={pack} selectedId={selectedId} onSelect={select} svgRef={svgRef} tagScale={tagScale} lite={lite} /> : null),
+    [ready, sim, buildings, fireCells, pack, selectedId, select, tagScale, lite],
+  );
 
   return (
     <div
@@ -167,9 +188,7 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
         }
       }}
     >
-      {cam && (
-        <Town sim={sim} buildings={buildings} fireCells={fireCells} pack={pack} selectedId={selectedId} onSelect={select} viewBox={viewBox} tagScale={tagScale} />
-      )}
+      {town}
       {children}
       <div className="map-chrome zoom" role="group" aria-label="Map zoom">
         <button type="button" aria-label="Zoom in" onClick={() => zoomButton(1.35)}>
