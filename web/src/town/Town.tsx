@@ -6,7 +6,7 @@ import {
   evacRoute, generatePlants, spriteScale, spriteUrl, spriteVariant,
 } from './scene';
 import { PALETTES, STATUS_COLORS, type GroundPalette } from './palettes';
-import { statusTag } from './status';
+import { Markers, StreetLife } from './markers';
 
 interface TownProps {
   sim: Sim;
@@ -278,30 +278,6 @@ function BuildingSprite({ b, pack, selected, onSelect }: { b: Building; pack: Pa
   );
 }
 
-interface PlacedTag { b: Building; x: number; y: number; w: number; text: string; color: string; lifted: number }
-
-/** Place one tag above each roof; front buildings keep their spot, ones behind move up until clear. */
-function layoutTags(buildings: Building[], phase: Sim['phase'], scale: number): PlacedTag[] {
-  const order = [...buildings].sort((a, b) => b.x + b.w / 2 + b.y + b.h / 2 - (a.x + a.w / 2 + a.y + a.h / 2));
-  const placed: PlacedTag[] = [];
-  for (const b of order) {
-    const s = spriteScale(b);
-    const [x, y0] = project(b.x + b.w / 2, b.y + b.h / 2, SPRITE[b.kind].tag * s + 26);
-    const tag = statusTag(b, phase);
-    const w = 30 + (b.name.length + tag.text.length + 3) * 6.6;
-    let y = y0;
-    const hw = (w * scale) / 2 + 4;
-    const hh = 13 * scale + 3;
-    for (let i = 0; i < 12; i++) {
-      const hit = placed.find((p) => Math.abs(p.x - x) < hw + (p.w * scale) / 2 && Math.abs(p.y - y) < hh * 2);
-      if (!hit) break;
-      y = hit.y - hh * 2 - 2;
-    }
-    placed.push({ b, x, y, w, text: tag.text, color: tag.color, lifted: y0 - y });
-  }
-  return placed;
-}
-
 export function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, viewBox, tagScale = 1 }: TownProps) {
   const P = PALETTES[pack];
   // plants only depend on building footprints, which never change during a run
@@ -420,23 +396,8 @@ export function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, vi
         ))}
       </g>
 
-      {/* residents walking to the shelter */}
-      {evacuating.map((b) => {
-        const route = evacRoute(b, shelter).map(([x, y]) => project(x, y));
-        const d = 'M' + route.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join(' L');
-        let len = 0;
-        for (let i = 1; i < route.length; i++) len += Math.hypot(route[i][0] - route[i - 1][0], route[i][1] - route[i - 1][1]);
-        const dur = Math.max(5, len / 40);
-        return (
-          <g key={`w${b.id}`}>
-            {Array.from({ length: 7 }, (_, i) => (
-              <circle key={i} r="2.8" fill={i === 3 ? STATUS_COLORS.amber : '#E8F7EE'} stroke="#0B0F17" strokeWidth="0.8">
-                <animateMotion path={d} dur={`${dur}s`} begin={`${(-i * dur) / 7}s`} repeatCount="indefinite" />
-              </circle>
-            ))}
-          </g>
-        );
-      })}
+      {/* cars, strolling residents, evacuation columns and vans */}
+      <StreetLife buildings={buildings} phase={sim.phase} />
 
       {/* depth-sorted world */}
       {items.map((it) => <g key={it.key}>{it.node}</g>)}
@@ -463,20 +424,8 @@ export function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, vi
         </g>
       )}
 
-      {/* status tags: laid out front-to-back, nudged upward when they would overlap */}
-      <g style={{ pointerEvents: 'none' }}>
-        {layoutTags(buildings, sim.phase, tagScale).map((t) => (
-          <g key={`t${t.b.id}`} transform={`translate(${t.x} ${t.y}) scale(${tagScale})`}>
-            {t.lifted > 0 && <line x1="0" y1="13" x2="0" y2={13 + t.lifted / tagScale} stroke={t.color} strokeWidth="1" opacity="0.6" />}
-            <rect x={-t.w / 2} y="-13" width={t.w} height="26" rx="13" fill="rgba(11,15,23,0.9)" stroke={t.color} strokeWidth={selectedId === t.b.id ? 2.2 : 1} />
-            <circle cx={-t.w / 2 + 14} cy="0" r="4" fill={t.color} />
-            <text x={-t.w / 2 + 24} y="4.2" fontSize="12" fontWeight="600" fill="#EEF1F7" fontFamily="Inter, system-ui, sans-serif">
-              {t.b.name}
-              <tspan fill={t.color}>{` · ${t.text}`}</tspan>
-            </text>
-          </g>
-        ))}
-      </g>
+      {/* waypoint markers: stem + numbered diamond + halo lettering (no pills) */}
+      <Markers buildings={buildings} phase={sim.phase} scale={tagScale} selectedId={selectedId} />
     </svg>
   );
 }

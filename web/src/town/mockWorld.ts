@@ -144,11 +144,19 @@ function fireTicks(cells: FireCell[], dirDeg: number): Float64Array {
   return dist;
 }
 
-interface World { sim: Sim; buildings: Building[]; cells: FireCell[]; burnCount: Record<number, number>; approved: Record<number, FixKey[]> }
+/** Mirrors the spec's event_log table (the dashboard's live feed). */
+export interface LogEvent { id: number; tick: number; text: string; tone: 'info' | 'good' | 'warn' | 'bad' }
+
+interface World { sim: Sim; buildings: Building[]; cells: FireCell[]; burnCount: Record<number, number>; approved: Record<number, FixKey[]>; events: LogEvent[] }
+
+let eventSeq = 1;
+function log(events: LogEvent[], tick: number, text: string, tone: LogEvent['tone']): LogEvent[] {
+  return [{ id: eventSeq++, tick, text, tone }, ...events].slice(0, 40);
+}
 
 function freshWorld(): World {
   const buildings = seedBuildings();
-  return { sim: seedSim(), buildings, cells: seedCells(buildings), burnCount: {}, approved: {} };
+  return { sim: seedSim(), buildings, cells: seedCells(buildings), burnCount: {}, approved: {}, events: [] };
 }
 
 function step(w: World): World {
@@ -212,11 +220,21 @@ function step(w: World): World {
     return b;
   });
 
+  let events = w.events;
+  for (const b of buildings) {
+    const before = w.buildings.find((x) => x.id === b.id)!.status;
+    if (before === b.status) continue;
+    if (b.status === 'behind') events = log(events, sim.tick, `${b.name} is behind: fire in ${Math.round(b.fireEtaMin)}m, evacuation needs ${Math.round(b.evacNeededMin)}m`, 'warn');
+    else if (b.status === 'burning') events = log(events, sim.tick, `${b.name} caught fire`, 'bad');
+    else if (b.status === 'lost') events = log(events, sim.tick, `${b.name} was lost${b.residents - b.peopleOut > 0 ? `, ${b.residents - b.peopleOut} still inside` : ''}`, 'bad');
+    else if (b.status === 'clear') events = log(events, sim.tick, `${b.name} is clear: everyone is out`, 'good');
+  }
   if (!cells.some((c) => c.state === 1)) {
     sim.phase = 'ended';
     sim.running = false;
+    events = log(events, sim.tick, 'The fire is out', 'info');
   }
-  return { ...w, sim, buildings, cells, burnCount };
+  return { ...w, sim, buildings, cells, burnCount, events };
 }
 
 export function useMockWorld() {
@@ -250,17 +268,22 @@ export function useMockWorld() {
           c.state = 1;
           c.burnTicks = 0;
         }
-        return { ...w, cells, sim: { ...w.sim, phase: 'fire', running: true } };
+        return { ...w, cells, sim: { ...w.sim, phase: 'fire', running: true }, events: log(w.events, 0, 'Fire ignited in the hills, wind toward the southwest', 'bad') };
       }
       return { ...w, sim: { ...w.sim, phase } };
     });
   }, []);
 
   const startEvacuation = useCallback((id: number) => {
-    setWorld((w) => ({
-      ...w,
-      buildings: w.buildings.map((b) => (b.id === id && b.status !== 'lost' && b.status !== 'burning' ? { ...b, evacStarted: true, status: 'evacuating' } : b)),
-    }));
+    setWorld((w) => {
+      const b = w.buildings.find((x) => x.id === id);
+      if (!b || b.evacStarted || b.status === 'lost' || b.status === 'burning') return w;
+      return {
+        ...w,
+        buildings: w.buildings.map((x) => (x.id === id ? { ...x, evacStarted: true, status: 'evacuating' } : x)),
+        events: log(w.events, w.sim.tick, `Evacuation started at ${b.name}: ${b.residents} residents pinged`, 'info'),
+      };
+    });
   }, []);
 
   /** Spec reducer approve_fix: check budget, apply risk drop / extra van, recompute prepared. */
@@ -277,6 +300,7 @@ export function useMockWorld() {
         ...w,
         sim: { ...w.sim, budgetLeft: w.sim.budgetLeft - fix.cost },
         approved: { ...w.approved, [id]: [...list, key] },
+        events: log(w.events, 0, `Approved ${fix.name.toLowerCase()} for ${b.name}`, 'good'),
         buildings: w.buildings.map((x) => (x.id === id ? { ...x, vans, risk, evacNeededMin: evac, prepared: risk < 40 && evac < REFERENCE_ETA_MIN } : x)),
       };
     });
