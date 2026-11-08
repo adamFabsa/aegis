@@ -1,0 +1,20 @@
+{
+  "baseSpread": 0.3,
+  "windK": 1.4,
+  "spotP": 0.02,
+  "burnTicks": 3,
+  "windDirDeg": 225,
+  "windMph": 40,
+  "ignitionCells": [
+    48,
+    49,
+    98,
+    99
+  ],
+  "staffRate": 0.5,
+  "vanRate": 2,
+  "escalateMin": 10,
+  "referenceFireEta": 180,
+  "maxTicks": 1500,
+  "randomSeed": 2026
+}

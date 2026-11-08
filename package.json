@@ -1,0 +1,30 @@
+{
+  "name": "lantern",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "node --import tsx tests/simulation.test.ts",
+    "build": "node --import tsx scripts/spacetime.ts build --module-path spacetimedb",
+    "bindings": "node --import tsx scripts/spacetime.ts generate",
+    "seed": "node --import tsx scripts/seed.ts",
+    "smoke": "node --import tsx scripts/smoke.ts",
+    "seed:fixtures": "node --import tsx scripts/create-demo-seed.ts",
+    "publish:local": "node --import tsx scripts/spacetime.ts publish --yes",
+    "publish:maincloud": "node --import tsx scripts/spacetime.ts publish --env maincloud --yes=remote,migrate,skip-login",
+    "spacetime": "node --import tsx scripts/spacetime.ts",
+    "check:all": "npm run check && npm test && npm run build"
+  },
+  "dependencies": {
+    "spacetimedb": "2.14.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": "^22.23.4 || ^24.22.1 || >=26.12.1"
+  }
+}

@@ -1,0 +1,402 @@
+[
+  {
+    "id": 12,
+    "name": "Building 12",
+    "kind": "senior",
+    "x": 570,
+    "y": 250,
+    "w": 150,
+    "h": 70,
+    "residents": 38,
+    "needsHelp": 9,
+    "staff": 4,
+    "vans": 1,
+    "baseRisk": 82,
+    "valueUsd": 8000000,
+    "simulated": true,
+    "features": {
+      "roof": "simulated",
+      "brushDistanceFt": 5
+    },
+    "fixes": [
+      {
+        "id": 121,
+        "name": "Second evacuation van",
+        "costUsd": 48000,
+        "riskDrop": 0,
+        "addVans": 1
+      },
+      {
+        "id": 122,
+        "name": "Clear brush to 30 ft",
+        "costUsd": 12000,
+        "riskDrop": 45,
+        "addVans": 0
+      },
+      {
+        "id": 123,
+        "name": "Ember-resistant vent screens",
+        "costUsd": 9000,
+        "riskDrop": 18,
+        "addVans": 0
+      },
+      {
+        "id": 124,
+        "name": "Class A roof",
+        "costUsd": 140000,
+        "riskDrop": 25,
+        "addVans": 0
+      }
+    ]
+  },
+  {
+    "id": 9,
+    "name": "Building 9",
+    "kind": "senior",
+    "x": 780,
+    "y": 300,
+    "w": 110,
+    "h": 60,
+    "residents": 22,
+    "needsHelp": 6,
+    "staff": 3,
+    "vans": 1,
+    "baseRisk": 78,
+    "valueUsd": 6000000,
+    "simulated": true,
+    "features": {
+      "roof": "simulated",
+      "brushDistanceFt": 5
+    },
+    "fixes": [
+      {
+        "id": 91,
+        "name": "Second evacuation van",
+        "costUsd": 48000,
+        "riskDrop": 0,
+        "addVans": 1
+      },
+      {
+        "id": 92,
+        "name": "Clear brush to 30 ft",
+        "costUsd": 12000,
+        "riskDrop": 45,
+        "addVans": 0
+      },
+      {
+        "id": 93,
+        "name": "Ember-resistant vent screens",
+        "costUsd": 9000,
+        "riskDrop": 18,
+        "addVans": 0
+      },
+      {
+        "id": 94,
+        "name": "Class A roof",
+        "costUsd": 140000,
+        "riskDrop": 25,
+        "addVans": 0
+      }
+    ]
+  },
+  {
+    "id": 7,
+    "name": "Building 7",
+    "kind": "apartments",
+    "x": 420,
+    "y": 290,
+    "w": 120,
+    "h": 90,
+    "residents": 64,
+    "needsHelp": 3,
+    "staff": 2,
+    "vans": 0,
+    "baseRisk": 66,
+    "valueUsd": 9000000,
+    "simulated": true,
+    "features": {
+      "roof": "simulated",
+      "brushDistanceFt": 5
+    },
+    "fixes": [
+      {
+        "id": 71,
+        "name": "Second evacuation van",
+        "costUsd": 48000,
+        "riskDrop": 0,
+        "addVans": 1
+      },
+      {
+        "id": 72,
+        "name": "Clear brush to 30 ft",
+        "costUsd": 12000,
+        "riskDrop": 45,
+        "addVans": 0
+      },
+      {
+        "id": 73,
+        "name": "Ember-resistant vent screens",
+        "costUsd": 9000,
+        "riskDrop": 18,
+        "addVans": 0
+      },
+      {
+        "id": 74,
+        "name": "Class A roof",
+        "costUsd": 140000,
+        "riskDrop": 25,
+        "addVans": 0
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "name": "Building 3",
+    "kind": "apartments",
+    "x": 170,
+    "y": 270,
+    "w": 140,
+    "h": 80,
+    "residents": 80,
+    "needsHelp": 4,
+    "staff": 2,
+    "vans": 0,
+    "baseRisk": 52,
+    "valueUsd": 10000000,
+    "simulated": true,
+    "features": {
+      "roof": "simulated",
+      "brushDistanceFt": 5
+    },
+    "fixes": [
+      {
+        "id": 31,
+        "name": "Second evacuation van",
+        "costUsd": 48000,
+        "riskDrop": 0,
+        "addVans": 1
+      },
+      {
+        "id": 32,
+        "name": "Clear brush to 30 ft",
+        "costUsd": 12000,
+        "riskDrop": 45,
+        "addVans": 0
+      },
+      {
+        "id": 33,
+        "name": "Ember-resistant vent screens",
+        "costUsd": 9000,
+        "riskDrop": 18,
+        "addVans": 0
+      },
+      {
+        "id": 34,
+        "name": "Class A roof",
+        "costUsd": 140000,
+        "riskDrop": 25,
+        "addVans": 0
+      }
+    ]
+  },
+  {
+    "id": 15,
+    "name": "Building 15",
+    "kind": "office",
+    "x": 140,
+    "y": 480,
+    "w": 130,
+    "h": 64,
+    "residents": 12,
+    "needsHelp": 0,
+    "staff": 1,
+    "vans": 0,
+    "baseRisk": 42,
+    "valueUsd": 4000000,
+    "simulated": true,
+    "features": {
+      "roof": "simulated",
+      "brushDistanceFt": 5
+    },
+    "fixes": [
+      {
+        "id": 151,
+        "name": "Second evacuation van",
+        "costUsd": 48000,
+        "riskDrop": 0,
+        "addVans": 1
+      },
+      {
+        "id": 152,
+        "name": "Clear brush to 30 ft",
+        "costUsd": 12000,
+        "riskDrop": 45,
+        "addVans": 0
+      },
+      {
+        "id": 153,
+        "name": "Ember-resistant vent screens",
+        "costUsd": 9000,
+        "riskDrop": 18,
+        "addVans": 0
+      },
+      {
+        "id": 154,
+        "name": "Class A roof",
+        "costUsd": 140000,
+        "riskDrop": 25,
+        "addVans": 0
+      }
+    ]
+  },
+  {
+    "id": 10,
+    "name": "Building 10",
+    "kind": "apartments",
+    "x": 800,
+    "y": 470,
+    "w": 130,
+    "h": 70,
+    "residents": 30,
+    "needsHelp": 2,
+    "staff": 1,
+    "vans": 0,
+    "baseRisk": 62,
+    "valueUsd": 5000000,
+    "simulated": true,
+    "features": {
+      "roof": "simulated",
+      "brushDistanceFt": 5
+    },
+    "fixes": [
+      {
+        "id": 101,
+        "name": "Second evacuation van",
+        "costUsd": 48000,
+        "riskDrop": 0,
+        "addVans": 1
+      },
+      {
+        "id": 102,
+        "name": "Clear brush to 30 ft",
+        "costUsd": 12000,
+        "riskDrop": 45,
+        "addVans": 0
+      },
+      {
+        "id": 103,
+        "name": "Ember-resistant vent screens",
+        "costUsd": 9000,
+        "riskDrop": 18,
+        "addVans": 0
+      },
+      {
+        "id": 104,
+        "name": "Class A roof",
+        "costUsd": 140000,
+        "riskDrop": 25,
+        "addVans": 0
+      }
+    ]
+  },
+  {
+    "id": 20,
+    "name": "Hillside homes",
+    "kind": "homes",
+    "x": 430,
+    "y": 150,
+    "w": 280,
+    "h": 40,
+    "residents": 14,
+    "needsHelp": 2,
+    "staff": 0,
+    "vans": 0,
+    "baseRisk": 90,
+    "valueUsd": 3000000,
+    "simulated": true,
+    "features": {
+      "roof": "simulated",
+      "brushDistanceFt": 5
+    },
+    "fixes": [
+      {
+        "id": 201,
+        "name": "Second evacuation van",
+        "costUsd": 48000,
+        "riskDrop": 0,
+        "addVans": 1
+      },
+      {
+        "id": 202,
+        "name": "Clear brush to 30 ft",
+        "costUsd": 12000,
+        "riskDrop": 45,
+        "addVans": 0
+      },
+      {
+        "id": 203,
+        "name": "Ember-resistant vent screens",
+        "costUsd": 9000,
+        "riskDrop": 18,
+        "addVans": 0
+      },
+      {
+        "id": 204,
+        "name": "Class A roof",
+        "costUsd": 140000,
+        "riskDrop": 25,
+        "addVans": 0
+      }
+    ]
+  },
+  {
+    "id": 99,
+    "name": "Shelter A",
+    "kind": "shelter",
+    "x": 440,
+    "y": 505,
+    "w": 140,
+    "h": 60,
+    "residents": 0,
+    "needsHelp": 0,
+    "staff": 2,
+    "vans": 0,
+    "baseRisk": 10,
+    "valueUsd": 2000000,
+    "simulated": true,
+    "features": {
+      "roof": "simulated",
+      "brushDistanceFt": 5
+    },
+    "fixes": [
+      {
+        "id": 991,
+        "name": "Second evacuation van",
+        "costUsd": 48000,
+        "riskDrop": 0,
+        "addVans": 1
+      },
+      {
+        "id": 992,
+        "name": "Clear brush to 30 ft",
+        "costUsd": 12000,
+        "riskDrop": 45,
+        "addVans": 0
+      },
+      {
+        "id": 993,
+        "name": "Ember-resistant vent screens",
+        "costUsd": 9000,
+        "riskDrop": 18,
+        "addVans": 0
+      },
+      {
+        "id": 994,
+        "name": "Class A roof",
+        "costUsd": 140000,
+        "riskDrop": 25,
+        "addVans": 0
+      }
+    ]
+  }
+]
