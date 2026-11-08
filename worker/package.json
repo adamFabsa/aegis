@@ -9,6 +9,7 @@
     "start": "node --env-file-if-exists=.env --import tsx src/index.ts",
     "register": "node --env-file-if-exists=.env --import tsx src/register.ts",
     "check": "tsc --noEmit",
+    "test": "LOG_LEVEL=warn node --import tsx --test src/*.test.ts",
     "selftest": "node --env-file-if-exists=.env --import tsx src/selftest.ts",
     "e2e": "node --env-file-if-exists=.env --import tsx src/e2e.ts",
     "bindings": "spacetime generate --lang typescript --out-dir src/module_bindings --module-path ../spacetimedb"

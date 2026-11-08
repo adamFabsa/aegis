@@ -11,30 +11,38 @@ export interface ReplyRecord {
   /** set_reply_class accepted, or permanently not applicable (unclear / reply no longer pending). */
   done: boolean;
 }
-/** Last note Gemini wrote for a building, keyed by a hash of the facts it was written from. */
+/** The last note the worker sent for a building: the facts it was written from, and which world (scenario) they describe. */
 export interface ExplanationRecord {
   hash: string;
   text: string;
+  /** Hash of the scenario-stable facts (construction, fixes, residents). A different basis = a note about another world. */
+  basis?: string;
 }
 
 interface Persisted {
   replies: Record<string, ReplyRecord>;
   explanations: Record<string, ExplanationRecord>;
+  /** facts hash → note, across buildings and scenarios, so revisiting a scenario costs no model calls. */
+  notes: Record<string, string>;
 }
+
+const MAX_NOTES = 300;
 
 /** Small JSON file next to the token, so a restart never re-classifies a reply or re-pays for a note. */
 export class WorkerState {
-  private data: Persisted = { replies: {}, explanations: {} };
+  private data: Persisted = { replies: {}, explanations: {}, notes: {} };
   private timer: NodeJS.Timeout | undefined;
 
   constructor(private readonly file = config.stateFile) {
     if (!existsSync(file)) return;
     try {
       const parsed = JSON.parse(readFileSync(file, 'utf8')) as Partial<Persisted>;
-      this.data = { replies: parsed.replies ?? {}, explanations: parsed.explanations ?? {} };
+      this.data = { replies: parsed.replies ?? {}, explanations: parsed.explanations ?? {}, notes: parsed.notes ?? {} };
+      for (const r of Object.values(this.data.explanations)) this.data.notes[r.hash] ??= r.text; // older state files
       log.info('loaded worker state', {
         replies: Object.keys(this.data.replies).length,
         explanations: Object.keys(this.data.explanations).length,
+        notes: Object.keys(this.data.notes).length,
       });
     } catch (e) {
       log.warn('could not read worker state, starting fresh', { file, error: errMsg(e) });
@@ -59,6 +67,18 @@ export class WorkerState {
   }
   setExplanation(buildingId: number, r: ExplanationRecord) {
     this.data.explanations[buildingId] = r;
+    this.save();
+  }
+
+  /** A note already written from exactly these facts (any building, any scenario). */
+  note(hash: string): string | undefined {
+    return this.data.notes[hash];
+  }
+  setNote(hash: string, text: string) {
+    delete this.data.notes[hash]; // re-insert as newest
+    this.data.notes[hash] = text;
+    const keys = Object.keys(this.data.notes);
+    for (const k of keys.slice(0, Math.max(0, keys.length - MAX_NOTES))) delete this.data.notes[k];
     this.save();
   }
 

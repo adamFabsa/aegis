@@ -1,7 +1,8 @@
 /**
  * Lantern Gemini worker — a peer SpacetimeDB client.
  *  - person.replyText (free text)  → Gemini triage → set_reply_class   ('unclear' is left for humans)
- *  - building.explanation empty / still the seed template → Gemini 2-sentence note → set_explanation
+ *  - building.explanation empty / still the module's template (seed, reset, every new scenario) → 2-sentence note
+ *    written from the building, building_profile and fix rows → set_explanation
  * Numbers never come from Gemini: notes are written from word-only facts and rejected if they contain digits.
  */
 import { config } from './config';
@@ -51,6 +52,7 @@ const classifier = new ReplyClassifier(state, {
 const explainer = new ExplanationWriter(state, {
   building: (id) => conn?.db.building.id.find(id) ?? undefined,
   fixes: (buildingId) => (conn ? [...conn.db.fix.iter()].filter((f) => f.buildingId === buildingId) : []),
+  profile: (buildingId) => conn?.db.buildingProfile.buildingId.find(buildingId) ?? undefined,
   setExplanation: (buildingId, text) => live().reducers.setExplanation({ buildingId, text }),
   onAuthFailure,
 });
@@ -93,6 +95,13 @@ function connect() {
         c.db.person.onUpdate((_ctx, _old, row) => classifier.observe(row));
         c.db.building.onInsert((_ctx, row) => explainer.observe(row));
         c.db.building.onUpdate((_ctx, _old, row) => explainer.observe(row));
+        // A new scenario rewrites construction: re-check that building (callbacks run once the whole transaction is applied).
+        const profileChanged = (buildingId: number) => {
+          const b = c.db.building.id.find(buildingId);
+          if (b) explainer.observe(b);
+        };
+        c.db.buildingProfile.onInsert((_ctx, row) => profileChanged(row.buildingId));
+        c.db.buildingProfile.onUpdate((_ctx, _old, row) => profileChanged(row.buildingId));
 
         c.subscriptionBuilder()
           .onApplied(() => {
@@ -107,7 +116,7 @@ function connect() {
             log.error('subscription error', { error: errMsg((ctx as { event?: unknown }).event ?? ctx) });
             c.disconnect();
           })
-          .subscribe(['SELECT * FROM person', 'SELECT * FROM building', 'SELECT * FROM fix']);
+          .subscribe(['SELECT * FROM person', 'SELECT * FROM building', 'SELECT * FROM fix', 'SELECT * FROM building_profile']);
       })
       .onConnectError((_ctx, error) => {
         const m = errMsg(error);
