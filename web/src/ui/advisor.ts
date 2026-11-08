@@ -17,7 +17,8 @@ export type Action =
   | { kind: 'plan'; label: string }
   | { kind: 'evacuate'; buildingId: number; label: string }
   | { kind: 'dispatch'; buildingId: number; label: string }
-  | { kind: 'assign'; taskId: number; buildingId: number; label: string }
+  /** one or more help tasks (a building's waiting residents go out as one card): assign_staff per task */
+  | { kind: 'assign'; taskIds: number[]; buildingId: number; label: string }
   | { kind: 'select'; buildingId: number; label: string };
 
 export interface Instruction {
@@ -62,6 +63,22 @@ export interface AdvisorInput {
 }
 
 const MIN_RISK = 5;
+/**
+ * One headcount for every screen (coach, panel, card). Of the residents told to leave (their building's evacuation
+ * started), "accounted for" are the ones out or confirmed safe; everyone else told to leave is unaccounted,
+ * including the ones staff are on their way to.
+ */
+export function headcount(persons: Person[], buildings: Building[]) {
+  const started = new Set(buildings.filter((b) => b.evacStarted).map((b) => b.id));
+  const told = persons.filter((p) => started.has(p.buildingId));
+  const isAccounted = (p: Person) => p.status === 'out' || p.status === 'safe';
+  return { told, accounted: told.filter(isAccounted), unaccounted: told.filter((p) => !isAccounted(p)) };
+}
+
+/** The sim's wind direction is where it blows TOWARD; people name a wind by where it comes FROM. */
+const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+export const windFrom = (towardDeg: number) => COMPASS[Math.round(((((towardDeg + 180) % 360) + 360) % 360) / 45) % 8];
+
 /** an engine on scene before the fire arrives multiplies ignition odds by this (spacetimedb/src/sim.ts default) */
 const ENGINE_PROTECT = 0.35;
 const inside = (b: Building) => Math.max(0, b.residents - b.peopleOut);
@@ -174,25 +191,49 @@ function fireAdvice(input: AdvisorInput): Advice {
   const engineAt = (id: number) => units.find((u) => u.targetId === id && (u.status === 'enroute' || u.status === 'onscene'));
   const minsSince = (p: Person) => Math.max(0, (sim.tick - p.pingedAtTick) * Math.max(1, sim.minutesPerTick));
 
-  // 1. People who need someone now: open help tasks nobody has claimed (urgent first, then oldest).
+  // 1. People who need someone now: open help tasks nobody has claimed (urgent first, then oldest), one card per
+  //    building, so three residents waiting in Building 12 are one "Send staff" press, not three cards.
   const open = tasks.filter((t) => !t.done && !t.claimedBy).sort((a, b) => b.priority - a.priority || a.createdTick - b.createdTick);
-  for (const t of open.slice(0, 3)) {
+  const groups: { b: Building; list: { t: Task; p: Person }[] }[] = [];
+  for (const t of open) {
     const p = persons.find((x) => x.id === t.personId);
     const b = byB.get(t.buildingId);
     if (!p || !b) continue;
-    const silent = !p.replyText;
+    const g = groups.find((x) => x.b.id === b.id);
+    if (g) g.list.push({ t, p });
+    else groups.push({ b, list: [{ t, p }] });
+  }
+  for (const { b, list } of groups.slice(0, 3)) {
+    const top = list[0].t;
+    const canAssign = input.canAssign && b.status !== 'lost';
+    if (list.length === 1) {
+      const { t, p } = list[0];
+      const silent = !p.replyText;
+      items.push({
+        id: `help-${t.id}`, rank: 0 - t.priority * 10, tone: 'now',
+        title: `Send staff to ${p.name}${p.note ? ` (${p.note})` : ''}`,
+        why: silent
+          ? `${b.name}, floor ${p.floor}. No reply for ${fmtMin(minsSince(p))}, so Lantern escalated.`
+          : `${b.name}, floor ${p.floor}. The AI read the reply as ${p.status === 'cant_move' ? 'cannot get out alone' : 'needs help'}.`,
+        quote: silent ? undefined : p.replyText,
+        people: 1, buildingId: b.id,
+        action: canAssign ? { kind: 'assign', taskIds: [t.id], buildingId: b.id, label: 'Send staff' } : { kind: 'select', buildingId: b.id, label: 'Show' },
+      });
+      continue;
+    }
+    const floors = [...new Set(list.map(({ p }) => p.floor))].sort((x, y) => x - y);
+    const silent = list.filter(({ p }) => !p.replyText).length;
+    const names = list.slice(0, 3).map(({ p }) => `${p.name}${p.note ? ` (${p.note})` : ''}`).join(', ') + (list.length > 3 ? ` and ${list.length - 3} more` : '');
     items.push({
-      id: `help-${t.id}`, rank: 0 - t.priority * 10, tone: 'now',
-      title: `Send staff to ${p.name}${p.note ? ` (${p.note})` : ''}`,
-      why: silent
-        ? `${b.name}, floor ${p.floor}. No reply for ${fmtMin(minsSince(p))}, so Lantern escalated.`
-        : `${b.name}, floor ${p.floor}. The AI read the reply as ${p.status === 'cant_move' ? 'cannot get out alone' : 'needs help'}.`,
-      quote: silent ? undefined : p.replyText,
-      people: 1, buildingId: b.id,
-      action: input.canAssign && b.status !== 'lost' ? { kind: 'assign', taskId: t.id, buildingId: b.id, label: 'Send staff' } : { kind: 'select', buildingId: b.id, label: 'Show' },
+      id: `help-b${b.id}`, rank: 0 - top.priority * 10, tone: 'now',
+      title: `Send staff to ${list.length} residents in ${b.name}`,
+      why: `${names}. Floor${floors.length === 1 ? '' : 's'} ${floors.join(', ')}${silent ? `; ${silent === list.length ? 'none' : `${list.length - silent} of them`} replied` : ''}.`,
+      people: list.length, buildingId: b.id,
+      action: canAssign ? { kind: 'assign', taskIds: list.map(({ t }) => t.id), buildingId: b.id, label: 'Send staff' } : { kind: 'select', buildingId: b.id, label: 'Show' },
     });
   }
-  if (open.length > 3) items.push({ id: 'help-more', rank: 1, tone: 'now', title: `${open.length - 3} more ${open.length - 3 === 1 ? 'resident' : 'residents'} waiting for staff`, why: 'Staff see them on their phones, most urgent first.', people: open.length - 3 });
+  const more = groups.slice(3).reduce((n, g) => n + g.list.length, 0);
+  if (more > 0) items.push({ id: 'help-more', rank: 1, tone: 'now', title: `${more} more ${more === 1 ? 'resident' : 'residents'} waiting for staff`, why: 'Staff see them on their phones, most urgent first.', people: more });
 
   // 2. Evacuate before the fire arrives.
   for (const b of buildings.filter(real)) {
@@ -207,9 +248,11 @@ function fireAdvice(input: AdvisorInput): Advice {
     if (margin < 20) {
       items.push({
         id: `evac-${b.id}`, rank: margin, tone: 'now', title: `Evacuate ${b.name} now`,
-        why: margin < 0
-          ? `The fire arrives in ${fmtMin(b.fireEtaMin)}, but getting ${n} people out takes ${fmtMin(b.evacNeededMin)}. Every minute counts.`
-          : `The fire arrives in ${fmtMin(b.fireEtaMin)}; getting ${n} people out takes ${fmtMin(b.evacNeededMin)}.`,
+        why: b.fireEtaMin < 1
+          ? `The fire is here, and getting ${n} people out takes ${fmtMin(b.evacNeededMin)}. Every minute counts.`
+          : margin < 0
+            ? `The fire arrives in ${fmtMin(b.fireEtaMin)}, but getting ${n} people out takes ${fmtMin(b.evacNeededMin)}. Every minute counts.`
+            : `The fire arrives in ${fmtMin(b.fireEtaMin)}; getting ${n} people out takes ${fmtMin(b.evacNeededMin)}.`,
         people: n, buildingId: b.id, action: { kind: 'evacuate', buildingId: b.id, label: 'Evacuate' },
       });
     } else if (b.fireEtaMin < 150) {
@@ -228,7 +271,7 @@ function fireAdvice(input: AdvisorInput): Advice {
     const canSend = free.length > 0 && !engineAt(b.id);
     items.push({
       id: `behind-${b.id}`, rank: -50 + Math.max(0, b.fireEtaMin), tone: 'now', title: `${b.name} is falling behind`,
-      why: `${n} still inside and the fire is ${b.fireEtaMin >= 0 ? `${fmtMin(b.fireEtaMin)} away` : 'close'}. Staff from nearby buildings are being sent.${canSend ? ' An engine on scene buys time.' : ''}`,
+      why: `${n} still inside and the fire is ${b.fireEtaMin >= 0 && b.fireEtaMin < 1 ? 'here' : b.fireEtaMin > 0 ? `${fmtMin(b.fireEtaMin)} away` : 'close'}. Staff from nearby buildings are being sent.${canSend ? ' An engine on scene buys time.' : ''}`,
       people: n, buildingId: b.id,
       action: canSend ? { kind: 'dispatch', buildingId: b.id, label: `Send ${free[0].name}` } : { kind: 'select', buildingId: b.id, label: 'Show' },
     });
@@ -270,18 +313,32 @@ function fireAdvice(input: AdvisorInput): Advice {
   }
 
   items.sort((a, c) => a.rank - c.rank);
-  // accounted for: of the residents told to leave, how many are out or confirmed safe
-  const told = persons.filter((p) => started.has(p.buildingId));
-  const out = told.filter((p) => p.status === 'out' || p.status === 'safe').length;
+  const { told, accounted, unaccounted } = headcount(persons, buildings);
+  const rescues = tasks.filter((t) => !t.done && t.claimedBy).length;
   const needHelp = tasks.filter((t) => !t.done).length;
   const lost = persons.filter((p) => p.status === 'left_behind').length;
   const urgent = items.filter((i) => i.tone === 'now').length;
+  const burning = buildings.filter((b) => real(b) && b.status === 'burning').length;
+  const watching = buildings.filter((b) => real(b) && (b.status === 'burning' || b.status === 'behind')).length;
+  const walking = unaccounted.filter((p) => p.status !== 'left_behind').length;
+  // never "On track" while someone still needs help or a building is burning
+  const [headline, detail] = urgent
+    ? [`${urgent} thing${urgent === 1 ? '' : 's'} to do now`, 'Most urgent first. People before property.']
+    : rescues
+      ? [`Staff are on ${rescues} rescue${rescues === 1 ? '' : 's'}`, `Everyone who asked for help has someone on the way.${watching ? ` Lantern is watching ${watching} building${watching === 1 ? '' : 's'} in the fire.` : ''}`]
+      : watching
+        ? [`Watching ${watching} building${watching === 1 ? '' : 's'}`, burning ? `${burning} on fire. Engines and staff are on it; Lantern flags anything new.` : 'The fire is close. Lantern flags anything new.']
+        : walking
+          ? [`${walking} resident${walking === 1 ? '' : 's'} still on the way out`, 'Lantern checks each one in at Shelter A.']
+          : lost
+            ? [`${lost} resident${lost === 1 ? '' : 's'} left behind`, 'Firefighters have their floor and room. Lantern is watching everyone else.']
+            : ['On track', 'Lantern is watching every building and every resident.'];
   return {
     phase: 'fire',
-    headline: urgent ? `${urgent} thing${urgent === 1 ? '' : 's'} to do now` : 'On track',
-    detail: urgent ? 'Most urgent first. People before property.' : 'Lantern is watching every building and every resident.',
+    headline,
+    detail,
     stats: [
-      { label: 'accounted for', value: told.length ? `${out}/${told.length}` : '—', tone: told.length && out === told.length ? 'ok' : undefined },
+      { label: 'accounted for', value: told.length ? `${accounted.length}/${told.length}` : '—', tone: told.length && accounted.length === told.length ? 'ok' : undefined },
       { label: 'need help', value: String(needHelp), tone: needHelp ? 'bad' : undefined },
       ...(units.length ? [{ label: 'engines free', value: `${free.length}/${units.length}` }] : []),
       ...(lost ? [{ label: 'left behind', value: String(lost), tone: 'bad' as const }] : []),
@@ -290,40 +347,69 @@ function fireAdvice(input: AdvisorInput): Advice {
   };
 }
 
-function endedAdvice(input: AdvisorInput): Advice {
+function endedAdvice(input: AdvisorInput, approved: Record<number, string[]>): Advice {
   const r = input.results;
   if (!r) return { phase: 'ended', headline: 'The fire is out', detail: 'Comparing with the same fire without Lantern…', stats: [], items: [] };
   const savedPeople = r.with.peopleSafe - r.without.peopleSafe;
   const avoided = r.without.damageUsd - r.with.damageUsd;
   const fewerClaims = r.without.claims - r.with.claims;
+  // were fixes actually made before the fire? (a risk fix lowers the building's risk; a van fix adds a van)
+  const fixedBuildings = input.buildings.filter((b) => real(b) && b.risk < b.baseRisk - 0.05);
+  const vans = Object.entries(approved).some(([id, keys]) => keys.some((k) => (input.fixesFor(Number(id)).find((f) => f.key === k)?.addVans ?? 0) > 0));
+  const fixed = fixedBuildings.length > 0 || vans;
+  const expected = portfolio(input.buildings, input.profileFor);
+  const across = expected && expected.avoided > 0
+    ? `Across many fires, these fixes cut expected claims by ${fmtUsd(Math.round(expected.avoided))}.`
+    : 'Across many fires, prep cuts expected claims.';
+  const missed = fixedBuildings.length > 0 && fixedBuildings.every((b) => !b.touched && b.status !== 'lost');
+  // Lantern's own run: who was left behind, and where
+  const leftBehind = input.persons.filter((p) => p.status === 'left_behind');
+  const left = leftBehind.length || Math.max(0, r.with.peopleTotal - r.with.peopleSafe);
+  const where = [...new Set(leftBehind.map((p) => p.buildingId))].map((id) => input.buildings.find((b) => b.id === id)).filter((b): b is Building => !!b);
+  const neverStarted = where.length > 0 && where.every((b) => !b.evacStarted);
+
+  const headline = savedPeople > 0 ? `${savedPeople} more ${savedPeople === 1 ? 'person' : 'people'} safe`
+    : savedPeople < 0 ? `${-savedPeople} fewer safe than without Lantern`
+      : !left ? (avoided > 0 ? `Everyone safe, ${fmtUsd(Math.round(avoided))} less damage` : 'Everyone safe')
+        : avoided > 0 ? `${fmtUsd(Math.round(avoided))} less damage` : 'Same outcome as without Lantern';
+  const parts: string[] = [];
+  if (avoided > 0) parts.push(`Compared with the same fire without Lantern: ${fmtUsd(Math.round(avoided))} less damage${fewerClaims > 0 ? ` and ${fewerClaims} fewer insurance claim${fewerClaims === 1 ? '' : 's'}` : ''}.`);
+  else if (avoided < 0) parts.push(`Same fire, but it burned a different path this time: ${fmtUsd(Math.round(-avoided))} more damage than without Lantern.`);
+  else parts.push(fixed ? 'Compared with the same fire without Lantern: the damage came out the same this time.' : 'Compared with the same fire without Lantern. Damage was the same: the buildings were not prepared before the fire.');
+  if (savedPeople < 0) parts.push('Some evacuations started late. Start them when the coach first asks.');
+
+  // prevention: from whether fixes were made, never claiming more than the results show
+  const prep: Instruction = !fixed
+    ? { id: 'why-prep', tone: 'soon', title: 'Next time: prepare first', why: 'Approve Lantern’s plan before the fire (Run again) to cut ignition risk and the claims that follow.' }
+    : avoided > 0
+      ? { id: 'why-prep', tone: 'good', title: 'Prevention paid first', why: 'Fixes made before the fire lowered ignition risk and documented Safer from Wildfires measures, so the claim never happens.' }
+      : {
+        id: 'why-prep', tone: 'info', title: 'Prevention paid first',
+        why: `${avoided === 0 && missed ? 'This fire missed the buildings you fixed, so the damage did not change.'
+          : `One fire is a roll of the dice, and this one ${avoided < 0 ? 'came out costlier' : 'did not come out cheaper'}.`} ${across}`,
+      };
+  const people: Instruction = !left
+    ? { id: 'why-people', tone: 'good', title: 'No one was overlooked', why: 'Every resident was asked if they were safe; silent ones and the ones who could not walk were sent to staff, most urgent first.' }
+    : {
+      id: 'why-people', tone: 'now', title: `${left} resident${left === 1 ? ' was' : 's were'} left behind${where.length ? ` at ${where.map((b) => b.name).join(' and ')}` : ''}`,
+      why: `${neverStarted ? 'The evacuation there never started.' : 'The evacuation there started too late.'} Run again and press Evacuate as soon as the coach asks for it.`,
+    };
   return {
     phase: 'ended',
-    headline: savedPeople > 0 ? `${savedPeople} more ${savedPeople === 1 ? 'person' : 'people'} safe`
-      : savedPeople < 0 ? `${-savedPeople} fewer safe than without Lantern`
-        : avoided > 0 ? `Everyone accounted for, ${fmtUsd(Math.round(avoided))} less damage` : 'Same outcome as without Lantern',
-    detail: savedPeople < 0 || avoided < 0
-      ? 'Same fire, but it took a different path once fixes changed which buildings caught, and some evacuations started late. Start them when the coach says.'
-      : avoided > 0
-        ? `Compared with the same fire without Lantern: ${fmtUsd(Math.round(avoided))} less damage${fewerClaims > 0 ? ` and ${fewerClaims} fewer insurance claim${fewerClaims === 1 ? '' : 's'}` : ''}.`
-        : 'Compared with the same fire without Lantern. Damage was the same: the buildings were not prepared before the fire.',
+    headline,
+    detail: parts.join(' '),
     stats: [
-      { label: 'safe', value: `${r.with.peopleSafe}/${r.with.peopleTotal}`, tone: 'ok' },
-      { label: 'without Lantern', value: `${r.without.peopleSafe}/${r.without.peopleTotal}`, tone: 'bad' },
+      // neutral colors when both runs kept the same number of people safe
+      { label: 'safe', value: `${r.with.peopleSafe}/${r.with.peopleTotal}`, tone: savedPeople > 0 ? 'ok' : savedPeople < 0 ? 'bad' : undefined },
+      { label: 'without Lantern', value: `${r.without.peopleSafe}/${r.without.peopleTotal}`, tone: savedPeople > 0 ? 'bad' : undefined },
       { label: 'buildings lost', value: `${r.with.buildingsLost} vs ${r.without.buildingsLost}` },
     ],
-    items: [
-      avoided > 0
-        ? { id: 'why-prep', tone: 'good', title: 'Prevention paid first', why: 'Fixes made before the fire lowered ignition risk and documented Safer from Wildfires measures, so the claim never happens.' }
-        : { id: 'why-prep', tone: 'soon', title: 'Next time: prepare first', why: 'Approve Lantern’s plan before the fire (Run again) to cut ignition risk and the claims that follow.' },
-      savedPeople >= 0
-        ? { id: 'why-people', tone: 'good', title: 'No one was overlooked', why: 'Every resident was asked if they were safe; silent ones and the ones who could not walk were sent to staff, most urgent first.' }
-        : { id: 'why-people', tone: 'now', title: 'Evacuate on the coach’s first call', why: 'People were left behind where the evacuation started after the coach first asked for it. Run again and press Evacuate as soon as it appears.' },
-    ],
+    items: [prep, people],
   };
 }
 
 export function advise(input: AdvisorInput, approved: Record<number, string[]>): Advice {
   if (input.sim.phase === 'prep') return prepAdvice(input, approved);
   if (input.sim.phase === 'fire') return fireAdvice(input);
-  return endedAdvice(input);
+  return endedAdvice(input, approved);
 }

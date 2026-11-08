@@ -1,12 +1,20 @@
 import { forwardRef, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Building, FireCell, Pack, Person, ScenarioResult, Sim, Task } from '../town/types';
-import { unaccounted, type LogEvent, type Unit } from '../town/mockWorld';
+import type { LogEvent, Unit } from '../town/mockWorld';
 import type { BuildingProfile, FixView, Measure, PreparedRule } from '../town/world';
 import { expectedLoss, fixAvoids, portfolio } from './impact';
+import { headcount, prepPlan, windFrom } from './advisor';
 import { STATUS_COLORS } from '../town/palettes';
 import { statusTag } from '../town/status';
 import { spriteUrl, spriteVariant } from '../town/scene';
-import { KIND_LABEL, fmtMin, fmtUsd } from './format';
+import { KIND_LABEL, fmtClock, fmtMin, fmtUsd } from './format';
+
+/** "1h 18m" → "1h18", for one-line list rows */
+function fmtShort(min: number): string {
+  if (min < 0 || !Number.isFinite(min)) return '—';
+  const m = Math.round(min);
+  return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m}m`;
+}
 
 interface DockProps {
   sim: Sim;
@@ -133,6 +141,11 @@ function prepList(p: DockProps): View {
   const avgRisk = Math.round(list.reduce((s, b) => s + b.risk, 0) / Math.max(1, list.length));
   const loss = portfolio(list, p.profileFor);
   const spent = list.reduce((s, b) => s + p.fixesFor(b.id).filter((f) => (p.approved[b.id] ?? []).includes(f.key)).reduce((t, f) => t + f.cost, 0), 0);
+  // what "Approve recommended fixes" would do right now (the server's approve_recommended, mirrored by the coach)
+  const plan = p.onRecommend ? prepPlan({ sim, buildings, persons: [], tasks: [], units: [], fixesFor: p.fixesFor, profileFor: p.profileFor }, (id, key) => (p.approved[id] ?? []).includes(key)) : [];
+  const left = list.flatMap((b) => p.fixesFor(b.id).filter((f) => !(p.approved[b.id] ?? []).includes(f.key)));
+  const planLabel = plan.length ? 'Approve recommended fixes'
+    : left.length && left.every((f) => f.cost > sim.budgetLeft) ? 'Budget spent' : 'All set';
   return {
     head: (
       <>
@@ -175,7 +188,7 @@ function prepList(p: DockProps): View {
     ),
     foot: (
       <>
-        {p.onRecommend && sim.budgetLeft > 0 && <button type="button" className="btn secondary wide" onClick={p.onRecommend}>Approve recommended fixes</button>}
+        {p.onRecommend && <button type="button" className="btn secondary wide" disabled={!plan.length} onClick={p.onRecommend}>{planLabel}</button>}
         <button type="button" className="btn fire wide" onClick={onStartFire}>Start the fire <Arrow /></button>
       </>
     ),
@@ -336,15 +349,17 @@ function Structure({ b }: { b: Building }) {
   );
 }
 
-function Log({ events }: { events: LogEvent[] }) {
+function Log({ events, sim }: { events: LogEvent[]; sim: Sim }) {
   if (!events.length) return null;
+  // the log carries ticks; the sim's own minutes per tick so far turn them into the top bar's clock (speed changes)
+  const perTick = sim.tick > 0 ? sim.simMinutes / sim.tick : sim.minutesPerTick;
   return (
     <>
       <h3 className="section">Incident log</h3>
       <ol className="log" aria-label="Incident log">
         {events.slice(0, 8).map((e) => (
           <li key={e.id} className={e.tone}>
-            <time>{`${Math.floor((e.tick * 2) / 60)}:${String((e.tick * 2) % 60).padStart(2, '0')}`}</time>
+            <time>{fmtClock(Math.min(sim.simMinutes, Math.round(e.tick * perTick)))}</time>
             <span>{e.text}</span>
           </li>
         ))}
@@ -356,13 +371,15 @@ function Log({ events }: { events: LogEvent[] }) {
 function fireHead(p: DockProps, tab: Tab, setTab: (t: Tab) => void): ReactNode {
   const list = p.buildings.filter((b) => b.kind !== 'shelter');
   const total = p.persons.length;
-  const safe = p.persons.filter((x) => x.status === 'out').length;
-  const missing = unaccounted(p.persons, p.buildings).length;
+  // the coach's headcount: safe = out or confirmed safe; unaccounted = told to leave and not yet out or safe
+  const { accounted, unaccounted } = headcount(p.persons, p.buildings);
+  const safe = accounted.length;
+  const missing = unaccounted.length;
   const atRisk = list.filter((b) => b.status === 'behind' || b.status === 'burning').length;
   const free = p.units.filter((u) => u.status === 'ready').length;
   return (
     <>
-      <p className="eyebrow step">Step 2 of 3 · wind SW {p.sim.windMph} mph</p>
+      <p className="eyebrow step">Step 2 of 3 · {windFrom(p.sim.windDirDeg)} wind {p.sim.windMph} mph</p>
       <h2 className="list-title">Fire response</h2>
       <Stats items={[
         { label: 'people safe', value: <>{safe}<small>/{total}</small></>, tone: safe === total ? 'ok' : '' },
@@ -398,7 +415,7 @@ function fireList(p: DockProps): ReactNode {
             ? `${b.residents} residents · ${b.needsHelp} need help`
             : b.status === 'burning'
               ? `${b.residents - b.peopleOut} still inside`
-              : b.fireEtaMin >= 0 ? `Fire in ${fmtMin(b.fireEtaMin)} · needs ${fmtMin(b.evacNeededMin)}` : `No fire path · needs ${fmtMin(b.evacNeededMin)}`;
+              : b.fireEtaMin >= 0 ? `Fire ${fmtShort(b.fireEtaMin)} · out in ${fmtShort(b.evacNeededMin)}` : `No fire path · out in ${fmtShort(b.evacNeededMin)}`;
           return (
             <li key={b.id} className="item" {...clickable(() => onSelect(b.id))}>
               <span className="thumb-wrap">
@@ -407,7 +424,7 @@ function fireList(p: DockProps): ReactNode {
               </span>
               <span className="item-text">
                 <span className="item-name">{b.name}{u && <span className="item-unit" title={u.name}><TruckIcon size={14} /></span>}</span>
-                <span className="item-detail">{detail}</span>
+                <span className="item-detail wrap">{detail}</span>
               </span>
               <RowAction b={b} sim={sim} onEvacuate={onEvacuate} />
             </li>
@@ -433,7 +450,7 @@ function incident(p: DockProps): ReactNode {
       <dl className="facts">
         <div><dt>Burning now</dt><dd className={burning ? 'bad' : ''}>{burning} cells</dd></div>
         <div><dt>Hills burned</dt><dd>{Math.min(100, Math.round((100 * burned) / hills))}%</dd></div>
-        <div><dt>Wind</dt><dd>SW {sim.windMph} mph</dd></div>
+        <div><dt>Wind from</dt><dd>{windFrom(sim.windDirDeg)} · {sim.windMph} mph</dd></div>
       </dl>
       {needs.length > 0 && (
         <>
@@ -456,7 +473,8 @@ function incident(p: DockProps): ReactNode {
       <ul className="list" aria-label="Units">
         {units.map((u) => {
           const b = buildings.find((x) => x.id === u.targetId);
-          const text = u.status === 'ready' ? 'At staging, ready' : u.status === 'enroute' ? `Responding to ${b?.name}` : u.status === 'returning' ? 'Returning to staging' : `On scene at ${b?.name}`;
+          const text = u.status === 'ready' ? 'At staging, ready' : u.status === 'enroute' ? `Responding to ${b?.name}` : u.status === 'returning' ? 'Returning to staging'
+            : b?.status === 'burning' ? `On scene at ${b.name}, water on` : `Standing by at ${b?.name}`;
           return (
             <li key={u.id} className="item static">
               <span className={`unit-badge ${u.status}`}><TruckIcon /></span>
@@ -466,7 +484,7 @@ function incident(p: DockProps): ReactNode {
           );
         })}
       </ul>
-      <Log events={p.events} />
+      <Log events={p.events} sim={sim} />
     </>
   );
 }
@@ -502,13 +520,16 @@ function fireDetail(p: DockProps, b: Building): View {
           </div>
         )}
         {(() => {
-          const missing = unaccounted(p.persons, p.buildings).filter((x) => x.buildingId === b.id);
-          const waiting = p.persons.filter((x) => x.buildingId === b.id && (x.status === 'cant_move' || x.status === 'claimed'));
-          if (!missing.length && !waiting.length) return null;
+          // the same headcount as the panel header and the coach: everyone told to leave who is not out or safe yet,
+          // the ones waiting for staff first
+          const rank = (s: Person['status']) => (s === 'cant_move' ? 0 : s === 'claimed' ? 1 : 2);
+          const missing = headcount(p.persons, p.buildings).unaccounted.filter((x) => x.buildingId === b.id).sort((x, y) => rank(x.status) - rank(y.status));
+          if (!missing.length) return null;
+          const tag = (x: Person) => (x.status === 'cant_move' ? ', waiting for staff' : x.status === 'claimed' ? ', staff on the way' : x.status === 'left_behind' ? ', left behind' : '');
           return (
             <div className="names">
-              {missing.length > 0 && <><h3 className="section">Unaccounted · {missing.length}</h3><p>{missing.slice(0, 12).map((x) => `${x.name} (fl ${x.floor})`).join(', ')}{missing.length > 12 ? ` and ${missing.length - 12} more` : ''}</p></>}
-              {waiting.length > 0 && <><h3 className="section">Waiting for staff · {waiting.length}</h3><p>{waiting.map((x) => `${x.name}${x.note ? `, ${x.note}` : ''}`).join(' · ')}</p></>}
+              <h3 className="section">Unaccounted · {missing.length}</h3>
+              <p>{missing.slice(0, 12).map((x) => `${x.name} (fl ${x.floor}${x.note ? `, ${x.note}` : ''}${tag(x)})`).join(' · ')}{missing.length > 12 ? ` and ${missing.length - 12} more` : ''}</p>
             </div>
           );
         })()}
@@ -571,7 +592,7 @@ function results(p: DockProps): View {
                 <span className="item-name">{b.name}</span>
                 <span className="item-detail">{b.peopleOut} of {b.residents} out</span>
               </span>
-              <span className={`state ${b.status === 'lost' ? 'muted' : 'ok'}`}>{b.status === 'lost' ? 'Collapsed' : b.touched ? 'Damaged' : 'Standing'}</span>
+              <span className={`state ${b.status === 'lost' ? 'muted' : b.touched ? 'warn' : 'ok'}`}>{b.status === 'lost' ? 'Collapsed' : b.touched ? 'Damaged' : 'Standing'}</span>
             </li>
           ))}
         </ul>

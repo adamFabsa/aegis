@@ -32,19 +32,26 @@ interface MarkerInfo { color: string; line: string; icon: IconName | null; badge
 function markerInfo(b: Building, phase: Sim['phase']): MarkerInfo {
   const badge = b.kind === 'shelter' ? 'A' : b.kind === 'homes' ? 'H' : (b.name.match(/\d+/) ?? [''])[0];
   if (b.kind === 'shelter') return { badge, color: STATUS_COLORS.green, line: 'Shelter', icon: 'house' };
+  if (phase === 'ended') {
+    // the fire is out: each building's final state, not the live race
+    if (b.status === 'lost') return { badge, color: STATUS_COLORS.gray, line: 'Collapsed', icon: 'x' };
+    const allOut = b.residents > 0 && (b.status === 'clear' || (b.evacStarted && b.peopleOut >= b.residents));
+    if (b.touched || b.status === 'burning') return { badge, color: STATUS_COLORS.amber, line: allOut ? 'Damaged · all out' : 'Damaged', icon: 'alert' };
+    return allOut ? { badge, color: STATUS_COLORS.green, line: 'Standing · all out', icon: 'check' } : { badge, color: STATUS_COLORS.green, line: 'Standing', icon: 'shield' };
+  }
   switch (b.status) {
     case 'burning': return { badge, color: STATUS_COLORS.red, line: (b.damage ?? 0) >= 2 ? 'Gutted' : 'Burning', icon: 'flame' };
     case 'lost': return { badge, color: STATUS_COLORS.gray, line: 'Collapsed', icon: 'x' };
     case 'clear': return { badge, color: STATUS_COLORS.green, line: 'All out', icon: 'check' };
     case 'evacuating': return { badge, color: STATUS_COLORS.amber, line: `${b.peopleOut}/${b.residents} out`, icon: 'walk' };
-    case 'behind': return { badge, color: STATUS_COLORS.red, line: `Behind · fire ${fmtMin(b.fireEtaMin)}`, icon: 'alert' };
+    case 'behind': return { badge, color: STATUS_COLORS.red, line: b.fireEtaMin >= 0 && b.fireEtaMin < 1 ? 'Behind · fire here' : `Behind · fire ${fmtMin(b.fireEtaMin)}`, icon: 'alert' };
   }
   if (phase === 'prep') {
     if (b.prepared) return { badge, color: STATUS_COLORS.green, line: 'Prepared', icon: 'shield' };
     const r = Math.round(b.risk);
     return { badge, color: r >= 70 ? STATUS_COLORS.red : r >= 40 ? STATUS_COLORS.amber : STATUS_COLORS.green, line: `Risk ${r}`, icon: null };
   }
-  return { badge, color: '#9AA6BA', line: b.fireEtaMin >= 0 ? `Fire in ${fmtMin(b.fireEtaMin)}` : 'No fire path', icon: null };
+  return { badge, color: '#9AA6BA', line: b.fireEtaMin < 0 ? 'No fire path' : b.fireEtaMin < 1 ? 'Fire here' : `Fire in ${fmtMin(b.fireEtaMin)}`, icon: null };
 }
 
 interface Placed { b: Building; info: MarkerInfo; x: number; y: number; roofY: number; w: number }

@@ -16,6 +16,8 @@ interface TopBarProps {
   onSpeed: (s: 1 | 2 | 4) => void;
   muted: boolean;
   onToggleMute: () => void;
+  /** a random scenario's name ("Scenario #48213"); the Eaton demo map leaves it out */
+  scenarioLabel?: string;
 }
 
 const LOOKS: { id: Look; label: string; hint: string }[] = [
@@ -36,7 +38,7 @@ function LanternMark() {
   );
 }
 
-export function TopBar({ sim, look, onLook, onPrepare, onStartFire, onTogglePause, onReset, speed, onSpeed, muted, onToggleMute }: TopBarProps) {
+export function TopBar({ sim, look, onLook, onPrepare, onStartFire, onTogglePause, onReset, speed, onSpeed, muted, onToggleMute, scenarioLabel }: TopBarProps) {
   const [menu, setMenu] = useState(false);
   const [menuPos, setMenuPos] = useState<CSSProperties>({});
   const menuBtn = useRef<HTMLButtonElement>(null);
@@ -62,7 +64,7 @@ export function TopBar({ sim, look, onLook, onPrepare, onStartFire, onTogglePaus
         <LanternMark />
         <span>Lantern</span>
       </div>
-      <p className="tb-sub">Eaton Fire replay · built for <img className="sf-inline" src="/brand/state-farm.svg" alt="State Farm" /></p>
+      <p className="tb-sub">{scenarioLabel ?? 'Eaton Fire replay'} · built for <img className="sf-inline" src="/brand/state-farm.svg" alt="State Farm" /></p>
 
       <ol className="stepper" aria-label="Simulation steps">
         {steps.map((s, i) => (
@@ -85,7 +87,7 @@ export function TopBar({ sim, look, onLook, onPrepare, onStartFire, onTogglePaus
       </ol>
 
       <div className="tb-tools">
-      <div className="status-pill">
+      <div className={`status-pill ${sim.phase}`}>
         {sim.phase === 'prep' ? (
           <><span className="pill-lbl">Budget</span><span className="pill-val">{fmtUsd(sim.budgetLeft)}</span></>
         ) : (

@@ -104,7 +104,13 @@ function ResidentView({ sim, buildings, persons, tasks, onReply, initialPerson }
 }
 
 function StaffView({ buildings, persons, tasks, onClaim, onDone, initialStaff }: PhoneProps) {
-  const crew = useMemo(() => buildings.filter((b) => b.staff > 0 && b.kind !== 'shelter').map((b) => ({ b, names: staffOf(b) })), [buildings]);
+  // each name once: the generated rosters can repeat a first name across buildings
+  const crew = useMemo(() => {
+    const seen = new Set<string>();
+    return buildings.filter((b) => b.staff > 0 && b.kind !== 'shelter')
+      .map((b) => ({ b, names: staffOf(b).filter((n) => !seen.has(n) && !!seen.add(n)) }))
+      .filter((g) => g.names.length > 0);
+  }, [buildings]);
   const [me, setMe] = useState(initialStaff ?? crew[0]?.names[0] ?? 'Alex');
   const [error, setError] = useState<string | null>(null);
   const open = tasks.filter((t) => !t.done).sort((a, b) => b.priority - a.priority || a.createdTick - b.createdTick);
@@ -164,6 +170,21 @@ function AdvisorView(props: PhoneProps) {
     profileFor: props.profileFor, checklistFor: props.checklistFor, results: props.results, selectedId: props.selectedId, canAssign: !!props.onAssign,
   }, props.approved ?? {}), [sim, buildings, persons, tasks, props.units, props.fixesFor, props.profileFor, props.checklistFor, props.results, props.selectedId, props.approved, props.onAssign]);
   const [busy, setBusy] = useState<Set<string>>(() => new Set());
+  // Only a card the list has not shown before slides in. A CSS animation would replay whenever React moves a
+  // card to a new rank (a DOM move restarts it), so the entrance is a one-off Web Animation started from the
+  // card's ref; cards that leave are forgotten, so one that comes back later slides in again.
+  const shown = useRef(new Set<string>());
+  const ids = advice.items.map((it) => it.id).join('|');
+  useEffect(() => {
+    const now = new Set(ids.split('|'));
+    for (const id of shown.current) if (!now.has(id)) shown.current.delete(id);
+  }, [ids]);
+  const enter = (id: string) => (el: HTMLLIElement | null) => {
+    if (!el || shown.current.has(id)) return;
+    shown.current.add(id);
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    el.animate?.([{ opacity: 0, transform: 'translateY(8px) scale(0.985)' }, { opacity: 1, transform: 'none' }], { duration: 300, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+  };
   const [error, setError] = useState<string | null>(null);
   // a pressed button stays disabled until the shared state moves on (the card then changes or disappears)
   const stamp = `${sim.phase}:${sim.tick}:${sim.budgetLeft}`;
@@ -177,7 +198,11 @@ function AdvisorView(props: PhoneProps) {
     else if (a.kind === 'plan') props.onRecommend?.();
     else if (a.kind === 'evacuate') props.onEvacuate?.(a.buildingId);
     else if (a.kind === 'dispatch') r = await props.onDispatch?.(a.buildingId);
-    else if (a.kind === 'assign') r = await props.onAssign?.(a.taskId);
+    else if (a.kind === 'assign') {
+      // one assign_staff per resident; a grouped card sends staff to all of them
+      const rs = await Promise.all(a.taskIds.map((t) => props.onAssign?.(t)));
+      r = rs.find((x): x is string => typeof x === 'string' && !!x) ?? null;
+    }
     else props.onSelect?.(a.buildingId);
     if (a.kind === 'select') setBusy((b) => { const n = new Set(b); n.delete(id); return n; });
     if (typeof r === 'string') { setError(r); setBusy((b) => { const n = new Set(b); n.delete(id); return n; }); }
@@ -186,7 +211,8 @@ function AdvisorView(props: PhoneProps) {
     <div className="phone-body ai">
       <div className="ai-head">
         <p className="ai-kicker"><span className="ai-spark" aria-hidden="true" />Lantern AI · {sim.phase === 'prep' ? 'before the fire' : sim.phase === 'fire' ? 'live' : 'debrief'}</p>
-        <h3 className="ai-headline" key={advice.headline}>{advice.headline}</h3>
+        {/* updated in place (no remount, no fade): the headline is never blank between two updates */}
+        <h3 className="ai-headline">{advice.headline}</h3>
         <p className="ai-detail">{advice.detail}</p>
         {advice.stats.length > 0 && (
           <dl className="ai-stats">
@@ -203,7 +229,8 @@ function AdvisorView(props: PhoneProps) {
       {error && <p className="phone-error" role="alert">{error}</p>}
       <ol className="ai-list" aria-live="polite">
         {advice.items.map((it, i) => (
-          <li key={it.id} className={`ai-card ${it.tone}`} style={{ animationDelay: `${Math.min(i, 5) * 60}ms` }}>
+          // stable keys: a card that stays keeps its element and only its text changes
+          <li key={it.id} ref={enter(it.id)} className={`ai-card ${it.tone}`}>
             <span className="ai-step" aria-hidden="true">{it.tone === 'good' ? '✓' : it.tone === 'info' ? '•' : i + 1}</span>
             <div className="ai-body">
               <b className="ai-title">{it.title}</b>

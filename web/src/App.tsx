@@ -229,6 +229,7 @@ export default function App() {
               onTogglePause={world.togglePause}
               speed={world.speed} onSpeed={world.setSpeed}
               muted={muted} onToggleMute={toggleMute}
+              scenarioLabel={scenario && scenario.number !== 0 ? scenario.label : undefined}
               onReset={() => { world.reset(); setSelectedId(null); }}
             />
           }
