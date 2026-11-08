@@ -8,7 +8,7 @@ import { DbConnection } from '../module_bindings';
 import type * as Rows from '../module_bindings/types';
 import type { Building, BuildingKind, BuildingStatus, FireCell, Person, PersonStatus, Phase, ScenarioResult, Sim, Task } from './types';
 import type { LogEvent, Unit } from './mockWorld';
-import type { BuildingProfile, ConnectionState, FixView, Measure, WorldApi } from './world';
+import type { BuildingProfile, ConnectionState, FixView, Measure, ScenarioInfo, WorldApi } from './world';
 import { CELL } from './iso';
 
 const q = new URLSearchParams(window.location.search);
@@ -38,6 +38,7 @@ interface Snapshot {
   devices: number;
   workerOnline: boolean;
   units: Unit[];
+  scenario?: ScenarioInfo;
 }
 
 const EMPTY_SIM: Sim = { phase: 'prep', running: false, tick: 0, simMinutes: 0, minutesPerTick: 2, budgetLeft: 0, windDirDeg: 225, windMph: 0 };
@@ -122,6 +123,7 @@ class LiveStore {
     c.db.buildingProfile.onInsert(touch); c.db.buildingProfile.onUpdate(touch); c.db.buildingProfile.onDelete(touch);
     c.db.mitigation.onInsert(touch); c.db.mitigation.onUpdate(touch); c.db.mitigation.onDelete(touch);
     c.db.unit.onInsert(touch); c.db.unit.onUpdate(touch); c.db.unit.onDelete(touch);
+    c.db.scenario.onInsert(touch); c.db.scenario.onUpdate(touch); c.db.scenario.onDelete(touch);
     c.db.fireCell.onInsert(touch);
     c.db.fireCell.onDelete(touch);
     c.db.fireCell.onUpdate((_ctx, oldRow, newRow) => {
@@ -204,9 +206,16 @@ class LiveStore {
       id: u.id, name: u.name, status: u.status as Unit['status'], targetId: u.targetId || null, ticksLeft: u.ticksLeft, travelTicks: u.travelTicks,
     }));
 
+    const sc = c.db.scenario.id.find(0);
+    // keep the same object while nothing changed, so the map does not re-render for it
+    const prevSc = this.snapshot.scenario;
+    const scenario: ScenarioInfo | undefined = !sc ? undefined
+      : prevSc && prevSc.number === sc.number && prevSc.label === sc.label && prevSc.ignitionX === sc.ignitionX && prevSc.ignitionY === sc.ignitionY && prevSc.picked === sc.picked ? prevSc
+        : { number: sc.number, label: sc.label, ignitionX: sc.ignitionX, ignitionY: sc.ignitionY, picked: sc.picked };
+
     this.snapshot = {
       sim, buildings, cells, persons, tasks, events, approved, fixes, results: w && wo ? { with: strip(w), without: strip(wo) } : undefined, connection: this.snapshot.connection,
-      profiles, checklists, devices: present.length, workerOnline: present.some((x) => x.worker), units,
+      profiles, checklists, devices: present.length, workerOnline: present.some((x) => x.worker), units, scenario,
     };
     this.emit();
   }
@@ -259,6 +268,8 @@ export function useLiveWorld(): WorldApi {
     claimTask: (taskId: number, staffName: string) => store.call((c) => c.reducers.claimTask({ taskId: BigInt(taskId), staffName })),
     completeTask: (taskId: number) => store.call((c) => c.reducers.completeTask({ taskId: BigInt(taskId) })),
     assignStaff: (taskId: number) => store.call((c) => c.reducers.assignStaff({ taskId: BigInt(taskId) })),
+    newScenario: (number: number) => store.call((c) => c.reducers.newScenario({ number: Math.max(0, Math.round(number)) })),
+    setIgnition: (cellX: number, cellY: number) => store.call((c) => c.reducers.setIgnition({ cellX: Math.max(0, Math.floor(cellX)), cellY: Math.max(0, Math.floor(cellY)) })),
   }), []);
   const fixesFor = useMemo(() => {
     const by = new Map<number, FixView[]>();
@@ -281,6 +292,7 @@ export function useLiveWorld(): WorldApi {
     profileFor: (id: number) => snap.profiles.get(id),
     checklistFor: (id: number) => snap.checklists.get(id) ?? [],
     live: { devices: snap.devices, workerOnline: snap.workerOnline },
+    scenario: snap.scenario,
     ...actions,
   };
 }

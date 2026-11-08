@@ -32,6 +32,10 @@ interface MapViewProps {
   units?: Unit[];
   /** real seconds per server tick (live 1.0, mock 0.7): fire engines drive at the speed this implies */
   tickSeconds?: number;
+  /** scenario: trees and brush scatter, where the fire starts, and picking a new fire start (map units) */
+  plantSeed?: number;
+  ignition?: { x: number; y: number; picked: boolean } | null;
+  onPickGround?: (x: number, y: number) => void;
 }
 
 /** How long the old look (dusk / night, fire damage) takes to dissolve into the new one. */
@@ -103,7 +107,7 @@ function clampCam(c: Cam, w: number, h: number, I: Ins): Cam {
   return { k, x: cx - mx / k, y: cy - my / k };
 }
 
-export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect, topInset = 0, bottomInset = 0, leftInset = 0, rightInset = 0, onPhone, rotation = 0, onRotate, lite = false, units, tickSeconds = TICK_SECONDS }: MapViewProps) {
+export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect, topInset = 0, bottomInset = 0, leftInset = 0, rightInset = 0, onPhone, rotation = 0, onRotate, lite = false, units, tickSeconds = TICK_SECONDS, plantSeed, ignition, onPickGround }: MapViewProps) {
   const ghost = useGhost(pack, sim.phase, buildings, fireCells);
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -212,7 +216,12 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
     cancelAnimationFrame(anim.current);
     if (pointers.current.size === 0) moved.current = 0;
     pointers.current.set(e.pointerId, local(e));
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    // no pointer capture yet: capturing on down retargets a plain click to the map itself (buildings never get it)
+  };
+  /** Once the pointer really drags, keep the gesture even if it leaves the map. */
+  const capture = (e: React.PointerEvent) => {
+    const el = e.currentTarget as HTMLElement;
+    if (!el.hasPointerCapture(e.pointerId)) el.setPointerCapture(e.pointerId);
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -225,8 +234,9 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
       const dx = p.x - prev.x;
       const dy = p.y - prev.y;
       moved.current += Math.abs(dx) + Math.abs(dy);
-      if (moved.current > 4) setUserCam(clampCam({ k: c.k, x: c.x - dx / c.k, y: c.y - dy / c.k }, w, h, I));
+      if (moved.current > 4) { capture(e); setUserCam(clampCam({ k: c.k, x: c.x - dx / c.k, y: c.y - dy / c.k }, w, h, I)); }
     } else if (pointers.current.size === 2) {
+      capture(e);
       const other = [...pointers.current.entries()].find(([id]) => id !== e.pointerId)![1];
       const d0 = Math.hypot(prev.x - other.x, prev.y - other.y);
       const d1 = Math.hypot(p.x - other.x, p.y - other.y);
@@ -260,6 +270,25 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
     const [sx, sy] = project(b.x + b.w / 2, b.y + b.h / 2, (SPRITE[b.kind].roof * spriteScale(b)) / 2);
     animateTo(clampCam(centerOn(c.k, sx, sy, L.w, L.h, L.I), L.w, L.h, L.I));
   }, [animateTo]);
+
+  // A new fire start (new scenario, or picked) glides into view if it is off screen or under the map controls.
+  const lastIgnition = useRef(ignition);
+  useEffect(() => {
+    const prev = lastIgnition.current;
+    lastIgnition.current = ignition;
+    const c = camRef.current;
+    if (!ignition || !prev || !c || (prev.x === ignition.x && prev.y === ignition.y)) return;
+    const L = live.current;
+    const B = band(L.w, L.h, L.I);
+    const [sx, sy] = project(ignition.x, ignition.y);
+    const px = (sx - c.x) * c.k;
+    const py = (sy - c.y) * c.k;
+    // room for the marker's callout (up and in) and the zoom column on the right
+    const x0 = L.I.left + 40, x1 = L.I.left + B.vw - 100, y0 = L.I.top + 110, y1 = L.I.top + B.vh - 40;
+    const dx = px < x0 ? px - x0 : px > x1 ? px - x1 : 0;
+    const dy = py < y0 ? py - y0 : py > y1 ? py - y1 : 0;
+    if (dx || dy) animateTo(clampCam({ k: c.k, x: c.x + dx / c.k, y: c.y + dy / c.k }, L.w, L.h, L.I));
+  }, [ignition, animateTo]);
 
   // When the town turns, keep the spot that was in the middle of the view in the middle, and fade the turn.
   const lastRot = useRef(rotation);
@@ -301,18 +330,20 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
   const ready = cam !== null;
   const assets = useAssetVersion();
   const town = useMemo(
-    () => (ready ? <Town sim={sim} buildings={buildings} fireCells={fireCells} pack={pack} selectedId={selectedId} onSelect={select} svgRef={svgRef} tagScale={tagScale} lite={lite} units={units} rotation={rotation} assets={assets} ghost={ghost} tickSeconds={tickSeconds} /> : null),
-    [ready, sim, buildings, fireCells, pack, selectedId, select, tagScale, lite, units, rotation, assets, ghost, tickSeconds],
+    () => (ready ? <Town sim={sim} buildings={buildings} fireCells={fireCells} pack={pack} selectedId={selectedId} onSelect={select} svgRef={svgRef} tagScale={tagScale} lite={lite} units={units} rotation={rotation} assets={assets} ghost={ghost} tickSeconds={tickSeconds}
+      plantSeed={plantSeed} ignition={ignition} onPick={onPickGround} /> : null),
+    [ready, sim, buildings, fireCells, pack, selectedId, select, tagScale, lite, units, rotation, assets, ghost, tickSeconds, plantSeed, ignition, onPickGround],
   );
 
   return (
     <div
       ref={ref}
-      className="map"
+      className={onPickGround ? 'map picking' : 'map'}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      onPointerLeave={onPointerUp}
       onClickCapture={(e) => {
         if (moved.current > 8 && !(e.target as HTMLElement).closest('.map-chrome')) {
           e.stopPropagation();

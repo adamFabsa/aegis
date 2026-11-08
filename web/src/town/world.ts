@@ -50,6 +50,18 @@ export interface LiveInfo {
   workerOnline: boolean;
 }
 
+/** The world being played (scenario table): the Eaton demo map (number 0) or a random scenario. */
+export interface ScenarioInfo {
+  number: number;
+  /** "Eaton demo" / "Scenario #48213" */
+  label: string;
+  /** where the fire starts, map units (centre of the ignition cells) */
+  ignitionX: number;
+  ignitionY: number;
+  /** the fire start was picked on the map */
+  picked: boolean;
+}
+
 /** Errors come back as a message (null = ok). Live calls are async, mock calls are not. */
 export type Result = string | null | Promise<string | null>;
 
@@ -71,6 +83,12 @@ export interface WorldApi {
   profileFor?: (buildingId: number) => BuildingProfile | undefined;
   checklistFor?: (buildingId: number) => Measure[];
   live?: LiveInfo;
+  /** live only: random scenarios on the same town, and where the fire starts */
+  scenario?: ScenarioInfo;
+  /** live only: a new random world (1–99999; 0 = back to the Eaton demo map). Resets to prep. */
+  newScenario?: (number: number) => Result;
+  /** live only, prep only: start the fire in fire-grid cell (cellX, cellY) instead */
+  setIgnition?: (cellX: number, cellY: number) => Result;
   setSpeed: (s: 1 | 2 | 4) => void;
   setPhase: (phase: Phase) => void;
   startEvacuation: (id: number) => void;

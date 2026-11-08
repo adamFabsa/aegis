@@ -636,3 +636,50 @@ h2, p { margin: 0; }
 .bcard-actions .btn { flex: 1; min-width: 0; }
 .bcard-error { font-size: 12.5px; font-weight: 600; color: var(--red); }
 @media (prefers-reduced-motion: reduce) { .bcard { animation-duration: 0.01s; } }
+/* ------------------------------------------------------------------ scenarios: new world, demo map, pick the fire start */
+.chrome-row { position: absolute; z-index: 2; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; max-width: calc(100% - 24px); pointer-events: none; }
+.chrome-row > * { pointer-events: auto; }
+.chrome-row > .map-chrome:not(.pick-banner) { position: relative; }
+.scenario-bar { display: flex; align-items: center; gap: 6px; padding: 5px 6px 5px 12px; border-radius: 12px; min-height: 42px; }
+.sc-label { display: flex; flex-direction: column; line-height: 1.15; margin-right: 6px; min-width: 0; }
+.sc-label small { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.sc-label small.err { color: #FF8A80; text-transform: none; letter-spacing: 0; white-space: normal; max-width: 220px; }
+.sc-label b { font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; animation: ai-fade 420ms ease both; }
+.sc-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--border-2);
+  background: #222B3D; color: var(--text); font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.sc-btn:hover:not(:disabled) { background: var(--amber); border-color: var(--amber); color: #0B0F17; }
+.sc-btn:disabled { opacity: 0.6; cursor: progress; }
+.sc-btn svg { flex: none; }
+.sc-btn.pick { color: #FFB38A; }
+.sc-btn.pick.on, .sc-btn.pick.on:hover:not(:disabled) { background: #FF6A1F; border-color: #FF6A1F; color: #0B0F17; }
+.sc-btn.busy svg { animation: sc-spin 0.9s linear infinite; }
+@keyframes sc-spin { to { transform: rotate(360deg); } }
+.scenario-bar.compact { padding: 4px; gap: 4px; min-height: 0; }
+.scenario-bar.compact .sc-btn { width: 32px; height: 32px; padding: 0; justify-content: center; }
+.sc-num { font-size: 11px; font-weight: 700; padding: 0 4px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* pick mode: crosshair over the board, buildings stop taking the click (the ground underneath does) */
+.map.picking, .map.picking:active { cursor: crosshair; }
+.map.picking .town-svg [role="button"] { pointer-events: none !important; }
+.pick-ground { pointer-events: all; cursor: crosshair; }
+.pick-banner {
+  position: fixed; top: 16px; z-index: 3; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; border-radius: 14px;
+  border-color: rgba(255, 106, 31, 0.6); transform: translateX(-50%); animation: pb-in 0.25s ease both; width: max-content;
+}
+.pb-flame { color: #FF8A3D; display: grid; place-items: center; }
+.pb-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; line-height: 1.3; }
+.pb-text b { font-size: 13.5px; }
+.pb-text small { font-size: 12px; color: var(--muted); }
+.pb-text small.err { color: #FF8A80; font-weight: 600; }
+@keyframes pb-in { from { opacity: 0; transform: translate(-50%, -6px); } }
+@media (max-width: 760px) {
+  .pick-banner { top: calc(12px + env(safe-area-inset-top)); left: 8px; right: 56px; width: auto; transform: none; animation-name: ai-fade; }
+}
+
+/* the fire-start marker's flame flickers from its base */
+.ignition-flame { transform-box: fill-box; transform-origin: 50% 100%; animation: ig-flicker 1.1s ease-in-out infinite alternate; }
+@keyframes ig-flicker { 0% { transform: scale(1, 1); } 45% { transform: scale(0.93, 1.09); } 100% { transform: scale(1.05, 0.95); } }
+@media (prefers-reduced-motion: reduce) { .ignition-flame, .sc-btn.busy svg { animation: none; } }

@@ -3,10 +3,10 @@ import type { Building, FireCell, Ghost, Pack, Sim } from './types';
 import { CELL, MAP_H, MAP_W, VIEW_H, VIEW_W, depthOf, groundMatrix, pointsAttr, project, projectRaw, projectVec, rotRect, viewRotation, windScreen, windVector } from './iso';
 import {
   GROUND_PLATE, LAMPS, groundUrl, PROP_BOX, SPRITE, SPRITE_BOX, propUrl,
-  evacRoute, generatePlants, previousVariant, ridgePaths, spriteScale, spriteUrl, spriteVariant,
+  evacRoute, generatePlants, previousVariant, ridgePaths, spriteScale, spriteUrl, spriteVariant, type Plant,
 } from './scene';
 import { PALETTES, STATUS_COLORS, type GroundPalette } from './palettes';
-import { Markers, StreetLife } from './markers';
+import { IgnitionMarker, Markers, StreetLife } from './markers';
 import { FireUnits } from './trucks';
 import { WindStreaks } from './wind';
 import { WindowLayer } from './WindowLayer';
@@ -36,6 +36,12 @@ interface TownProps {
   ghost?: Ghost | null;
   /** real seconds per server tick, for the fire engines' driving speed */
   tickSeconds?: number;
+  /** trees and brush scatter (7 = the demo map; scenarios pass their number) */
+  plantSeed?: number;
+  /** where the fire will start (map units): marked on the ground before the fire */
+  ignition?: { x: number; y: number; picked: boolean } | null;
+  /** picking the fire start: a click on the ground reports its map point instead of selecting */
+  onPick?: (x: number, y: number) => void;
 }
 
 /** True while `on`, and for `ms` after it turns off (so a layer can fade out instead of popping). */
@@ -53,6 +59,24 @@ function useLinger(on: boolean, ms: number): boolean {
   }, [linger, ms]);
   return on || linger;
 }
+
+/** The value a change just replaced, for `ms` (so the old one can dissolve while the new one fades in). */
+function useOutgoing<T>(value: T, ms: number): T | null {
+  const [out, setOut] = useState<T | null>(null);
+  const [was, setWas] = useState(value);
+  if (was !== value) {
+    setWas(value);
+    setOut(was);
+  }
+  useEffect(() => {
+    if (out === null) return;
+    const t = setTimeout(() => setOut(null), ms);
+    return () => clearTimeout(t);
+  }, [out, ms]);
+  return out;
+}
+
+const plantKey = (p: Plant) => `${Math.round(p.x)}_${Math.round(p.y)}_${p.type}`;
 
 const cellKey = (x: number, y: number) => y * 1000 + x;
 function stateMap(cells: FireCell[]): Map<number, number> {
@@ -355,7 +379,7 @@ const COOL_TICKS = 7;
 /** Stable 0..1 jitter per cell so neighbours ignite a few hundred ms apart instead of in lockstep. */
 const jitter = (id: number) => ((id * 2654435761) % 1000) / 1000;
 
-export const Town = memo(function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, svgRef, tagScale = 1, lite = false, units = [], rotation = 0, assets = 0, ghost = null, tickSeconds = TICK_SECONDS }: TownProps) {
+export const Town = memo(function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, svgRef, tagScale = 1, lite = false, units = [], rotation = 0, assets = 0, ghost = null, tickSeconds = TICK_SECONDS, plantSeed = 7, ignition = null, onPick }: TownProps) {
   const P = PALETTES[pack];
   // MapView captures the pointer to pan, so the browser hands the click to the map element, not to the building
   // under it: remember what the press landed on and act on the click that follows (MapView swallows drags).
@@ -379,12 +403,18 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
     return ghost && o ? { variant: spriteVariant(ghost.pack, o.status, o.damage ?? 0), epoch: ghost.epoch } : null;
   };
   const leftFire = ghost !== null && ghost.phase !== 'prep' && sim.phase === 'prep';
-  // plants only depend on building footprints, which never change during a run
+  // plants only depend on building footprints, which never change during a run, and the scenario's seed
   const footprintKey = buildings.map((b) => `${b.x},${b.y},${b.w},${b.h}`).join('|');
   const plants = useMemo(
-    () => generatePlants(footprintKey.split('|').map((s) => { const [x, y, w, h] = s.split(',').map(Number); return { x, y, w, h }; })),
-    [footprintKey],
+    () => generatePlants(footprintKey.split('|').map((s) => { const [x, y, w, h] = s.split(',').map(Number); return { x, y, w, h }; }), plantSeed),
+    [footprintKey, plantSeed],
   );
+  // a new scenario re-scatters the trees and brush: the ones that moved dissolve while the new ones grow in
+  const oldPlants = useOutgoing(plants, 2100);
+  const oldKeys = useMemo(() => (oldPlants ? new Set(oldPlants.map(plantKey)) : null), [oldPlants]);
+  // the fire-start marker shows before the fire and fades out once it starts (the scenario row stays)
+  const igOn = sim.phase === 'prep' && !!ignition;
+  const igShown = useLinger(igOn, 1400);
   const shelter = buildings.find((b) => b.kind === 'shelter');
 
   const cellState = useMemo(() => stateMap(fireCells), [fireCells]);
@@ -418,7 +448,13 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
   // ---------------- billboards sorted back-to-front by map depth (x + y)
   const items: { depth: number; key: string; node: ReactNode }[] = [];
   const propSize = (type: string, i: number) => (type === 'shrub' ? 0.8 : type === 'palm' ? 1.12 : 0.92) + ((i * 37) % 10) / 40;
+  const plantKeys = new Set<string>();
   for (const [i, p] of plants.entries()) {
+    // keyed by place: a tree that stays put across scenarios keeps its element (no flicker)
+    let pk = plantKey(p);
+    if (plantKeys.has(pk)) pk += `_${i}`;
+    plantKeys.add(pk);
+    const grows = oldKeys !== null && !oldKeys.has(pk);
     const k = cellKey(Math.floor(p.x / CELL), Math.floor(p.y / CELL));
     const st = cellState.get(k) ?? 0;
     const gst = ghostCells ? (ghostCells.get(k) ?? 0) : st;
@@ -439,14 +475,26 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
     const fromChanged = ghost && !wasGone && (gType !== type || gone || ghost.pack !== pack);
     items.push({
       depth: depthOf(p.x, p.y),
-      key: `p${i}`,
+      key: `p${pk}`,
       node: (
         <>
-          {!gone && img(type, pack, ghost && wasGone ? 'fx-in' : undefined, 'cur')}
+          {!gone && img(type, pack, (ghost && wasGone) || grows ? 'fx-in' : undefined, 'cur')}
           {fromChanged && img(gType, ghost.pack, 'pack-out', `from${ghost.epoch}`)}
         </>
       ),
     });
+  }
+  if (oldPlants) {
+    for (const [i, p] of oldPlants.entries()) {
+      if (plantKeys.has(plantKey(p))) continue;
+      const [px, py] = project(p.x, p.y);
+      const sc = propSize(p.type, i);
+      items.push({
+        depth: depthOf(p.x, p.y),
+        key: `o${plantKey(p)}_${i}`,
+        node: <image className="pack-out" href={propUrl(p.type, pack)} x={px - PROP_BOX.ax * sc} y={py - PROP_BOX.ay * sc} width={PROP_BOX.w * sc} height={PROP_BOX.h * sc} preserveAspectRatio="none" style={{ pointerEvents: 'none' }} />,
+      });
+    }
   }
   for (const b of buildings) {
     items.push({
@@ -560,6 +608,17 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
             <animate attributeName="stroke-dashoffset" from="24" to="0" dur="1.4s" repeatCount="indefinite" />
           </path>
         ))}
+        {/* picking the fire start: the whole board takes the click, read back in map units through this layer's transform */}
+        {onPick && (
+          <rect className="pick-ground" x="0" y="0" width={MAP_W} height={MAP_H} fill="transparent"
+            onClick={(e) => {
+              e.stopPropagation();
+              const m = e.currentTarget.getScreenCTM();
+              if (!m) return;
+              const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse());
+              onPick(p.x, p.y);
+            }} />
+        )}
       </g>
 
       {/* cars, strolling residents, evacuation columns and vans; engines on the road */}
@@ -599,6 +658,9 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
           </g>
         </g>
       )}
+
+      {/* where the fire will start: glides when the start moves, fades out as the fire takes over */}
+      {igShown && ignition && <IgnitionMarker key={`ig${rotation}`} x={ignition.x} y={ignition.y} picked={ignition.picked} scale={tagScale} visible={igOn} />}
 
       {/* waypoint markers: stem + numbered diamond + halo lettering (no pills) */}
       <Markers buildings={buildings} phase={sim.phase} scale={tagScale} selectedId={selectedId} />
