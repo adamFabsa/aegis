@@ -170,6 +170,8 @@ export default function App() {
         topInset={insets.top} bottomInset={insets.bottom} leftInset={insets.left} rightInset={showFrame ? 336 : 0} lite={lite} units={units}
         rotation={rotation} onRotate={[1, 2, 3].every((r) => ready(spriteUrl('homes', pack, r)) && ready(spriteUrl('office', pack, r))) ? onRotate : undefined}
         onPhone={vw >= 1180 && !phoneOpen ? () => setPhoneOpen(true) : undefined}
+        // the live module ticks once per second; the mock runs its own clock
+        tickSeconds={MOCK ? undefined : 1}
       />
       {world.live && (
         <LiveChip tick={sim.tick} phase={sim.phase} devices={world.live.devices} worker={world.live.workerOnline}
