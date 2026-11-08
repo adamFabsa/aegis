@@ -12,6 +12,7 @@ import * as S from './sim';
 import { SEED } from './seed_data';
 import { DATA_SOURCES, applyFixToChecklist, mitigationRows, type MitigationRow } from './insurance';
 import * as U from './units';
+import * as SC from './scenario';
 export default db;
 type Context = ReducerCtx<typeof db.schemaType>;
 
@@ -33,8 +34,9 @@ function requireFire(ctx: Context) {
 
 // The stored seed is validated once by seed_world/init; cache the parsed copy (keyed by its JSON).
 let seedCache: { json: string; seed: S.Seed } | undefined;
+/** The world being played: the current scenario (row 1) if there is one, else the base seed (row 0). */
 function storedSeed(ctx: Context): S.Seed {
-  const json = ctx.db.worldSeed.id.find(0)?.json ?? reject('seed world first');
+  const json = ctx.db.worldSeed.id.find(1)?.json ?? ctx.db.worldSeed.id.find(0)?.json ?? reject('seed world first');
   if (seedCache?.json !== json) seedCache = { json, seed: JSON.parse(json) as S.Seed };
   return seedCache.seed;
 }
@@ -155,12 +157,29 @@ function seedWorld(ctx: Context, seed: S.Seed) {
     for (const m of mitigationRows(b)) ctx.db.mitigation.insert(m);
   }
   savePings(ctx, {});
+  writeScenario(ctx, seed);
   log(ctx, 'World seeded — simulated neighborhood; fire calibrated to the 2025 Eaton Fire; risk from CAL FIRE DINS', 0);
 }
-function storeSeed(ctx: Context, seed: S.Seed) {
-  const row = { id: 0, json: JSON.stringify(seed) };
-  if (ctx.db.worldSeed.id.find(0)) ctx.db.worldSeed.id.update(row);
+/** Row 0 = the base seed (pipeline / admin); row 1 = the current random scenario built from it. */
+function storeSeed(ctx: Context, seed: S.Seed, id = 0) {
+  const row = { id, json: JSON.stringify(seed) };
+  if (ctx.db.worldSeed.id.find(id)) ctx.db.worldSeed.id.update(row);
   else ctx.db.worldSeed.insert(row);
+  if (id === 0 && ctx.db.worldSeed.id.find(1)) ctx.db.worldSeed.id.delete(1); // a new base drops the old scenario
+}
+function baseSeed(ctx: Context): S.Seed {
+  return JSON.parse(ctx.db.worldSeed.id.find(0)?.json ?? reject('seed world first')) as S.Seed;
+}
+/** The public scenario row; the ignition point always follows the world's seed. */
+function writeScenario(ctx: Context, seed: S.Seed, meta?: { number: number; label: string; picked: boolean }) {
+  const p = seed.params;
+  const cells = p.ignition.length ? p.ignition : [0];
+  const ignitionX = (cells.reduce((s, c) => s + (c % p.cols), 0) / cells.length + 0.5) * p.cellSize;
+  const ignitionY = (cells.reduce((s, c) => s + Math.floor(c / p.cols), 0) / cells.length + 0.5) * p.cellSize;
+  const prev = ctx.db.scenario.id.find(0);
+  const row = { id: 0, number: meta?.number ?? prev?.number ?? 0, label: meta?.label ?? prev?.label ?? 'Eaton demo', picked: meta?.picked ?? prev?.picked ?? false, ignitionX, ignitionY };
+  if (prev) ctx.db.scenario.id.update(row);
+  else ctx.db.scenario.insert(row);
 }
 
 // ───────────────────────────── lifecycle ─────────────────────────────
@@ -169,6 +188,7 @@ export const init = db.init((ctx) => {
   ctx.db.admin.insert({ id: 0, identity: ctx.sender, worker: undefined });
   const seed = parseSeed(JSON.stringify(SEED)); // the pipeline's seed, validated like any other
   storeSeed(ctx, seed);
+  writeScenario(ctx, seed, { number: 0, label: 'Eaton demo', picked: false });
   seedWorld(ctx, seed);
   ctx.db.simTick.insert({ scheduledId: 0n, scheduledAt: ScheduleAt.interval(1_000_000n) });
 });
@@ -197,6 +217,7 @@ export const seed_world = db.reducer({ json: t.string() }, (ctx, { json }) => {
     reject(`Invalid seed: ${(error as Error).message}`);
   }
   storeSeed(ctx, seed);
+  writeScenario(ctx, seed, { number: 0, label: 'Eaton demo', picked: false });
   seedWorld(ctx, seed);
 });
 
@@ -222,6 +243,43 @@ export const set_explanation = db.reducer({ buildingId: t.u32(), text: t.string(
 
 export const reset_sim = db.reducer((ctx) => {
   seedWorld(ctx, storedSeed(ctx));
+});
+
+/**
+ * A new world on the same town: random wind, fire start, construction (scored by the CAL FIRE model), residents'
+ * needs, with fire arrival and reach re-simulated. number 0 = back to the Eaton demo map. Resets to prep.
+ */
+export const new_scenario = db.reducer({ number: t.u32() }, (ctx, { number }) => {
+  if (number === 0) {
+    if (ctx.db.worldSeed.id.find(1)) ctx.db.worldSeed.id.delete(1);
+    const base = storedSeed(ctx);
+    writeScenario(ctx, base, { number: 0, label: 'Eaton demo', picked: false });
+    seedWorld(ctx, base);
+    log(ctx, 'Back to the Eaton demo map', 0);
+    return;
+  }
+  const seed = SC.makeScenario(baseSeed(ctx), number);
+  storeSeed(ctx, seed, 1);
+  writeScenario(ctx, seed, { number, label: `Scenario #${number}`, picked: false });
+  seedWorld(ctx, seed);
+  log(ctx, `Scenario #${number}: new wind, fire start, construction and residents; Lantern re-scored every building`, 0);
+});
+
+/** Prep only: start the fire at map cell (cellX, cellY) instead; fire arrival and reach are re-simulated. */
+export const set_ignition = db.reducer({ cellX: t.u32(), cellY: t.u32() }, (ctx, { cellX, cellY }) => {
+  if (getSim(ctx).phase !== 'prep') reject('pick the fire start before the fire');
+  let seed: S.Seed;
+  try {
+    seed = SC.withIgnition(storedSeed(ctx), cellX, cellY);
+  } catch (e) {
+    reject((e as Error).message);
+  }
+  storeSeed(ctx, seed, 1);
+  const prev = ctx.db.scenario.id.find(0);
+  const number = prev?.number ?? 0;
+  writeScenario(ctx, seed, { number, label: number ? `Scenario #${number}` : 'Eaton demo', picked: true });
+  seedWorld(ctx, seed);
+  log(ctx, 'Fire start picked on the map; Lantern re-ran the fire and re-ranked every building', 0);
 });
 
 export const set_phase = db.reducer({ phase: t.string() }, (ctx, { phase }) => {

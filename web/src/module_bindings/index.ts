@@ -42,6 +42,7 @@ import ClaimTaskReducer from "./claim_task_reducer";
 import CompleteTaskReducer from "./complete_task_reducer";
 import DispatchUnitReducer from "./dispatch_unit_reducer";
 import EndAndCompareReducer from "./end_and_compare_reducer";
+import NewScenarioReducer from "./new_scenario_reducer";
 import RegisterWorkerReducer from "./register_worker_reducer";
 import ReleaseUnitReducer from "./release_unit_reducer";
 import ReplyCheckinReducer from "./reply_checkin_reducer";
@@ -49,6 +50,7 @@ import ResetSimReducer from "./reset_sim_reducer";
 import RunBaselineReducer from "./run_baseline_reducer";
 import SeedWorldReducer from "./seed_world_reducer";
 import SetExplanationReducer from "./set_explanation_reducer";
+import SetIgnitionReducer from "./set_ignition_reducer";
 import SetPhaseReducer from "./set_phase_reducer";
 import SetReplyClassReducer from "./set_reply_class_reducer";
 import SetRunningReducer from "./set_running_reducer";
@@ -67,6 +69,7 @@ import MitigationRow from "./mitigation_table";
 import PersonRow from "./person_table";
 import PresenceRow from "./presence_table";
 import ResultRow from "./result_table";
+import ScenarioRow from "./scenario_table";
 import SimRow from "./sim_table";
 import TaskRow from "./task_table";
 import UnitRow from "./unit_table";
@@ -174,6 +177,17 @@ const tablesSchema = __schema({
       { name: 'result_scenario_key', constraint: 'unique', columns: ['scenario'] },
     ],
   }, ResultRow),
+  scenario: __table({
+    name: 'scenario',
+    indexes: [
+      { accessor: 'id', name: 'scenario_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'scenario_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, ScenarioRow),
   sim: __table({
     name: 'sim',
     indexes: [
@@ -219,6 +233,7 @@ const reducersSchema = __reducers(
   __reducerSchema("complete_task", CompleteTaskReducer),
   __reducerSchema("dispatch_unit", DispatchUnitReducer),
   __reducerSchema("end_and_compare", EndAndCompareReducer),
+  __reducerSchema("new_scenario", NewScenarioReducer),
   __reducerSchema("register_worker", RegisterWorkerReducer),
   __reducerSchema("release_unit", ReleaseUnitReducer),
   __reducerSchema("reply_checkin", ReplyCheckinReducer),
@@ -226,6 +241,7 @@ const reducersSchema = __reducers(
   __reducerSchema("run_baseline", RunBaselineReducer),
   __reducerSchema("seed_world", SeedWorldReducer),
   __reducerSchema("set_explanation", SetExplanationReducer),
+  __reducerSchema("set_ignition", SetIgnitionReducer),
   __reducerSchema("set_phase", SetPhaseReducer),
   __reducerSchema("set_reply_class", SetReplyClassReducer),
   __reducerSchema("set_running", SetRunningReducer),

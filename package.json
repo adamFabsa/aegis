@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "check": "tsc --noEmit",
-    "test": "node --import tsx --test spacetimedb/tests/sim.test.ts spacetimedb/tests/insurance.test.ts spacetimedb/tests/units.test.ts preview/test_preview.ts",
+    "test": "node --import tsx --test spacetimedb/tests/sim.test.ts spacetimedb/tests/insurance.test.ts spacetimedb/tests/units.test.ts spacetimedb/tests/scenario.test.ts preview/test_preview.ts",
     "build": "node --import tsx scripts/spacetime.ts build --module-path spacetimedb",
     "bindings": "node --import tsx scripts/spacetime.ts generate",
     "seed": "node --import tsx scripts/seed.ts",

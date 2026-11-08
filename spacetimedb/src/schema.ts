@@ -130,6 +130,15 @@ const unit = table({ name: 'unit', public: true }, {
   travelTicks: t.u32(),
 });
 
+/** The world being played: 0 = the Eaton demo map; otherwise a random scenario number (scenario.ts). */
+const scenario = table({ name: 'scenario', public: true }, {
+  id: t.u32().primaryKey(),                // always 0
+  number: t.u32(),                         // 0 = demo; same number → same world
+  label: t.string(),                       // "Eaton demo" / "Scenario #48213" (+ " · fire start picked")
+  ignitionX: t.f64(), ignitionY: t.f64(),  // where the fire starts (map units, centre of the ignition cells)
+  picked: t.bool(),                        // the fire start was chosen on the map
+});
+
 // Private operational state; the public contract above is unchanged.
 const admin = table({ name: 'admin' }, {
   id: t.u32().primaryKey(), identity: t.identity(), worker: t.identity().optional(),
@@ -144,7 +153,7 @@ const taskOwner = table({ name: 'task_owner' }, {
   taskId: t.u64().primaryKey(), identity: t.identity(),
 });
 export const db = schema({ sim, building, person, task, fix, fireCell, eventLog, result, simTick,
-  presence, buildingProfile, mitigation, unit,
+  presence, buildingProfile, mitigation, unit, scenario,
   admin, worldSeed, engineState, taskOwner });
 export default db;
 export { simTick };

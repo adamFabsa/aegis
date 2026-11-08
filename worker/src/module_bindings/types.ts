@@ -130,6 +130,16 @@ export const Result = __t.object("Result", {
 });
 export type Result = __Infer<typeof Result>;
 
+export const Scenario = __t.object("Scenario", {
+  id: __t.u32(),
+  number: __t.u32(),
+  label: __t.string(),
+  ignitionX: __t.f64(),
+  ignitionY: __t.f64(),
+  picked: __t.bool(),
+});
+export type Scenario = __Infer<typeof Scenario>;
+
 export const Sim = __t.object("Sim", {
   id: __t.u32(),
   phase: __t.string(),
