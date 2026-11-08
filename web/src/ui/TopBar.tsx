@@ -12,6 +12,8 @@ interface TopBarProps {
   onStartFire: () => void;
   onTogglePause: () => void;
   onReset: () => void;
+  muted: boolean;
+  onToggleMute: () => void;
 }
 
 const LOOKS: { id: Look; label: string; hint: string }[] = [
@@ -32,7 +34,7 @@ function LanternMark() {
   );
 }
 
-export function TopBar({ sim, look, onLook, onPrepare, onStartFire, onTogglePause, onReset }: TopBarProps) {
+export function TopBar({ sim, look, onLook, onPrepare, onStartFire, onTogglePause, onReset, muted, onToggleMute }: TopBarProps) {
   const [menu, setMenu] = useState(false);
   const step = sim.phase === 'prep' ? 0 : sim.phase === 'fire' ? 1 : 2;
   const steps = [
@@ -88,6 +90,13 @@ export function TopBar({ sim, look, onLook, onPrepare, onStartFire, onTogglePaus
         )}
       </div>
 
+      <button type="button" className={`icon-btn sound ${muted ? 'off' : ''}`} aria-label={muted ? 'Turn sound on' : 'Turn sound off'} aria-pressed={!muted} onClick={onToggleMute}>
+        {muted ? (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M17 9l5 6M22 9l-5 6" /></svg>
+        ) : (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" /></svg>
+        )}
+      </button>
       <div className="menu-wrap">
         <button type="button" className="icon-btn" aria-label="Settings" aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>

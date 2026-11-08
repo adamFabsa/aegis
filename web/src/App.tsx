@@ -6,6 +6,7 @@ import { propUrl, spriteUrl } from './town/scene';
 import type { BuildingKind, Pack } from './town/types';
 import { TopBar, type Look } from './ui/TopBar';
 import { Dock } from './ui/Dock';
+import { sound } from './audio/sound';
 
 export default function App() {
   const world = useMockWorld();
@@ -69,11 +70,30 @@ export default function App() {
   // Phones and reduced-motion users get the lighter effects path (no noise textures, blur or blend modes).
   const [lite] = useState(() => window.innerWidth < 760 || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
   const selected = buildings.find((b) => b.id === selectedId) ?? null;
+
+  // ---- sound: fire loudness follows burning buildings + fire cells; events trigger alert tones
+  const [muted, setMuted] = useState(sound.muted);
+  const burningBuildings = buildings.filter((b) => b.status === 'burning').length;
+  const burningCells = sim.phase === 'fire' ? cells.reduce((n, c) => n + (c.state === 1 ? 1 : 0), 0) : 0;
+  const fireLevel = sim.phase !== 'fire' ? 0 : Math.min(1, burningBuildings * 0.3 + burningCells / 140) * (sim.running ? 1 : 0.35);
+  useEffect(() => { sound.setLevel(fireLevel); }, [fireLevel]);
+  const lastEvent = useRef(0);
+  useEffect(() => {
+    const e = events[0];
+    if (!e || e.id === lastEvent.current) return;
+    const first = lastEvent.current === 0 && events.length > 1;
+    lastEvent.current = e.id;
+    if (first) return; // do not replay history after a deep link
+    if (e.tone === 'bad') sound.alert('fire');
+    else if (e.tone === 'warn') sound.alert('behind');
+    else if (e.tone === 'good') sound.alert('good');
+  }, [events]);
+  const toggleMute = () => { sound.unlock(); sound.setMuted(!muted); setMuted(!muted); };
   const startFire = () => { setSelectedId(null); world.setPhase('fire'); };
   const prepare = () => { setSelectedId(null); world.setPhase('prep'); };
 
   return (
-    <div className="app" style={{ background: PALETTES[pack].bg }}>
+    <div className="app" style={{ background: PALETTES[pack].bg }} onPointerDownCapture={() => sound.unlock()} onKeyDownCapture={() => sound.unlock()}>
       <MapView
         sim={sim} buildings={buildings} fireCells={cells} pack={pack}
         selectedId={selectedId} onSelect={setSelectedId}
@@ -84,6 +104,7 @@ export default function App() {
             sim={sim} look={look} onLook={setLook}
             onPrepare={prepare} onStartFire={startFire}
             onTogglePause={world.togglePause}
+            muted={muted} onToggleMute={toggleMute}
             onReset={() => { world.reset(); setSelectedId(null); }}
           />
         </div>
