@@ -27,3 +27,4 @@ blender/renders/
 
 # Event material (large, not ours to publish)
 *.pptx
+web/dist-hosted/

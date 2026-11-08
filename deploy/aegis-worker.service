@@ -1,0 +1,18 @@
+# The Aegis AI worker (reads residents' replies, writes building notes) as a service that restarts by itself.
+# Install: cp deploy/aegis-worker.service /etc/systemd/system/ && systemctl enable --now aegis-worker
+[Unit]
+Description=Aegis AI worker (SpacetimeDB client on Maincloud)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=aegis
+WorkingDirectory=/opt/aegis/worker
+# worker/.env holds the AI key and SPACETIME_SERVER / SPACETIME_DATABASE (never committed)
+ExecStart=/usr/bin/node --env-file-if-exists=.env --import tsx src/index.ts
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

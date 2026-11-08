@@ -17,7 +17,8 @@
     "pipeline": "bash data/run_pipeline.sh",
     "preview": "node --import tsx preview/build.ts",
     "web:dev": "npm --prefix web run dev",
-    "web:build": "npm --prefix web run build"
+    "web:build": "npm --prefix web run build",
+    "web:build:hosted": "VITE_SPACETIME_URI=wss://maincloud.spacetimedb.com VITE_SPACETIME_DB=${SPACETIME_DATABASE:-aegis-hackutd} npm --prefix web run build -- --outDir dist-hosted --emptyOutDir"
   },
   "dependencies": {
     "spacetimedb": "2.14.1"
