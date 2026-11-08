@@ -64,7 +64,7 @@ export function WindowLayer({ b, ox, oy, s, lite }: Props) {
             {!lite && h > 0.55 && w[9] === 0 && (
               <g transform={`translate(${topX} ${topY + 2 * s})`}>
                 <g className="flame-grow" style={{ animationDelay: `${Math.round(h * 900)}ms` }}>
-                  <use href={h > 0.8 ? '#flA' : '#flC'} transform={`scale(${0.42 * Math.max(0.8, s)})`} />
+                  <use href={h > 0.8 ? '#fireA' : '#fireC'} transform={`scale(${0.42 * Math.max(0.8, s)})`} />
                 </g>
               </g>
             )}

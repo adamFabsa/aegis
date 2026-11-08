@@ -8,6 +8,7 @@ import {
 import { PALETTES, STATUS_COLORS, type GroundPalette } from './palettes';
 import { FireUnits, Markers, StreetLife } from './markers';
 import { WindowLayer } from './WindowLayer';
+import { FireDefs } from './FireDefs';
 import { TICK_SECONDS, type Unit } from './mockWorld';
 
 interface TownProps {
@@ -35,7 +36,7 @@ const CROSSWALKS =
   'M363 421 v7 M369 421 v7 M375 421 v7 M381 421 v7 M387 421 v7 M363 468 v7 M369 468 v7 M375 468 v7 M381 468 v7 M387 468 v7 ' +
   'M351 433 h7 M351 439 h7 M351 445 h7 M351 451 h7 M351 457 h7 M394 433 h7 M394 439 h7 M394 445 h7 M394 451 h7 M394 457 h7';
 
-const FLAMES = ['flA', 'flB', 'flC'];
+const FLAMES = ['fireA', 'fireB', 'fireC'];
 const RIDGES = ridgePaths();
 
 function Defs({ P }: { P: GroundPalette }) {
@@ -125,37 +126,12 @@ function Defs({ P }: { P: GroundPalette }) {
           <animate attributeName="offset" values="0.2;1;0.2" dur="1.1s" repeatCount="indefinite" />
         </stop>
       </linearGradient>
+      <FireDefs />
       <radialGradient id="roofGlow">
         <stop offset="0" stopColor="#FF8A3D" stopOpacity="0.75" />
         <stop offset="0.5" stopColor="#FF5A1F" stopOpacity="0.28" />
         <stop offset="1" stopColor="#FF5A1F" stopOpacity="0" />
       </radialGradient>
-      <linearGradient id="flameGrad" x1="0" y1="1" x2="0" y2="0">
-        <stop offset="0" stopColor="#FF3D17" stopOpacity="0" />
-        <stop offset="0.18" stopColor="#FF4A1C" />
-        <stop offset="0.55" stopColor="#FF9A2E" />
-        <stop offset="1" stopColor="#FFE7A3" />
-      </linearGradient>
-      <g id="flA">
-        <g>
-          <animateTransform attributeName="transform" type="scale" values="1 1;0.9 1.16;1.08 0.92;1 1" dur="0.62s" repeatCount="indefinite" />
-          <path d="M0 0 C-7 -2 -9 -10 -5 -17 C-4 -12 -1 -11 -1 -15 C-1 -20 2 -24 1 -29 C6 -24 9 -17 7 -10 C9 -12 9 -15 8 -17 C12 -11 10 -2 0 0 Z" fill="url(#flameGrad)" />
-          <path d="M0 -1 C-4 -2 -5 -7 -2 -12 C-1 -9 1 -9 1 -13 C4 -9 5 -4 0 -1 Z" fill="#FFF2B8" opacity="0.9" />
-        </g>
-      </g>
-      <g id="flB">
-        <g>
-          <animateTransform attributeName="transform" type="scale" values="1 1;1.1 0.9;0.92 1.18;1 1" dur="0.78s" repeatCount="indefinite" />
-          <path d="M0 0 C-6 -1 -8 -8 -4 -14 C-3 -10 0 -10 0 -14 C0 -18 3 -20 2 -24 C6 -19 8 -13 6 -7 C8 -9 8 -11 7 -13 C10 -8 9 -1 0 0 Z" fill="url(#flameGrad)" />
-          <path d="M0 -1 C-3 -2 -4 -6 -1 -10 C0 -7 2 -7 2 -10 C4 -6 4 -3 0 -1 Z" fill="#FFF2B8" opacity="0.85" />
-        </g>
-      </g>
-      <g id="flC">
-        <g>
-          <animateTransform attributeName="transform" type="scale" values="1 1;0.94 1.22;1.05 0.9;1 1" dur="0.5s" repeatCount="indefinite" />
-          <path d="M0 0 C-5 -2 -6 -9 -3 -15 C-2 -11 0 -12 0 -17 C4 -13 7 -8 5 -3 C4 -1 2 0 0 0 Z" fill="url(#flameGrad)" />
-        </g>
-      </g>
       <g id="oak">
         <ellipse cx="4" cy="1" rx="12" ry="4" fill="#000" opacity="0.22" />
         <rect x="-1.3" y="-11" width="2.6" height="11" fill={P.trunk} />
@@ -278,7 +254,8 @@ function BuildingSprite({ b, pack, selected, onSelect, lite }: { b: Building; pa
     <g>
       {/* the previous damage stage fades out underneath while the new one fades in */}
       {prev && <image key={`prev-${prev}`} className={variant === 'lost' ? 'sprite-collapse' : 'sprite-out'} href={spriteUrl(b.kind, prev)} {...box} preserveAspectRatio="none" style={{ pointerEvents: 'none' }} />}
-      <image key={`cur-${variant}`} className={prev ? (variant === 'lost' ? 'sprite-in-late' : 'sprite-in') : undefined} href={spriteUrl(b.kind, variant)} {...box} preserveAspectRatio="none" style={{ pointerEvents: 'none' }} />
+      <image key={`cur-${variant}`} className={prev ? (variant === 'lost' ? 'sprite-in-late' : 'sprite-in') : undefined} href={spriteUrl(b.kind, variant)} {...box} preserveAspectRatio="none"
+        filter={b.status === 'burning' && !lite ? 'url(#heatHaze)' : undefined} style={{ pointerEvents: 'none' }} />
       {/* rooms: power failing, then fire moving through them */}
       <WindowLayer b={b} ox={box.x} oy={box.y} s={s} lite={lite} />
       {b.status === 'burning' && (() => {
@@ -289,6 +266,7 @@ function BuildingSprite({ b, pack, selected, onSelect, lite }: { b: Building; pa
         const flameScale = (0.45 + grow * 0.9) * (heavy ? 1.5 : 1);
         return (
           <g style={{ pointerEvents: 'none' }}>
+            <g filter={lite ? undefined : 'url(#flameWarp)'} style={lite ? undefined : { mixBlendMode: 'screen' }}>
             <ellipse cx={rx} cy={ry} rx={(0.433 * (b.w + b.h) + 24) * (heavy ? 1.35 : 1)} ry={(0.25 * (b.w + b.h) + 30) * (heavy ? 1.35 : 1)} fill="url(#roofGlow)"
               style={{ opacity: 0.25 + grow * 0.75, transition: 'opacity 1.5s ease', ...(lite ? {} : { mixBlendMode: 'screen' as const }) }} />
             {/* early smoke leaking from the facade */}
@@ -312,6 +290,7 @@ function BuildingSprite({ b, pack, selected, onSelect, lite }: { b: Building; pa
                 <g className="flame-grow" style={{ animationDelay: `${i * 220}ms` }}><use href={`#${FLAMES[(i + 1) % 3]}`} transform={`scale(${0.8 + (i % 3) * 0.2})`} /></g>
               </g>
             ))}
+            </g>
             {[0, 1, 2, ...(heavy ? [3, 4] : [])].map((i) => (
               <circle key={i} cx={roofPts[(i * 2) % 8][0]} cy={ry - 12} r="10" fill="url(#smokeDark)">
                 <animate attributeName="r" values={heavy ? '12;56' : '8;38'} dur="5s" begin={`${-i * 1.2}s`} repeatCount="indefinite" />
