@@ -4,6 +4,7 @@ import { useMockWorld } from './town/mockWorld';
 import { PALETTES } from './town/palettes';
 import { groundUrl, propUrl, spriteUrl } from './town/scene';
 import { setViewRotation } from './town/iso';
+import { ready, useAssetVersion } from './town/assets';
 import { vehUrl } from './town/vehicleData';
 import type { BuildingKind, Pack } from './town/types';
 import { TopBar, type Look } from './ui/TopBar';
@@ -78,6 +79,8 @@ export default function App() {
   const [rotation, setRotation] = useState(() => Number(new URLSearchParams(window.location.search).get('rot') ?? 0) % 4);
   setViewRotation(rotation);
   const onRotate = useCallback((dir: 1 | -1) => setRotation((r) => (r + dir + 4) % 4), []);
+  // the turn buttons appear only once the turned renders exist for this look
+  useAssetVersion();
 
   const pack: Pack = look === 'auto' ? (sim.phase === 'prep' ? 'dusk' : 'night') : look;
   // Phones and reduced-motion users get the lighter effects path (no noise textures, blur or blend modes).
@@ -137,7 +140,7 @@ export default function App() {
         sim={sim} buildings={buildings} fireCells={cells} pack={pack}
         selectedId={selectedId} onSelect={setSelectedId}
         topInset={insets.top} bottomInset={insets.bottom} leftInset={insets.left} rightInset={showFrame ? 336 : 0} lite={lite} units={units}
-        rotation={rotation} onRotate={onRotate}
+        rotation={rotation} onRotate={[1, 2, 3].every((r) => ready(spriteUrl('homes', pack, r)) && ready(spriteUrl('office', pack, r))) ? onRotate : undefined}
         onPhone={vw >= 1180 && sim.phase !== 'prep' && !phoneOpen ? () => setPhoneOpen(true) : undefined}
       />
       <WindChip deg={sim.windDirDeg} mph={sim.windMph} style={phoneLayout ? { right: 8, top: 'calc(130px + env(safe-area-inset-top))' } : { left: insets.left + 4, bottom: 16 }} />
