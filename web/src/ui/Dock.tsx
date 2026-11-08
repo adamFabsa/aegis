@@ -1,8 +1,9 @@
-import { forwardRef, useState } from 'react';
-import type { Building, FireCell, Sim } from '../town/types';
+import { forwardRef, useEffect, useRef, useState, type ReactNode } from 'react';
+import type { Building, FireCell, Pack, Sim } from '../town/types';
 import { FIXES, REFERENCE_ETA_MIN, type FixKey, type LogEvent, type Unit } from '../town/mockWorld';
 import { STATUS_COLORS } from '../town/palettes';
 import { statusTag } from '../town/status';
+import { spriteUrl, spriteVariant } from '../town/scene';
 import { KIND_LABEL, fmtMin, fmtUsd } from './format';
 
 interface DockProps {
@@ -11,6 +12,7 @@ interface DockProps {
   approved: Record<number, FixKey[]>;
   events: LogEvent[];
   selected: Building | null;
+  pack: Pack;
   onSelect: (id: number | null) => void;
   onApprove: (id: number, key: FixKey) => void;
   onEvacuate: (id: number) => void;
@@ -20,13 +22,35 @@ interface DockProps {
   cells: FireCell[];
   onDispatch: (buildingId: number) => void;
   onRelease: (unitId: number) => void;
+  /** Screen y the phone sheet may grow up to (bottom of the top bar). */
+  topLimit: number;
 }
 
+interface View { head: ReactNode; body: ReactNode; foot?: ReactNode }
+type Tab = 'people' | 'units';
+
+// ------------------------------------------------------------------ small pieces
 function TruckIcon({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M2 16V8h11v8M13 11h4l3 3v2h-7" /><circle cx="6.5" cy="17.5" r="1.8" /><circle cx="16.5" cy="17.5" r="1.8" /><path d="M2 6h8" />
     </svg>
+  );
+}
+const Arrow = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+);
+const Check = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10" /></svg>
+);
+
+/** A crop of the building's own Blender render, in its current state (burning, gutted, collapsed). */
+function Thumb({ b, pack, hero = false }: { b: Building; pack: Pack; hero?: boolean }) {
+  const variant = spriteVariant(pack, b.status, b.damage ?? 0);
+  return (
+    <span className={hero ? 'hero' : 'thumb'} aria-hidden="true">
+      <img src={spriteUrl(b.kind, variant)} alt="" draggable={false} />
+    </span>
   );
 }
 
@@ -46,7 +70,7 @@ function urgency(b: Building): number {
   return b.fireEtaMin >= 0 ? b.fireEtaMin - b.evacNeededMin : 6000;
 }
 
-function BackButton({ onClick }: { onClick: () => void }) {
+function Back({ onClick }: { onClick: () => void }) {
   return (
     <button type="button" className="back" onClick={onClick}>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
@@ -55,94 +79,127 @@ function BackButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-function Feed({ events }: { events: LogEvent[] }) {
+function Stats({ items }: { items: { label: string; value: ReactNode; tone?: 'ok' | 'bad' | '' }[] }) {
+  return (
+    <dl className="stats">
+      {items.map((s) => (
+        <div key={s.label}><dd className={s.tone ?? ''}>{s.value}</dd><dt>{s.label}</dt></div>
+      ))}
+    </dl>
+  );
+}
+
+function Ticker({ events }: { events: LogEvent[] }) {
   const e = events[0];
   if (!e) return null;
   return (
-    <div className={`feed ${e.tone}`} aria-live="polite">
-      <span className="feed-dot" aria-hidden="true" />
-      <span key={e.id} className="feed-text">{e.text}</span>
-    </div>
+    <p className={`ticker ${e.tone}`} aria-live="polite">
+      <span className="ticker-dot" aria-hidden="true" />
+      <span key={e.id} className="ticker-text">{e.text}</span>
+    </p>
   );
+}
+
+function clickable(onClick: () => void) {
+  return { role: 'button', tabIndex: 0, onClick, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } };
 }
 
 // ------------------------------------------------------------------ prepare
-function PrepList({ sim, buildings, onSelect, onStartFire }: DockProps) {
+function prepList(p: DockProps): View {
+  const { sim, buildings, onSelect, onStartFire, pack } = p;
   const list = buildings.filter((b) => b.kind !== 'shelter').sort((a, b) => b.risk - a.risk);
   const prepared = list.filter((b) => b.prepared).length;
-  return (
-    <>
-      <div className="dock-head">
-        <div>
-          <h2>Prepare your buildings</h2>
-          <p className="sub">{fmtUsd(sim.budgetLeft)} left · {prepared} of {list.length} prepared · tap one to fix it</p>
-        </div>
-        <button type="button" className="btn fire" onClick={onStartFire}>
-          Start the fire
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
-        </button>
-      </div>
-      <ul className="cards" aria-label="Buildings by risk">
-        {list.map((b) => (
-          <li key={b.id}>
-            <button type="button" className="bcard" onClick={() => onSelect(b.id)}>
-              <span className="bcard-risk" style={{ color: b.prepared ? STATUS_COLORS.green : riskColor(b.risk) }}>
-                {b.prepared ? (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-label="Prepared"><path d="M5 12l5 5 9-10" /></svg>
-                ) : Math.round(b.risk)}
+  const avgRisk = Math.round(list.reduce((s, b) => s + b.risk, 0) / Math.max(1, list.length));
+  return {
+    head: (
+      <>
+        <p className="eyebrow step">Step 1 of 3</p>
+        <h2>Prepare the neighborhood</h2>
+        <Stats items={[
+          { label: 'budget left', value: fmtUsd(sim.budgetLeft) },
+          { label: 'prepared', value: <>{prepared}<small>/{list.length}</small></>, tone: prepared === list.length ? 'ok' : '' },
+          { label: 'average risk', value: avgRisk, tone: avgRisk >= 70 ? 'bad' : '' },
+        ]} />
+      </>
+    ),
+    body: (
+      <>
+        <h3 className="section">Highest risk first</h3>
+        <ul className="list" aria-label="Buildings by risk">
+          {list.map((b) => (
+            <li key={b.id} className="item" {...clickable(() => onSelect(b.id))}>
+              <Thumb b={b} pack={pack} />
+              <span className="item-text">
+                <span className="item-name">{b.name}</span>
+                <span className="item-detail">{b.residents} residents · evacuation {fmtMin(b.evacNeededMin)}</span>
               </span>
-              <span className="bcard-name">{b.name}</span>
-              <span className="bcard-meta">{b.prepared ? 'Prepared' : `Evacuation ${fmtMin(b.evacNeededMin)}`}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </>
-  );
+              {b.prepared ? (
+                <span className="score ok"><Check size={18} /><small>ready</small></span>
+              ) : (
+                <span className="score" style={{ color: riskColor(b.risk) }}>{Math.round(b.risk)}<small>risk</small></span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </>
+    ),
+    foot: (
+      <button type="button" className="btn fire wide" onClick={onStartFire}>Start the fire <Arrow /></button>
+    ),
+  };
 }
 
-function PrepDetail({ sim, selected: b, approved, onSelect, onApprove }: DockProps & { selected: Building }) {
+function prepDetail(p: DockProps, b: Building): View {
+  const { sim, approved, onSelect, onApprove, pack } = p;
   const done = approved[b.id] ?? [];
-  return (
-    <>
-      <BackButton onClick={() => onSelect(null)} />
-      <div className="dock-head">
-        <div>
-          <div className="eyebrow">{KIND_LABEL[b.kind]} · {b.residents} residents · {b.needsHelp} need help</div>
-          <h2>{b.name}</h2>
-        </div>
-        <div className="kpis">
-          <div className="kpi"><span className="kpi-val" style={{ color: riskColor(b.risk) }}>{Math.round(b.risk)}</span><span className="kpi-lbl">Risk</span></div>
-          <div className="kpi"><span className="kpi-val">{fmtMin(b.evacNeededMin)}</span><span className="kpi-lbl">Evacuation</span></div>
-        </div>
-      </div>
-      <ul className="fix-grid" aria-label="Fixes">
-        {FIXES.map((f) => {
-          const on = done.includes(f.key);
-          const afford = sim.budgetLeft >= f.cost;
-          return (
-            <li key={f.key}>
-              <button type="button" className={`fix ${on ? 'on' : ''}`} disabled={on || !afford} onClick={() => onApprove(b.id, f.key)} aria-pressed={on}>
-                <span className="fix-top">
-                  <span className="fix-effect">{f.addVans ? `+${f.addVans} van` : `−${f.riskDrop} risk`}</span>
-                  <span className="fix-check" aria-hidden="true">
-                    {on && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-10" /></svg>}
+  return {
+    head: (
+      <>
+        <Back onClick={() => onSelect(null)} />
+        <p className="eyebrow">{KIND_LABEL[b.kind]}</p>
+        <h2>{b.name}</h2>
+        <Stats items={[
+          { label: 'risk', value: <span style={{ color: riskColor(b.risk) }}>{Math.round(b.risk)}</span> },
+          { label: 'evacuation', value: fmtMin(b.evacNeededMin), tone: b.evacNeededMin > REFERENCE_ETA_MIN ? 'bad' : '' },
+          { label: 'need help', value: <>{b.needsHelp}<small>/{b.residents}</small></> },
+        ]} />
+      </>
+    ),
+    body: (
+      <>
+        <Thumb b={b} pack={pack} hero />
+        <h3 className="section">Fixes</h3>
+        <ul className="list" aria-label="Fixes">
+          {FIXES.map((f) => {
+            const on = done.includes(f.key);
+            const afford = sim.budgetLeft >= f.cost;
+            return (
+              <li key={f.key}>
+                <button type="button" className={`item fix ${on ? 'on' : ''}`} disabled={on || !afford} onClick={() => onApprove(b.id, f.key)} aria-pressed={on}>
+                  <span className="tick" aria-hidden="true">{on && <Check />}</span>
+                  <span className="item-text">
+                    <span className="item-name">{f.name}</span>
+                    <span className="item-detail">{f.addVans ? `Adds ${f.addVans} van, faster evacuation` : `Lowers risk by ${f.riskDrop}`}</span>
                   </span>
-                </span>
-                <span className="fix-name">{f.name}</span>
-                <span className="fix-cost">{on ? 'Approved' : afford ? fmtUsd(f.cost) : `${fmtUsd(f.cost)} · over budget`}</span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      {b.prepared ? (
-        <div className="badge">Prepared · better insurance rating</div>
-      ) : (
-        <p className="hint">Prepared when risk is under 40 and evacuation takes under {fmtMin(REFERENCE_ETA_MIN)}. {fmtUsd(sim.budgetLeft)} left.</p>
-      )}
-    </>
-  );
+                  <span className="cost">{on ? 'Done' : afford ? fmtUsd(f.cost) : 'Over budget'}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="hint">
+          {b.prepared ? 'Prepared. Risk is under 40 and evacuation fits the window, so the building earns a better insurance rating.'
+            : `Prepared when risk is under 40 and evacuation takes under ${fmtMin(REFERENCE_ETA_MIN)}.`}
+        </p>
+      </>
+    ),
+    foot: (
+      <div className="foot-row">
+        <span className="foot-note">{fmtUsd(sim.budgetLeft)} left</span>
+        <button type="button" className="btn ghost" onClick={() => onSelect(null)}>Done</button>
+      </div>
+    ),
+  };
 }
 
 // ------------------------------------------------------------------ fire
@@ -154,6 +211,7 @@ function Race({ b }: { b: Building }) {
   const late = known && need > eta;
   return (
     <div className="race">
+      <div className="race-legend"><span>Evacuation {fmtMin(need)}</span><span className="bad">Fire {fmtMin(eta)}</span></div>
       <div className="race-bar" aria-hidden="true">
         <div className="race-evac" style={{ width: `${(100 * need) / max}%`, background: late ? STATUS_COLORS.red : STATUS_COLORS.green }} />
         {known && <div className="race-fire" style={{ left: `${(100 * eta) / max}%` }} />}
@@ -166,18 +224,18 @@ function Race({ b }: { b: Building }) {
 }
 
 function RowAction({ b, sim, onEvacuate }: { b: Building; sim: Sim; onEvacuate: (id: number) => void }) {
-  if (b.status === 'lost') return <span className="row-state muted">Collapsed</span>;
-  if (b.status === 'clear') return <span className="row-state ok">All out</span>;
+  if (b.status === 'lost') return <span className="state muted">Collapsed</span>;
+  if (b.status === 'clear') return <span className="state ok">All out</span>;
   if (b.evacStarted) {
     const pct = (100 * b.peopleOut) / Math.max(1, b.residents);
     return (
-      <span className="row-progress" aria-label={`${b.peopleOut} of ${b.residents} out`}>
-        <span className="mini-bar"><span style={{ width: `${pct}%` }} /></span>
+      <span className="progress-mini" aria-label={`${b.peopleOut} of ${b.residents} out`}>
         <span>{b.peopleOut}/{b.residents}</span>
+        <span className="mini-bar"><span style={{ width: `${pct}%` }} /></span>
       </span>
     );
   }
-  if (b.status === 'burning') return <span className="row-state bad">{(b.damage ?? 0) >= 2 ? 'Gutted' : 'Burning'}</span>;
+  if (b.status === 'burning') return <span className="state bad">{(b.damage ?? 0) >= 2 ? 'Gutted' : 'Burning'}</span>;
   if (sim.phase !== 'fire') return null;
   return (
     <button type="button" className={`btn small ${b.status === 'behind' ? 'urgent' : ''}`} onClick={(e) => { e.stopPropagation(); onEvacuate(b.id); }}>
@@ -188,18 +246,14 @@ function RowAction({ b, sim, onEvacuate }: { b: Building; sim: Sim; onEvacuate: 
 
 const STAGES = ['Intact', 'Burning', 'Gutted', 'Collapsed'];
 
-/** Fire damage as four steps, so a glance tells you how far the building has gone. */
 function Structure({ b }: { b: Building }) {
   const stage = b.status === 'lost' ? 3 : b.status === 'burning' ? Math.max(1, b.damage ?? 1) : 0;
   return (
-    <div className="structure" aria-label={`Structure: ${STAGES[stage]}`}>
-      <span className="structure-lbl">Structure</span>
-      <ol>
-        {STAGES.map((s, i) => (
-          <li key={s} className={i < stage ? 'past' : i === stage ? `now s${i}` : ''}>{s}</li>
-        ))}
-      </ol>
-    </div>
+    <ol className="structure" aria-label={`Structure: ${STAGES[stage]}`}>
+      {STAGES.map((s, i) => (
+        <li key={s} className={i < stage ? 'past' : i === stage ? `now s${i}` : ''}>{s}</li>
+      ))}
+    </ol>
   );
 }
 
@@ -207,11 +261,11 @@ function Log({ events }: { events: LogEvent[] }) {
   if (!events.length) return null;
   return (
     <>
-      <h3 className="mini-title">Incident log</h3>
+      <h3 className="section">Incident log</h3>
       <ol className="log" aria-label="Incident log">
-        {events.slice(0, 6).map((e) => (
+        {events.slice(0, 8).map((e) => (
           <li key={e.id} className={e.tone}>
-            <time>{`T+${Math.floor((e.tick * 2) / 60)}:${String((e.tick * 2) % 60).padStart(2, '0')}`}</time>
+            <time>{`${Math.floor((e.tick * 2) / 60)}:${String((e.tick * 2) % 60).padStart(2, '0')}`}</time>
             <span>{e.text}</span>
           </li>
         ))}
@@ -220,40 +274,60 @@ function Log({ events }: { events: LogEvent[] }) {
   );
 }
 
-function FireList(p: DockProps) {
-  const { sim, buildings, events, onSelect, onEvacuate } = p;
-  const list = buildings.filter((b) => b.kind !== 'shelter').sort((a, b) => urgency(a) - urgency(b));
+function fireHead(p: DockProps, tab: Tab, setTab: (t: Tab) => void): ReactNode {
+  const list = p.buildings.filter((b) => b.kind !== 'shelter');
   const total = list.reduce((s, b) => s + b.residents, 0);
   const out = list.reduce((s, b) => s + b.peopleOut, 0);
   const atRisk = list.filter((b) => b.status === 'behind' || b.status === 'burning').length;
   const lost = list.filter((b) => b.status === 'lost').length;
+  const free = p.units.filter((u) => u.status === 'ready').length;
   return (
     <>
-      <div className="dock-head">
-        <div>
-          <h2>Who needs help first</h2>
-          <p className="sub"><b className="ok">{out}</b> of {total} out · <b className={atRisk ? 'bad' : ''}>{atRisk}</b> at risk · <b>{lost}</b> lost</p>
-        </div>
+      <p className="eyebrow step">Step 2 of 3 · wind SW {p.sim.windMph} mph</p>
+      <h2>Fire response</h2>
+      <Stats items={[
+        { label: 'out', value: <>{out}<small>/{total}</small></>, tone: out === total ? 'ok' : '' },
+        { label: 'at risk', value: atRisk, tone: atRisk ? 'bad' : '' },
+        { label: 'lost', value: lost, tone: lost ? 'bad' : '' },
+        { label: 'units free', value: <>{free}<small>/{p.units.length}</small></> },
+      ]} />
+      <div className="tabs" role="tablist" aria-label="Fire view">
+        <button type="button" role="tab" aria-selected={tab === 'people'} className={tab === 'people' ? 'on' : ''} onClick={() => setTab('people')}>Residents</button>
+        <button type="button" role="tab" aria-selected={tab === 'units'} className={tab === 'units' ? 'on' : ''} onClick={() => setTab('units')}>
+          Incident command
+        </button>
       </div>
-      <Feed events={events} />
-      <ul className="rows" aria-label="Buildings by urgency">
+      <Ticker events={p.events} />
+    </>
+  );
+}
+
+function fireList(p: DockProps): ReactNode {
+  const { sim, buildings, onSelect, onEvacuate, pack } = p;
+  const list = buildings.filter((b) => b.kind !== 'shelter').sort((a, b) => urgency(a) - urgency(b));
+  return (
+    <>
+      <h3 className="section">Who needs help first</h3>
+      <ul className="list" aria-label="Buildings by urgency">
         {list.map((b) => {
           const tag = statusTag(b, sim.phase);
+          const u = unitFor(p.units, b.id);
           const detail = b.evacStarted || b.status === 'lost' || b.status === 'clear'
             ? `${b.residents} residents · ${b.needsHelp} need help`
             : b.status === 'burning'
-              ? `On fire · ${b.residents - b.peopleOut} still inside`
-              : `${b.fireEtaMin >= 0 ? `Fire in ${fmtMin(b.fireEtaMin)}` : 'No fire path yet'} · evacuation ${fmtMin(b.evacNeededMin)}`;
+              ? `${b.residents - b.peopleOut} still inside`
+              : b.fireEtaMin >= 0 ? `Fire in ${fmtMin(b.fireEtaMin)} · needs ${fmtMin(b.evacNeededMin)}` : `No fire path · needs ${fmtMin(b.evacNeededMin)}`;
           return (
-            <li key={b.id}>
-              <div className="row" role="button" tabIndex={0} onClick={() => onSelect(b.id)} onKeyDown={(e) => { if (e.key === 'Enter') onSelect(b.id); }}>
-                <span className="row-bar" style={{ background: tag.color }} aria-hidden="true" />
-                <span className="row-text">
-                  <span className="row-name">{b.name}{unitFor(p.units, b.id) && <span className="row-unit" title={unitFor(p.units, b.id)!.name}><TruckIcon size={14} /></span>}</span>
-                  <span className="row-detail">{detail}</span>
-                </span>
-                <RowAction b={b} sim={sim} onEvacuate={onEvacuate} />
-              </div>
+            <li key={b.id} className="item" {...clickable(() => onSelect(b.id))}>
+              <span className="thumb-wrap">
+                <Thumb b={b} pack={pack} />
+                <span className="dot" style={{ background: tag.color }} aria-hidden="true" />
+              </span>
+              <span className="item-text">
+                <span className="item-name">{b.name}{u && <span className="item-unit" title={u.name}><TruckIcon size={14} /></span>}</span>
+                <span className="item-detail">{detail}</span>
+              </span>
+              <RowAction b={b} sim={sim} onEvacuate={onEvacuate} />
             </li>
           );
         })}
@@ -262,56 +336,8 @@ function FireList(p: DockProps) {
   );
 }
 
-function FireDetail(p: DockProps & { selected: Building }) {
-  const { selected: b, sim, onSelect, onEvacuate } = p;
-  const tag = statusTag(b, sim.phase);
-  const canEvac = sim.phase === 'fire' && !b.evacStarted && b.status !== 'lost' && b.status !== 'burning';
-  return (
-    <>
-      <BackButton onClick={() => onSelect(null)} />
-      <div className="dock-head">
-        <div>
-          <div className="eyebrow">{KIND_LABEL[b.kind]} · {b.residents} residents · {b.needsHelp} need help · {b.vans} van{b.vans === 1 ? '' : 's'}</div>
-          <h2>{b.name}</h2>
-        </div>
-        <span className="chip" style={{ color: tag.color, borderColor: tag.color }}>{tag.text}</span>
-      </div>
-      {b.kind !== 'shelter' && <Structure b={b} />}
-      {b.kind !== 'shelter' && b.status !== 'lost' && b.status !== 'clear' && (
-        <>
-          <div className="kpis wide">
-            <div className="kpi"><span className="kpi-val" style={{ color: STATUS_COLORS.red }}>{fmtMin(b.fireEtaMin)}</span><span className="kpi-lbl">Fire arrives in</span></div>
-            <div className="kpi"><span className="kpi-val">{fmtMin(b.evacNeededMin)}</span><span className="kpi-lbl">Evacuation needs</span></div>
-          </div>
-          <Race b={b} />
-        </>
-      )}
-      {canEvac && <button type="button" className="btn primary wide" onClick={() => onEvacuate(b.id)}>Start evacuation</button>}
-      {sim.phase === 'fire' && b.kind !== 'shelter' && b.status !== 'lost' && (() => {
-        const u = unitFor(p.units, b.id);
-        const free = p.units.find((x) => x.status === 'ready');
-        if (u) return <p className="unit-line"><TruckIcon /> {u.name} {u.status === 'enroute' ? 'is on the way' : 'is on scene, water on the building'}</p>;
-        return (
-          <button type="button" className="btn secondary wide" disabled={!free} onClick={() => p.onDispatch(b.id)}>
-            <TruckIcon /> {free ? `Send ${free.name}` : 'All units are busy'}
-          </button>
-        );
-      })()}
-      {b.evacStarted && (
-        <div className="progress">
-          <div className="progress-row"><span>Residents out</span><b>{b.peopleOut} of {b.residents}</b></div>
-          <div className="meter"><div style={{ width: `${(100 * b.peopleOut) / Math.max(1, b.residents)}%` }} /></div>
-        </div>
-      )}
-      {b.status === 'lost' && <p className="hint">The building collapsed. {b.residents - b.peopleOut > 0 ? `${b.residents - b.peopleOut} residents were still inside.` : 'Everyone was already out.'}</p>}
-      {b.status === 'clear' && <p className="hint">Everyone is out and accounted for.</p>}
-      {b.kind === 'shelter' && <p className="hint">Destination for every evacuation.</p>}
-    </>
-  );
-}
-
-function Incident(p: DockProps) {
-  const { sim, buildings, units, cells, onSelect, onDispatch, onRelease } = p;
+function incident(p: DockProps): ReactNode {
+  const { sim, buildings, units, cells, onSelect, onDispatch, onRelease, pack } = p;
   const burning = cells.filter((c) => c.state === 1).length;
   const hills = cells.filter((c) => c.fuel >= 1 || c.state === 2).length || 1;
   const burned = cells.filter((c) => c.state === 2).length;
@@ -319,107 +345,231 @@ function Incident(p: DockProps) {
   const needs = buildings
     .filter((b) => b.kind !== 'shelter' && !unitFor(units, b.id) && (b.status === 'behind' || b.status === 'burning' || (b.fireEtaMin >= 0 && b.fireEtaMin < 90 && b.status !== 'lost' && b.status !== 'clear')))
     .sort((a, b) => (a.status === 'burning' ? -1 : 0) - (b.status === 'burning' ? -1 : 0) || a.fireEtaMin - b.fireEtaMin)
-    .slice(0, 3);
+    .slice(0, 4);
   return (
     <>
-      <dl className="incident-stats">
-        <div><dt>Burning now</dt><dd className={burning ? 'bad' : ''}>{burning}<small> cells</small></dd></div>
-        <div><dt>Burned</dt><dd>{Math.min(100, Math.round((100 * burned) / hills))}<small>% of hills</small></dd></div>
-        <div><dt>Wind</dt><dd>SW<small> {sim.windMph} mph</small></dd></div>
-        <div><dt>Units free</dt><dd className={free ? 'ok' : 'bad'}>{free}<small>/{units.length}</small></dd></div>
+      <dl className="facts">
+        <div><dt>Burning now</dt><dd className={burning ? 'bad' : ''}>{burning} cells</dd></div>
+        <div><dt>Hills burned</dt><dd>{Math.min(100, Math.round((100 * burned) / hills))}%</dd></div>
+        <div><dt>Wind</dt><dd>SW {sim.windMph} mph</dd></div>
       </dl>
-      <ul className="rows" aria-label="Units">
-        {units.map((u) => {
-          const b = buildings.find((x) => x.id === u.targetId);
-          const text = u.status === 'ready' ? 'At staging, ready' : u.status === 'enroute' ? `Responding to ${b?.name}` : `On scene at ${b?.name}`;
-          return (
-            <li key={u.id}>
-              <div className="row static">
-                <span className={`unit-badge ${u.status}`}><TruckIcon /></span>
-                <span className="row-text"><span className="row-name">{u.name}</span><span className="row-detail">{text}</span></span>
-                {u.status !== 'ready' && <button type="button" className="btn small" onClick={() => onRelease(u.id)}>Return</button>}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
       {needs.length > 0 && (
         <>
-          <h3 className="mini-title">Needs a unit</h3>
-          <ul className="rows" aria-label="Buildings that need a unit">
+          <h3 className="section">Needs a unit</h3>
+          <ul className="list" aria-label="Buildings that need a unit">
             {needs.map((b) => (
-              <li key={b.id}>
-                <div className="row" role="button" tabIndex={0} onClick={() => onSelect(b.id)} onKeyDown={(e) => { if (e.key === 'Enter') onSelect(b.id); }}>
-                  <span className="row-bar" style={{ background: b.status === 'burning' || b.status === 'behind' ? STATUS_COLORS.red : STATUS_COLORS.amber }} aria-hidden="true" />
-                  <span className="row-text">
-                    <span className="row-name">{b.name}</span>
-                    <span className="row-detail">{b.status === 'burning' ? 'Burning' : `Fire in ${fmtMin(b.fireEtaMin)}`} · {b.residents - b.peopleOut} inside</span>
-                  </span>
-                  <button type="button" className="btn small urgent" disabled={!free} onClick={(e) => { e.stopPropagation(); onDispatch(b.id); }}>Send unit</button>
-                </div>
+              <li key={b.id} className="item" {...clickable(() => onSelect(b.id))}>
+                <Thumb b={b} pack={pack} />
+                <span className="item-text">
+                  <span className="item-name">{b.name}</span>
+                  <span className="item-detail">{b.status === 'burning' ? 'Burning' : `Fire in ${fmtMin(b.fireEtaMin)}`} · {b.residents - b.peopleOut} inside</span>
+                </span>
+                <button type="button" className="btn small urgent" disabled={!free} onClick={(e) => { e.stopPropagation(); onDispatch(b.id); }}>Send unit</button>
               </li>
             ))}
           </ul>
         </>
       )}
+      <h3 className="section">Units</h3>
+      <ul className="list" aria-label="Units">
+        {units.map((u) => {
+          const b = buildings.find((x) => x.id === u.targetId);
+          const text = u.status === 'ready' ? 'At staging, ready' : u.status === 'enroute' ? `Responding to ${b?.name}` : `On scene at ${b?.name}`;
+          return (
+            <li key={u.id} className="item static">
+              <span className={`unit-badge ${u.status}`}><TruckIcon /></span>
+              <span className="item-text"><span className="item-name">{u.name}</span><span className="item-detail">{text}</span></span>
+              {u.status !== 'ready' && <button type="button" className="btn small" onClick={() => onRelease(u.id)}>Return</button>}
+            </li>
+          );
+        })}
+      </ul>
       <Log events={p.events} />
     </>
   );
 }
 
-function FireTabs(p: DockProps) {
-  const [tab, setTab] = useState<'people' | 'units'>('people');
-  return (
-    <>
-      <div className="tabs" role="tablist" aria-label="Fire view">
-        <button type="button" role="tab" aria-selected={tab === 'people'} className={tab === 'people' ? 'on' : ''} onClick={() => setTab('people')}>Residents</button>
-        <button type="button" role="tab" aria-selected={tab === 'units'} className={tab === 'units' ? 'on' : ''} onClick={() => setTab('units')}>
-          Incident command
-          <span className="tab-count">{p.units.filter((u) => u.status === 'ready').length}</span>
-        </button>
+function fireDetail(p: DockProps, b: Building): View {
+  const { sim, onSelect, onEvacuate, pack } = p;
+  const tag = statusTag(b, sim.phase);
+  const canEvac = sim.phase === 'fire' && !b.evacStarted && b.status !== 'lost' && b.status !== 'burning' && b.kind !== 'shelter';
+  const u = unitFor(p.units, b.id);
+  const free = p.units.find((x) => x.status === 'ready');
+  const canSend = sim.phase === 'fire' && b.kind !== 'shelter' && b.status !== 'lost' && !u;
+  return {
+    head: (
+      <>
+        <Back onClick={() => onSelect(null)} />
+        <p className="eyebrow">{KIND_LABEL[b.kind]} · {b.residents} residents · {b.vans} van{b.vans === 1 ? '' : 's'}</p>
+        <div className="title-row">
+          <h2>{b.name}</h2>
+          <span className="state" style={{ color: tag.color }}>{tag.text}</span>
+        </div>
+      </>
+    ),
+    body: (
+      <>
+        <Thumb b={b} pack={pack} hero />
+        {b.kind !== 'shelter' && <Structure b={b} />}
+        {b.kind !== 'shelter' && b.status !== 'lost' && b.status !== 'clear' && <Race b={b} />}
+        {u && <p className="unit-line"><TruckIcon /> {u.name} {u.status === 'enroute' ? 'is on the way' : 'is on scene, water on the building'}</p>}
+        {b.evacStarted && (
+          <div className="progress">
+            <div className="progress-row"><span>Residents out</span><b>{b.peopleOut} of {b.residents}</b></div>
+            <div className="meter"><div style={{ width: `${(100 * b.peopleOut) / Math.max(1, b.residents)}%` }} /></div>
+          </div>
+        )}
+        {b.status === 'lost' && <p className="hint">The building collapsed. {b.residents - b.peopleOut > 0 ? `${b.residents - b.peopleOut} residents were still inside.` : 'Everyone was already out.'}</p>}
+        {b.status === 'clear' && <p className="hint">Everyone is out and accounted for.</p>}
+        {b.kind === 'shelter' && <p className="hint">Destination for every evacuation. {b.residents} beds.</p>}
+      </>
+    ),
+    foot: canEvac || canSend ? (
+      <div className="foot-row">
+        {canEvac && <button type="button" className="btn primary grow" onClick={() => onEvacuate(b.id)}>Start evacuation</button>}
+        {canSend && (
+          <button type="button" className="btn secondary grow" disabled={!free} onClick={() => p.onDispatch(b.id)}>
+            <TruckIcon /> {free ? `Send ${free.name}` : 'All units busy'}
+          </button>
+        )}
       </div>
-      {tab === 'people' ? <FireList {...p} /> : <Incident {...p} />}
-    </>
-  );
+    ) : undefined,
+  };
 }
 
 // ------------------------------------------------------------------ results
-function ResultsView({ sim, buildings, onRestart }: DockProps) {
+function results(p: DockProps): View {
+  const { sim, buildings, onRestart, onSelect, pack } = p;
   const list = buildings.filter((b) => b.kind !== 'shelter');
   const total = list.reduce((s, b) => s + b.residents, 0);
   const out = list.reduce((s, b) => s + b.peopleOut, 0);
   const lost = list.filter((b) => b.status === 'lost');
   const damage = lost.reduce((s, b) => s + b.valueUsd, 0);
-  return (
-    <>
-      <div className="dock-head">
-        <div>
-          <div className="eyebrow">The fire is out · {Math.floor(sim.simMinutes / 60)}h {sim.simMinutes % 60}m after ignition</div>
-          <h2>The best claim is the one that never happens</h2>
-        </div>
-        <button type="button" className="btn primary" onClick={onRestart}>Run again</button>
-      </div>
-      <dl className="result-grid">
-        <div><dt>People out</dt><dd className="ok">{out}<small>/{total}</small></dd></div>
-        <div><dt>Buildings lost</dt><dd className={lost.length ? 'bad' : 'ok'}>{lost.length}</dd></div>
-        <div><dt>Damage</dt><dd>{fmtUsd(damage)}</dd></div>
-        <div><dt>Insurance claims</dt><dd>{lost.length}</dd></div>
-      </dl>
-      <p className="hint">With Lantern. The without-Lantern comparison arrives with the Spacetime baseline run. All numbers are simulated.</p>
-    </>
-  );
+  return {
+    head: (
+      <>
+        <p className="eyebrow">The fire is out · {Math.floor(sim.simMinutes / 60)}h {sim.simMinutes % 60}m after ignition</p>
+        <h2>The best claim is the one that never happens</h2>
+        <Stats items={[
+          { label: 'residents out', value: <>{out}<small>/{total}</small></>, tone: out === total ? 'ok' : '' },
+          { label: 'buildings lost', value: lost.length, tone: lost.length ? 'bad' : 'ok' },
+          { label: 'damage', value: fmtUsd(damage) },
+        ]} />
+      </>
+    ),
+    body: (
+      <>
+        <h3 className="section">Every building</h3>
+        <ul className="list">
+          {list.sort((a, b) => urgency(b) - urgency(a)).map((b) => (
+            <li key={b.id} className="item" {...clickable(() => onSelect(b.id))}>
+              <Thumb b={b} pack={pack} />
+              <span className="item-text">
+                <span className="item-name">{b.name}</span>
+                <span className="item-detail">{b.peopleOut} of {b.residents} out</span>
+              </span>
+              <span className={`state ${b.status === 'lost' ? 'muted' : 'ok'}`}>{b.status === 'lost' ? 'Collapsed' : 'Standing'}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="hint">With Lantern. The without-Lantern comparison arrives with the Spacetime baseline run. All numbers are simulated.</p>
+      </>
+    ),
+    foot: <button type="button" className="btn primary wide" onClick={onRestart}>Run again</button>,
+  };
+}
+
+// ------------------------------------------------------------------ the panel: side column on wide screens, a draggable sheet on phones
+const PHONE = 760;
+
+function usePhone() {
+  const [phone, setPhone] = useState(() => window.innerWidth <= PHONE);
+  const [vh, setVh] = useState(() => window.innerHeight);
+  useEffect(() => {
+    const on = () => { setPhone(window.innerWidth <= PHONE); setVh(window.innerHeight); };
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
+  return { phone, vh };
 }
 
 export const Dock = forwardRef<HTMLElement, DockProps>(function Dock(props, ref) {
-  const { sim, selected } = props;
-  let body;
-  if (sim.phase === 'ended' && !selected) body = <ResultsView {...props} />;
-  else if (sim.phase === 'prep') body = selected && selected.kind !== 'shelter' ? <PrepDetail {...props} selected={selected} /> : <PrepList {...props} />;
-  else body = selected ? <FireDetail {...props} selected={selected} /> : <FireTabs {...props} />;
+  const { sim, selected, topLimit } = props;
+  const [tab, setTab] = useState<Tab>('people');
+  const { phone, vh } = usePhone();
+
+  // sheet heights: peek (title + main button), half, full
+  const snaps = [Math.max(200, Math.round(vh * 0.27)), Math.round(vh * 0.5), Math.max(Math.round(vh * 0.5), vh - topLimit - 4)];
+  const [snap, setSnap] = useState(1);
+  const [dragH, setDragH] = useState<number | null>(null);
+  const drag = useRef<{ y: number; h: number; moved: boolean; id: number } | null>(null);
+  const justDragged = useRef(false);
+
+  // a building picked on the map should be readable without dragging the sheet up first
+  const selId = selected?.id ?? null;
+  const [lastSel, setLastSel] = useState(selId);
+  if (selId !== lastSel) {
+    setLastSel(selId);
+    if (selId != null && snap < 1) setSnap(1);
+  }
+  // the body starts at the top whenever the view changes
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const viewKey = `${sim.phase}-${selId}-${tab}`;
+  useEffect(() => { bodyRef.current?.scrollTo({ top: 0 }); }, [viewKey]);
+
+  let view: View;
+  if (sim.phase === 'ended' && !selected) view = results(props);
+  else if (sim.phase === 'prep') view = selected && selected.kind !== 'shelter' ? prepDetail(props, selected) : prepList(props);
+  else if (selected) view = fireDetail(props, selected);
+  else view = { head: fireHead(props, tab, setTab), body: tab === 'people' ? fireList(props) : incident(props) };
+
+  const onDown = (e: React.PointerEvent) => {
+    if (!phone) return;
+    drag.current = { y: e.clientY, h: dragH ?? snaps[snap], moved: false, id: e.pointerId };
+  };
+  const onMove = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    const dy = d.y - e.clientY;
+    if (!d.moved && Math.abs(dy) < 8) return;
+    if (!d.moved) { d.moved = true; (e.currentTarget as HTMLElement).setPointerCapture(d.id); }
+    setDragH(Math.min(snaps[2], Math.max(snaps[0] - 40, d.h + dy)));
+  };
+  const onUp = (e: React.PointerEvent) => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d) return;
+    if (!d.moved) {
+      if ((e.target as HTMLElement).closest('.grip')) setSnap((s) => (s + 1) % 3);
+      return;
+    }
+    justDragged.current = true;
+    setTimeout(() => { justDragged.current = false; }, 0);
+    const h = dragH ?? d.h;
+    const v = d.h - h; // positive: dragged down
+    let best = 0;
+    snaps.forEach((s, i) => { if (Math.abs(s - h) < Math.abs(snaps[best] - h)) best = i; });
+    // a short flick still moves one step in the direction of the drag
+    if (best === snap && Math.abs(v) > 40) best = Math.max(0, Math.min(2, snap + (v > 0 ? -1 : 1)));
+    setSnap(best);
+    setDragH(null);
+  };
+
+  const height = phone ? (dragH ?? snaps[snap]) : undefined;
   return (
-    <section ref={ref} className="dock map-chrome" aria-label="Control panel">
-      <div className="dock-grip" aria-hidden="true" />
-      {body}
+    <section
+      ref={ref}
+      className={`panel map-chrome ${dragH != null ? 'dragging' : ''}`}
+      style={height ? { height } : undefined}
+      aria-label="Control panel"
+    >
+      <div className="panel-head" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
+        onClickCapture={(e) => { if (justDragged.current) e.stopPropagation(); }}>
+        <button type="button" className="grip" aria-label="Resize panel"><span /></button>
+        {view.head}
+      </div>
+      <div className="panel-body" ref={bodyRef}>{view.body}</div>
+      {view.foot && <div className="panel-foot">{view.foot}</div>}
     </section>
   );
 });

@@ -50,14 +50,17 @@ export default function App() {
   // The map frames the town in the space the floating bar and panel leave free.
   const topRef = useRef<HTMLDivElement>(null);
   const dockRef = useRef<HTMLElement>(null);
-  const [insets, setInsets] = useState({ top: 64, bottom: 240 });
+  const [insets, setInsets] = useState({ top: 64, bottom: 240, left: 0 });
   useLayoutEffect(() => {
     const measure = () => {
       const t = topRef.current?.getBoundingClientRect();
       const d = dockRef.current?.getBoundingClientRect();
       const top = t ? t.bottom + 8 : 64;
-      const bottom = d ? window.innerHeight - d.top + 8 : 240;
-      setInsets((p) => (Math.abs(p.top - top) > 4 || Math.abs(p.bottom - bottom) > 24 ? { top, bottom } : p));
+      // wide screens: the panel is a column on the left; phones: a sheet along the bottom
+      const side = window.innerWidth > 760;
+      const bottom = side ? 0 : d ? window.innerHeight - d.top + 8 : 240;
+      const left = side && d ? d.right + 8 : 0;
+      setInsets((p) => (Math.abs(p.top - top) > 4 || Math.abs(p.bottom - bottom) > 24 || Math.abs(p.left - left) > 4 ? { top, bottom, left } : p));
     };
     const ro = new ResizeObserver(measure);
     if (topRef.current) ro.observe(topRef.current);
@@ -100,8 +103,8 @@ export default function App() {
       <MapView
         sim={sim} buildings={buildings} fireCells={cells} pack={pack}
         selectedId={selectedId} onSelect={setSelectedId}
-        topInset={insets.top} bottomInset={insets.bottom} lite={lite} units={units}
-      >
+        topInset={insets.top} bottomInset={insets.bottom} leftInset={insets.left} lite={lite} units={units}
+      />
         <div ref={topRef} className="top-slot">
           <TopBar
             sim={sim} look={look} onLook={setLook}
@@ -122,8 +125,9 @@ export default function App() {
           units={units} cells={cells}
           onDispatch={world.dispatchUnit}
           onRelease={world.releaseUnit}
+          pack={pack}
+          topLimit={insets.top}
         />
-      </MapView>
     </div>
   );
 }
