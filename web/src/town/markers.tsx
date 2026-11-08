@@ -1,12 +1,14 @@
-// Map markers and street life. Deliberately no pills/badges: buildings get a slim waypoint
-// (stem + numbered diamond) with map-style halo lettering, and the streets get people and cars.
-import { useEffect, useRef, type CSSProperties } from 'react';
+// Map markers and street life. Buildings get a slim waypoint (stem + numbered diamond) with map-style
+// halo lettering; the one pill on the map is the people alert beside a building's name ("3 need help").
+// The streets get people and cars.
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { Building, Pack, Sim } from './types';
 import { PeopleDefs, RouteVehicle } from './vehicles';
 import { TRAFFIC, personStyle, vehLook, vehOffset, type Heading } from './vehicleData';
 import { VIEW_W, depthOf, project } from './iso';
 import { SPRITE, evacRoute, spriteScale } from './scene';
 import { STATUS_COLORS } from './palettes';
+import { badgeFor, type AlertKind, type BuildingAlerts } from '../ui/alerts';
 
 type IconName = 'shield' | 'alert' | 'flame' | 'walk' | 'check' | 'x' | 'house';
 
@@ -54,33 +56,126 @@ function markerInfo(b: Building, phase: Sim['phase']): MarkerInfo {
   return { badge, color: '#9AA6BA', line: b.fireEtaMin < 0 ? 'No fire path' : b.fireEtaMin < 1 ? 'Fire here' : `Fire in ${fmtMin(b.fireEtaMin)}`, icon: null };
 }
 
-interface Placed { b: Building; info: MarkerInfo; x: number; y: number; roofY: number; w: number }
+// ------------------------------------------------------------------ people alerts
+// A pill right of the building's name: the most urgent count for its people ("3 need help", "2 left behind",
+// "4 no reply", "2 help coming"). Red pills ping from their dot. Text only: portraits at this size (about
+// 11 px at the default zoom) are smudges, so the faces stay on the phone.
 
-/** Front buildings keep their spot; markers behind them slide up their stem until clear. */
-function layout(buildings: Building[], phase: Sim['phase'], s: number): Placed[] {
+/** Measured label widths (canvas measures the same font the SVG text uses); re-measured once web fonts land. */
+const widths = new Map<string, number>();
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+if (typeof document !== 'undefined') document.fonts?.addEventListener?.('loadingdone', () => widths.clear());
+function textW(text: string, size: number, weight: number): number {
+  const key = `${weight}/${size}/${text}`;
+  let w = widths.get(key);
+  if (w === undefined) {
+    if (measureCtx === undefined) measureCtx = typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d');
+    if (measureCtx) {
+      measureCtx.font = `${weight} ${size}px Inter, system-ui, sans-serif`;
+      w = measureCtx.measureText(text).width;
+    } else w = text.length * size * 0.6;
+    widths.set(key, w);
+  }
+  return w;
+}
+
+type AlertTone = 'bad' | 'warn' | 'calm';
+interface AlertView { key: string; tone: AlertTone; text: string; label: string }
+
+/** What a building's badge says (null: nothing to flag). */
+function alertView(b: Building, a: BuildingAlerts | undefined): AlertView | null {
+  const head = badgeFor(a);
+  if (!a || !head) return null;
+  const kind: AlertKind = a.leftBehind ? 'left_behind' : a.needHelp ? 'needs_help' : a.noReply ? 'no_reply' : 'help_coming';
+  const tone: AlertTone = head.tone === 'bad' ? 'bad' : kind === 'help_coming' ? 'calm' : 'warn';
+  const names = a.people.filter((p) => p.kind === kind).map((p) => p.person.name);
+  const label = `${b.name}: ${head.text}${names.length ? ` (${names.slice(0, 4).join(', ')}${names.length > 4 ? ` and ${names.length - 4} more` : ''})` : ''}`;
+  return { key: `${tone}|${label}`, tone, text: head.text, label };
+}
+
+// badge geometry, in marker units (the marker group scales it screen-constant): the pill is centred on the
+// name line and sits 7 units right of the name, clear of the status line below
+const BADGE_H = 17.5;
+const BADGE_CY = -6.5;
+const BADGE_GAP = 7;
+const BADGE_FONT = 11.5;
+const badgeX = (b: Building) => 22 + textW(b.name, 12.5, 700) + BADGE_GAP;
+const badgeW = (v: AlertView) => 16.5 + textW(v.text, BADGE_FONT, 700) + 7.5;
+
+const ALERT_COLORS: Record<AlertTone, { fill: string; text: string; dot: string; edge: string }> = {
+  bad: { fill: '#D63A30', text: '#FFFFFF', dot: '#FFFFFF', edge: 'rgba(255,255,255,0.28)' },
+  warn: { fill: '#F2A93B', text: '#1A1204', dot: '#1A1204', edge: 'rgba(255,255,255,0.3)' },
+  calm: { fill: 'rgba(14,18,28,0.94)', text: '#F5C979', dot: STATUS_COLORS.amber, edge: 'rgba(242,169,59,0.55)' },
+};
+
+/**
+ * One building's people-alert pill. Fades in when it appears and keeps its last words while it fades out;
+ * a click selects the building, the same as clicking the building itself.
+ */
+function AlertBadge({ view, x, id, onSelect }: { view: AlertView | null; x: number; id: number; onSelect?: (id: number) => void }) {
+  const [kept, setKept] = useState(view);
+  if (view && view.key !== kept?.key) setKept(view);
+  const on = view !== null;
+  useEffect(() => {
+    if (on) return;
+    const t = setTimeout(() => setKept(null), 600);
+    return () => clearTimeout(t);
+  }, [on]);
+  const v = view ?? kept;
+  if (!v) return null;
+  const c = ALERT_COLORS[v.tone];
+  const w = badgeW(v);
+  const top = BADGE_CY - BADGE_H / 2;
+  const dotX = x + 8.75;
+  return (
+    <g className={on ? 'mk-alert' : 'mk-alert off'} data-bid={id} role="button" aria-label={v.label}
+      onClick={(e) => { e.stopPropagation(); onSelect?.(id); }}>
+      <title>{v.label}</title>
+      <rect x={x} y={top} width={w} height={BADGE_H} rx={BADGE_H / 2} fill="none" stroke="rgba(7,10,16,0.78)" strokeWidth="3.4" />
+      <rect className="mk-alert-pill" x={x} y={top} width={w} height={BADGE_H} rx={BADGE_H / 2} fill={c.fill} stroke={c.edge} strokeWidth="1" />
+      {v.tone === 'bad' && <circle className="mk-alert-ping" cx={dotX} cy={BADGE_CY} r="3" fill="none" stroke={c.dot} strokeWidth="1.4" />}
+      <circle cx={dotX} cy={BADGE_CY} r="3" fill={c.dot} />
+      <text x={x + 16.5} y={BADGE_CY + 4.1} fontSize={BADGE_FONT} fontWeight="700" fill={c.text}>{v.text}</text>
+    </g>
+  );
+}
+
+interface Placed { b: Building; info: MarkerInfo; x: number; y: number; roofY: number; w: number; alert: AlertView | null; ax: number }
+
+/** Front buildings keep their spot; markers behind them slide up their stem until clear (alert pill included). */
+function layout(buildings: Building[], phase: Sim['phase'], s: number, alerts?: Map<number, BuildingAlerts>): Placed[] {
   const order = [...buildings].sort((a, b) => depthOf(b.x + b.w / 2, b.y + b.h / 2) - depthOf(a.x + a.w / 2, a.y + a.h / 2));
   const out: Placed[] = [];
   for (const b of order) {
     const info = markerInfo(b, phase);
     const [x, roofY] = project(b.x + b.w / 2, b.y + b.h / 2, (SPRITE[b.kind].tag - 6) * spriteScale(b));
-    const w = 26 + Math.max(b.name.length * 7.4, info.line.length * 6.4 + (info.icon ? 15 : 0));
+    const alert = phase === 'prep' ? null : alertView(b, alerts?.get(b.id));
+    const ax = badgeX(b);
+    let w = 26 + Math.max(b.name.length * 7.4, info.line.length * 6.4 + (info.icon ? 15 : 0));
+    if (alert) w = Math.max(w, ax + badgeW(alert) + 4);
     let y = roofY - 34 * s;
     for (let i = 0; i < 14; i++) {
       const hit = out.find((p) => x - 16 * s < p.x + p.w * s && p.x - 16 * s < x + w * s && Math.abs(p.y - y) < 36 * s);
       if (!hit) break;
       y = hit.y - 38 * s;
     }
-    out.push({ b, info, x, y, roofY, w });
+    out.push({ b, info, x, y, roofY, w, alert, ax });
   }
   return out;
 }
 
 const HALO = { stroke: 'rgba(7,10,16,0.82)', strokeWidth: 3, paintOrder: 'stroke' as const, strokeLinejoin: 'round' as const };
 
-export function Markers({ buildings, phase, scale, selectedId }: { buildings: Building[]; phase: Sim['phase']; scale: number; selectedId: number | null }) {
+export function Markers({ buildings, phase, scale, selectedId, alerts, onSelect }: {
+  buildings: Building[]; phase: Sim['phase']; scale: number; selectedId: number | null;
+  /** people alerts per building (ui/alerts): a pill beside the name during and after the fire */
+  alerts?: Map<number, BuildingAlerts>;
+  /** clicking an alert pill selects its building */
+  onSelect?: (id: number) => void;
+}) {
   return (
     <g style={{ pointerEvents: 'none' }} fontFamily="Inter, system-ui, sans-serif">
-      {layout(buildings, phase, scale).map(({ b, info, x, y, roofY }) => {
+      {layout(buildings, phase, scale, alerts).map(({ b, info, x, y, roofY, alert, ax }) => {
         const sel = selectedId === b.id;
         return (
           <g key={b.id}>
@@ -99,6 +194,7 @@ export function Markers({ buildings, phase, scale, selectedId }: { buildings: Bu
                 <path d={ICON_PATHS[info.icon]} transform="translate(21 4) scale(0.52)" fill="none" stroke={info.color} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
               )}
               <text x={info.icon ? 36 : 22} y="13" fontSize="11" fontWeight="600" fill={info.color} {...HALO}>{info.line}</text>
+              <AlertBadge view={alert} x={ax} id={b.id} onSelect={onSelect} />
             </g>
           </g>
         );

@@ -13,6 +13,7 @@ import { WindowLayer } from './WindowLayer';
 import { ready } from './assets';
 import { FireDefs } from './FireDefs';
 import { TICK_SECONDS, type Unit } from './mockWorld';
+import type { BuildingAlerts } from '../ui/alerts';
 
 interface TownProps {
   sim: Sim;
@@ -42,6 +43,8 @@ interface TownProps {
   ignition?: { x: number; y: number; picked: boolean } | null;
   /** picking the fire start: a click on the ground reports its map point instead of selecting */
   onPick?: (x: number, y: number) => void;
+  /** people alerts per building (ui/alerts), drawn as a pill beside each marker */
+  alerts?: Map<number, BuildingAlerts>;
 }
 
 /** True while `on`, and for `ms` after it turns off (so a layer can fade out instead of popping). */
@@ -379,7 +382,7 @@ const COOL_TICKS = 7;
 /** Stable 0..1 jitter per cell so neighbours ignite a few hundred ms apart instead of in lockstep. */
 const jitter = (id: number) => ((id * 2654435761) % 1000) / 1000;
 
-export const Town = memo(function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, svgRef, tagScale = 1, lite = false, units = [], rotation = 0, assets = 0, ghost = null, tickSeconds = TICK_SECONDS, plantSeed = 7, ignition = null, onPick }: TownProps) {
+export const Town = memo(function Town({ sim, buildings, fireCells, pack, selectedId, onSelect, svgRef, tagScale = 1, lite = false, units = [], rotation = 0, assets = 0, ghost = null, tickSeconds = TICK_SECONDS, plantSeed = 7, ignition = null, onPick, alerts }: TownProps) {
   const P = PALETTES[pack];
   // MapView captures the pointer to pan, so the browser hands the click to the map element, not to the building
   // under it: remember what the press landed on and act on the click that follows (MapView swallows drags).
@@ -662,8 +665,8 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
       {/* where the fire will start: glides when the start moves, fades out as the fire takes over */}
       {igShown && ignition && <IgnitionMarker key={`ig${rotation}`} x={ignition.x} y={ignition.y} picked={ignition.picked} scale={tagScale} visible={igOn} />}
 
-      {/* waypoint markers: stem + numbered diamond + halo lettering (no pills) */}
-      <Markers buildings={buildings} phase={sim.phase} scale={tagScale} selectedId={selectedId} />
+      {/* waypoint markers: stem + numbered diamond + halo lettering, and a people-alert pill beside the name */}
+      <Markers buildings={buildings} phase={sim.phase} scale={tagScale} selectedId={selectedId} alerts={alerts} onSelect={onSelect} />
     </svg>
   );
 });

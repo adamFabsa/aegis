@@ -7,6 +7,7 @@ import { PALETTES } from './palettes';
 import { WindCompass } from './wind';
 import { VIEW_H, VIEW_W, project, unproject } from './iso';
 import { SPRITE, spriteScale } from './scene';
+import type { BuildingAlerts } from '../ui/alerts';
 
 interface Cam { x: number; y: number; k: number } // viewBox top-left (svg units) + zoom (px per unit)
 interface Ins { top: number; bottom: number; left: number; right: number }
@@ -36,6 +37,8 @@ interface MapViewProps {
   plantSeed?: number;
   ignition?: { x: number; y: number; picked: boolean } | null;
   onPickGround?: (x: number, y: number) => void;
+  /** people alerts per building (ui/alerts): a pill beside each building's marker */
+  alerts?: Map<number, BuildingAlerts>;
 }
 
 /** How long the old look (dusk / night, fire damage) takes to dissolve into the new one. */
@@ -107,7 +110,7 @@ function clampCam(c: Cam, w: number, h: number, I: Ins): Cam {
   return { k, x: cx - mx / k, y: cy - my / k };
 }
 
-export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect, topInset = 0, bottomInset = 0, leftInset = 0, rightInset = 0, onPhone, rotation = 0, onRotate, lite = false, units, tickSeconds = TICK_SECONDS, plantSeed, ignition, onPickGround }: MapViewProps) {
+export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect, topInset = 0, bottomInset = 0, leftInset = 0, rightInset = 0, onPhone, rotation = 0, onRotate, lite = false, units, tickSeconds = TICK_SECONDS, plantSeed, ignition, onPickGround, alerts }: MapViewProps) {
   const ghost = useGhost(pack, sim.phase, buildings, fireCells);
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -331,8 +334,8 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
   const assets = useAssetVersion();
   const town = useMemo(
     () => (ready ? <Town sim={sim} buildings={buildings} fireCells={fireCells} pack={pack} selectedId={selectedId} onSelect={select} svgRef={svgRef} tagScale={tagScale} lite={lite} units={units} rotation={rotation} assets={assets} ghost={ghost} tickSeconds={tickSeconds}
-      plantSeed={plantSeed} ignition={ignition} onPick={onPickGround} /> : null),
-    [ready, sim, buildings, fireCells, pack, selectedId, select, tagScale, lite, units, rotation, assets, ghost, tickSeconds, plantSeed, ignition, onPickGround],
+      plantSeed={plantSeed} ignition={ignition} onPick={onPickGround} alerts={alerts} /> : null),
+    [ready, sim, buildings, fireCells, pack, selectedId, select, tagScale, lite, units, rotation, assets, ghost, tickSeconds, plantSeed, ignition, onPickGround, alerts],
   );
 
   return (
