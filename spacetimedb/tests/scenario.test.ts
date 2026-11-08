@@ -52,3 +52,35 @@ test('a picked fire start must be burnable', () => {
   const s = SC.withIgnition(SEED, 45, 2);
   assert.ok(s.params.ignition.length > 0);
 });
+
+test('the same fire is monotone: preparing never makes it worse (keyed draws)', () => {
+  for (const n of [0, 7919, 15838, 23757, 31676, 39595]) {
+    const seed = n ? SC.makeScenario(SEED, n) : SEED;
+    const p = seed.params;
+    const w = S.buildWorldFromSeed(seed);
+    const fixes = w.fixes.map((f) => ({ ...f }));
+    for (const id of S.recommendFixes(w, fixes, p)) {
+      const f = fixes.find((x) => x.id === id)!;
+      const b = w.buildings.find((x) => x.id === f.buildingId)!;
+      S.applyFix(w.sim, b, f, w.people.filter((x) => x.buildingId === b.id), p);
+    }
+    S.startFire(w, p, p.fireSeed);
+    S.fastForward(w, p, p.fireSeed, { followCoach: true });
+    const L = S.computeResults(w, p, 'with');
+    const B = S.runBaseline(seed);
+    assert.ok(L.damageUsd <= B.damageUsd + 1, `#${n}: damage ${L.damageUsd} vs ${B.damageUsd}`);
+    assert.ok(L.buildingsLost <= B.buildingsLost, `#${n}: lost ${L.buildingsLost} vs ${B.buildingsLost}`);
+    assert.ok(L.peopleSafe >= B.peopleSafe, `#${n}: safe ${L.peopleSafe} vs ${B.peopleSafe}`);
+  }
+});
+
+test('a fire start must be on burnable ground away from buildings', () => {
+  const b12 = SEED.buildings.find((b) => b.id === 12)!;
+  const p = SEED.params;
+  // the cell just right of Building 12's footprint is refused, even if that cell could burn
+  const foot = S.footprintCellIds(b12, p);
+  const right = Math.max(...foot.map((c) => c % p.cols)) + 1;
+  const row = Math.floor(foot[0] / p.cols);
+  assert.throws(() => SC.withIgnition(SEED, right, row), /nothing to burn/);
+  assert.throws(() => SC.withIgnition(SEED, foot[0] % p.cols, row), /nothing to burn/); // on the building
+});

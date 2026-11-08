@@ -187,7 +187,7 @@
   "homesUnits": 5,
   "maxSimMinutes": 720,
   "baselineRuns": 1,
-  "fireSeed": 20250112,
+  "fireSeed": 20250130,
   "calibration": {
     "note": "SIMULATED neighbourhood. Fire constants calibrated to the real 2025 Eaton Fire (NASA FIRMS + IEM wind); building risk from CAL FIRE DINS.",
     "firms": {
@@ -533,17 +533,17 @@
     },
     "demoSeed": {
       "rule": "fire closest to the 40-fire average with-vs-without difference",
-      "seed": 20250112,
+      "seed": 20250130,
       "average": {
-        "dSafe": 6.275,
-        "dLost": 0.575,
-        "dDmg": 8.9825
+        "dSafe": 8.375,
+        "dLost": 1.05,
+        "dDmg": 17.3425
       },
       "chosen": {
-        "s": 20250112,
-        "dSafe": 7,
+        "s": 20250130,
+        "dSafe": 10,
         "dLost": 1,
-        "dDmg": 8.4
+        "dDmg": 24
       }
     }
   }

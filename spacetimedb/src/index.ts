@@ -47,15 +47,16 @@ function log(ctx: Context, lines: string | string[], tick = getSim(ctx).tick) {
   for (const text of typeof lines === 'string' ? [lines] : lines) if (text) ctx.db.eventLog.insert({ id: 0n, tick, text });
 }
 
-// Private engine state: exact sim-minute each resident was pinged (keeps deadlines right across speed changes).
-function loadPings(ctx: Context): Record<number, number> {
+// Private engine state: exact sim-minute each resident was pinged (keeps deadlines right across speed changes)
+// and each building's cumulative fire exposure (the monotone keyed fire, sim.ts fireSubstep).
+type EngineState = { pingedAtMinute: Record<number, number>; exposureHazard: Record<number, number> };
+function loadEngineState(ctx: Context): EngineState {
   const json = ctx.db.engineState.id.find(0)?.json;
-  if (!json) return {};
-  const parsed = JSON.parse(json) as { pingedAtMinute?: Record<number, number> };
-  return parsed.pingedAtMinute ?? {};
+  const parsed = (json ? JSON.parse(json) : {}) as Partial<EngineState>;
+  return { pingedAtMinute: parsed.pingedAtMinute ?? {}, exposureHazard: parsed.exposureHazard ?? {} };
 }
-function savePings(ctx: Context, pings: Record<number, number>) {
-  const row = { id: 0, json: JSON.stringify({ pingedAtMinute: pings }) };
+function saveEngineState(ctx: Context, world: { pingedAtMinute?: Record<number, number>; exposureHazard?: Record<number, number> }) {
+  const row = { id: 0, json: JSON.stringify({ pingedAtMinute: world.pingedAtMinute ?? {}, exposureHazard: world.exposureHazard ?? {} }) };
   if (ctx.db.engineState.id.find(0)) ctx.db.engineState.id.update(row);
   else ctx.db.engineState.insert(row);
 }
@@ -67,7 +68,7 @@ function load(ctx: Context): S.World {
     people: [...ctx.db.person.iter()].map((p) => ({ ...p })),
     tasks: [...ctx.db.task.iter()].map((x) => ({ ...x })),
     cells: [...ctx.db.fireCell.iter()].map((c) => ({ ...c })),
-    pingedAtMinute: loadPings(ctx),
+    ...loadEngineState(ctx),
     protectedBuildingIds: U.protectedIds([...ctx.db.unit.iter()]),
   };
 }
@@ -81,7 +82,7 @@ function saveUnits(ctx: Context, units: U.UnitRow[]) {
 }
 /** After an engine step: move the trucks, auto-dispatch to burning buildings, keep the world's protection current. */
 function stepUnits(ctx: Context, world: S.World, units: U.UnitRow[], tick: number) {
-  const r = U.stepUnits(units, world.buildings);
+  const r = U.stepUnits(units, world.buildings, world.sim.minutesPerTick);
   world.protectedBuildingIds = U.protectedIds(units);
   log(ctx, r.events, tick);
   return r.changed;
@@ -96,7 +97,7 @@ function saveStep(ctx: Context, r: S.StepResult, world: S.World) {
   for (const x of r.tasksUpdated) ctx.db.task.id.update(x);
   for (const x of r.tasksNew) ctx.db.task.insert({ ...x, id: 0n });
   log(ctx, r.events, r.sim.tick);
-  savePings(ctx, world.pingedAtMinute ?? {});
+  saveEngineState(ctx, world);
 }
 
 /** Persist a whole world by diff (used after fast-forward). New tasks get auto-increment ids. */
@@ -110,7 +111,7 @@ function saveAll(ctx: Context, world: S.World) {
     if (x.id === 0n) ctx.db.task.insert({ ...x, id: 0n });
     else if (!same(ctx.db.task.id.find(x.id), x)) ctx.db.task.id.update(x);
   }
-  savePings(ctx, world.pingedAtMinute ?? {});
+  saveEngineState(ctx, world);
 }
 
 function upsertResult(ctx: Context, row: S.ResultRow) {
@@ -156,7 +157,7 @@ function seedWorld(ctx: Context, seed: S.Seed) {
     });
     for (const m of mitigationRows(b)) ctx.db.mitigation.insert(m);
   }
-  savePings(ctx, {});
+  saveEngineState(ctx, {});
   writeScenario(ctx, seed);
   log(ctx, 'World seeded — simulated neighborhood; fire calibrated to the 2025 Eaton Fire; risk from CAL FIRE DINS', 0);
 }
@@ -278,7 +279,18 @@ export const set_ignition = db.reducer({ cellX: t.u32(), cellY: t.u32() }, (ctx,
   const prev = ctx.db.scenario.id.find(0);
   const number = prev?.number ?? 0;
   writeScenario(ctx, seed, { number, label: number ? `Scenario #${number}` : 'Eaton demo', picked: true });
-  seedWorld(ctx, seed);
+  // Keep everything the manager already did (approved fixes, budget): only the fire's start, each building's
+  // arrival time and its chance of being reached change.
+  const p = seed.params;
+  for (const sb of seed.buildings) {
+    const b = ctx.db.building.id.find(sb.id);
+    if (b) {
+      const next = { ...b, fireEtaMin: sb.referenceFireEtaMin ?? -1 };
+      ctx.db.building.id.update({ ...next, prepared: S.isPrepared(next, p) });
+    }
+    const prof = ctx.db.buildingProfile.buildingId.find(sb.id);
+    if (prof && sb.reachProbability !== undefined) ctx.db.buildingProfile.buildingId.update({ ...prof, reachProbability: sb.reachProbability });
+  }
   log(ctx, 'Fire start picked on the map; Lantern re-ran the fire and re-ranked every building', 0);
 });
 
@@ -382,7 +394,7 @@ export const start_evacuation = db.reducer({ buildingId: t.u32() }, (ctx, { buil
   if (r.error) reject(r.error);
   ctx.db.building.id.update(b);
   for (const p of r.people) ctx.db.person.id.update(p);
-  savePings(ctx, world.pingedAtMinute ?? {});
+  saveEngineState(ctx, world);
   log(ctx, r.events);
 });
 
@@ -513,7 +525,7 @@ export const dispatch_unit = db.reducer({ buildingId: t.u32() }, (ctx, { buildin
   requireFire(ctx);
   const units = loadUnits(ctx);
   const b = ctx.db.building.id.find(buildingId) ?? reject('building not found');
-  const r = U.dispatch(units, b, b.status !== 'burning');
+  const r = U.dispatch(units, b, b.status !== 'burning', getSim(ctx).minutesPerTick);
   if (r.error || !r.unit) reject(r.error ?? 'no engine free');
   ctx.db.unit.id.update(r.unit);
   log(ctx, r.event!);
@@ -543,8 +555,14 @@ export const end_and_compare = db.reducer((ctx) => {
   requireFire(ctx);
   const p = params(ctx);
   const world = load(ctx);
-  const followed = S.fastForward(world, p, p.fireSeed, { followCoach: true });
+  const units = loadUnits(ctx);
+  const followed = S.fastForward(world, p, p.fireSeed, {
+    followCoach: true,
+    // engines still driving in arrive and protect, exactly as they would have in the live run
+    afterStep: (w) => { U.stepUnits(units, w.buildings, w.sim.minutesPerTick); w.protectedBuildingIds = U.protectedIds(units); },
+  });
   saveAll(ctx, world);
+  saveUnits(ctx, units);
   writeResults(ctx, world);
   log(ctx, followed ? `Fast-forwarded to the end of the fire, following Lantern's advice (${followed} more building${followed === 1 ? '' : 's'} evacuated)` : 'Fast-forwarded to the end of the fire', world.sim.tick);
 });

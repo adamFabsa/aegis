@@ -254,6 +254,8 @@ export interface World {
    * Absent in the baseline, which models engines arriving only after a building is already burning.
    */
   protectedBuildingIds?: number[];
+  /** Keyed fires: cumulative ignition hazard per building id (persisted by the module next to pingedAtMinute). */
+  exposureHazard?: Record<number, number>;
 }
 
 /** Sim-minute a resident was pinged (exact if recorded, else reconstructed from ticks at the current speed). */
@@ -290,10 +292,10 @@ export function tickStreams(src: RngSource, tick: number): Streams {
  * Fire randomness for one absolute fire step (step s covers sim-minute s·stepMinutes). Keyed to the step,
  * not the tick, so the same seed gives the same fire whatever minutesPerTick the presenter picks.
  */
-/** A uniform number in [0, 1) for (subject, use), fixed for one fire step. */
+/** A uniform number in [0, 1) for (subject, use), fixed for the whole fire. */
 export type Draw = (subject: number, use: number) => number;
-export function fireStepDraw(seed: number, step: number): Draw {
-  let base = (Math.imul(seed | 0, 0x27d4eb2f) ^ Math.imul(step + 1, 0x165667b1) ^ 0x5bd1e995) >>> 0;
+export function fireDraw(seed: number): Draw {
+  let base = (Math.imul(seed | 0, 0x27d4eb2f) ^ 0x165667b1 ^ 0x5bd1e995) >>> 0;
   base = Math.imul(base ^ (base >>> 16), 0x7feb352d) >>> 0;
   return (subject, use) => {
     let h = (base ^ Math.imul(subject + 1, 0x9e3779b1) ^ Math.imul(use + 1, 0x85ebca77)) >>> 0;
@@ -409,6 +411,8 @@ export interface FireGrid {
   burn: Uint8Array;
   bstate: Uint8Array; // per building index: 0 ok, 1 burning, 2 lost
   burning: number[]; // cell ids currently burning
+  /** keyed fires only: exposure each building has absorbed so far (cumulative ignition hazard) */
+  bhaz?: Float64Array;
 }
 
 export function makeEngine(p: FireParams, fuel: ArrayLike<number>, buildings: ReadonlyArray<{ id: number; x: number; y: number; w: number; h: number; risk: number }>): Engine {
@@ -446,7 +450,7 @@ export function makeEngine(p: FireParams, fuel: ArrayLike<number>, buildings: Re
 }
 
 export function cloneGrid(g: FireGrid): FireGrid {
-  return { state: g.state.slice(), burn: g.burn.slice(), bstate: g.bstate.slice(), burning: g.burning.slice() };
+  return { state: g.state.slice(), burn: g.burn.slice(), bstate: g.bstate.slice(), burning: g.burning.slice(), bhaz: g.bhaz?.slice() };
 }
 
 export interface SubstepResult {
@@ -458,10 +462,15 @@ export interface SubstepResult {
 /** Advance the fire by one step (stepMinutes of sim time). */
 export function fireSubstep(eng: Engine, g: FireGrid, rng: Rng, wind: WindSample, draw?: Draw): SubstepResult {
   const p = eng.p;
-  // Keyed draws (the live fire and the baseline): every (cell, use) gets its own fixed number per step, so the
-  // two runs stay the same fire everywhere except where an action actually changed something. Without a key
-  // (Monte Carlo forecasts), draws come from the sequential stream so each forecast run differs.
+  // Keyed fires (the live fire and the without-Lantern baseline) are MONOTONE: every spread link and every
+  // building has one fixed random threshold for the whole fire and fires once enough hazard has built up
+  // (the same per-step odds as a coin flip each step). So less fuel, a lower risk or an engine on scene can
+  // only delay or prevent a burn, never cause one: "the same fire" stays the same wherever nothing changed.
+  // Embers are keyed by how long their source has burned, so a later fire throws the same embers later.
+  // Without a key (Monte Carlo forecasts) draws come from the sequential stream so each forecast run differs.
   const r: Draw = draw ?? (() => rng());
+  const exp1 = (u: number) => -Math.log1p(-Math.min(u, 0.999999999)); // Exp(1) threshold from a uniform
+  const hazard = (pr: number) => -Math.log1p(-Math.min(Math.max(pr, 0), 0.999999));
   const n = p.cols * p.rows;
   const cols = p.cols;
   const rows = p.rows;
@@ -508,12 +517,15 @@ export function fireSubstep(eng: Engine, g: FireGrid, rng: Rng, wind: WindSample
       if (state[j] !== 0) continue;
       const fj = fuel[j];
       if (fj <= 0) continue;
-      if (r(i, k) < fj * wf[k]) ignite.push(j);
+      if (draw) {
+        if ((burn[i] + 1) * hazard(fj * wf[k]) >= exp1(draw(i * 8 + k, 0))) ignite.push(j);
+      } else if (rng() < fj * wf[k]) ignite.push(j);
     }
     const fi = fuel[i];
-    if (spotScale > 0 && fi >= p.spotMinFuel && r(i, 8) < spotScale * fi) {
-      const d = p.spotMinCells + Math.floor(r(i, 9) * spotSpan);
-      const a = (wind.dirDeg + (r(i, 10) * 2 - 1) * p.spotJitterDeg) * DEG;
+    const age = 16 + 4 * burn[i];
+    if (spotScale > 0 && fi >= p.spotMinFuel && r(i, age) < spotScale * fi) {
+      const d = p.spotMinCells + Math.floor(r(i, age + 1) * spotSpan);
+      const a = (wind.dirDeg + (r(i, age + 2) * 2 - 1) * p.spotJitterDeg) * DEG;
       const tx = Math.round(cx + d * Math.sin(a));
       const ty = Math.round(cy - d * Math.cos(a));
       if (tx >= 0 && ty >= 0 && tx < cols && ty < rows) {
@@ -521,7 +533,7 @@ export function fireSubstep(eng: Engine, g: FireGrid, rng: Rng, wind: WindSample
         const o = owner[t];
         if (o >= 0) {
           if (o !== own && bstate[o] === BSTATE_OK) exposedFlag[o] = 1;
-        } else if (state[t] === 0 && fuel[t] > 0 && r(i, 11) < fuel[t]) {
+        } else if (state[t] === 0 && fuel[t] > 0 && r(i, age + 3) < fuel[t]) {
           ignite.push(t);
         }
       }
@@ -550,8 +562,14 @@ export function fireSubstep(eng: Engine, g: FireGrid, rng: Rng, wind: WindSample
   for (let b = 0; b < nb; b++) {
     if (!exposedFlag[b] || bstate[b] !== BSTATE_OK) continue;
     exposed.push(b);
-    // one draw per exposed building either way, so protection never shifts the random streams
-    if (r(n + b, 12) < igniteProb(eng.risk[b], p) * (eng.protect ? eng.protect[b] : 1)) {
+    const pIgn = igniteProb(eng.risk[b], p) * (eng.protect ? eng.protect[b] : 1);
+    let catches: boolean;
+    if (draw) {
+      const acc = (g.bhaz ??= new Float64Array(nb));
+      acc[b] += hazard(pIgn);
+      catches = acc[b] >= exp1(draw(n + b, 12));
+    } else catches = rng() < pIgn;
+    if (catches) {
       bstate[b] = BSTATE_BURNING;
       ignited.push(b);
       for (const c of eng.foot[b]) {
@@ -806,16 +824,25 @@ export function stepSimulation(world: World, p: FireParams, rngSrc: RngSource, o
     }
   }
   const g = gridFromRows(byId, world.buildings, n);
+  const draw = typeof rngSrc === 'number' ? fireDraw(rngSrc) : undefined;
+  if (draw) {
+    g.bhaz = new Float64Array(world.buildings.length);
+    world.buildings.forEach((b, bi) => { g.bhaz![bi] = world.exposureHazard?.[b.id] ?? 0; });
+  }
   const [first, last] = stepRange(p, oldMin, sim.simMinutes);
   const ignitedB = new Set<number>();
   const lostB = new Set<number>();
   for (let s = first; s <= last; s++) {
     // Fire randomness is keyed to the absolute fire step, so the fire is the same at any speed.
     const fireRng = typeof rngSrc === 'number' ? fireStepStream(rngSrc, s) : R.fire;
-    const draw = typeof rngSrc === 'number' ? fireStepDraw(rngSrc, s) : undefined;
     const res = fireSubstep(eng, g, fireRng, windAt(p, s * p.stepMinutes, { dirDeg: sim.windDirDeg, mph: sim.windMph }), draw);
     for (const b of res.ignited) ignitedB.add(b);
     for (const b of res.lost) lostB.add(b);
+  }
+  if (draw && g.bhaz) {
+    const hz: Record<number, number> = {};
+    world.buildings.forEach((b, bi) => { if (g.bhaz![bi] > 0) hz[b.id] = Math.round(g.bhaz![bi] * 1e6) / 1e6; });
+    world.exposureHazard = hz;
   }
   for (let i = 0; i < n; i++) {
     const c = byId[i];
@@ -1217,6 +1244,7 @@ export function applyFix(sim: SimRow, b: BuildingRow, fix: FixRow, people: Reado
 
 /** set_phase('fire'): reset the grid, light the ignition cells, start the clock. Mutates world. */
 export function startFire(world: World, p: FireParams, rngSrc: RngSource, opts: { etaRuns?: number } = {}): StepResult {
+  world.exposureHazard = {}; // a new fire: no building has absorbed any exposure yet
   const d = new Dirty();
   const sim = world.sim;
   sim.phase = 'fire';
@@ -1394,7 +1422,7 @@ export function computeResults(world: World, p: FireParams, scenario: string): R
 }
 
 /** Run the current world to the end instantly (e.g. an "End & compare" button). Mutates world. */
-export function fastForward(world: World, p: FireParams, rngSrc: RngSource, opts: StepOptions & { followCoach?: boolean } = {}): number {
+export function fastForward(world: World, p: FireParams, rngSrc: RngSource, opts: StepOptions & { followCoach?: boolean; afterStep?: (world: World) => void } = {}): number {
   const o: StepOptions = { mode: opts.mode, etaRuns: opts.etaRuns }; // same ETA settings as the live tick, so outcomes match a live run
   let started = 0;
   for (let i = 0; i < 100000 && world.sim.phase === 'fire'; i++) {
@@ -1402,6 +1430,7 @@ export function fastForward(world: World, p: FireParams, rngSrc: RngSource, opts
     if (opts.followCoach) for (const id of coachEvacuations(world)) if (!startEvacuation(world, id, p).error) started++;
     world.sim.running = true;
     stepSimulation(world, p, rngSrc, o);
+    opts.afterStep?.(world); // e.g. the module's fire engines keep driving and protecting
   }
   return started; // evacuations Lantern's advice started along the way
 }

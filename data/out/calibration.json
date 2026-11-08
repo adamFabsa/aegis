@@ -6,7 +6,7 @@
     "buildingBurnSteps": 19,
     "baseSpread": 0.0393,
     "buildingIgniteK": 0.096,
-    "fireSeed": 20250112
+    "fireSeed": 20250130
   },
   "brushRiskDrop": {
     "3": 10.1,
@@ -344,17 +344,17 @@
     },
     "demoSeed": {
       "rule": "fire closest to the 40-fire average with-vs-without difference",
-      "seed": 20250112,
+      "seed": 20250130,
       "average": {
-        "dSafe": 6.275,
-        "dLost": 0.575,
-        "dDmg": 8.9825
+        "dSafe": 8.375,
+        "dLost": 1.05,
+        "dDmg": 17.3425
       },
       "chosen": {
-        "s": 20250112,
-        "dSafe": 7,
+        "s": 20250130,
+        "dSafe": 10,
         "dLost": 1,
-        "dDmg": 8.4
+        "dDmg": 24
       }
     }
   }

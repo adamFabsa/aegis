@@ -135,10 +135,16 @@ try {
   const scenarioRisks = [...admin.db.building.iter()].map((x) => x.baseRisk).join(',');
   await assert.rejects(a.reducers.setIgnition({ cellX: 999, cellY: 0 }), /nothing to burn/);
   const before = admin.db.scenario.id.find(0)!;
+  const someFix = [...admin.db.fix.iter()].find((f) => !f.approved && f.costUsd <= admin.db.sim.id.find(0)!.budgetLeft)!;
+  await admin.reducers.approveFix({ fixId: someFix.id });
+  await waitFor(() => admin.db.fix.id.find(someFix.id)!.approved, 'fix approved before the pick');
+  const budgetBefore = admin.db.sim.id.find(0)!.budgetLeft;
   await b.reducers.setIgnition({ cellX: 44, cellY: 3 });
   await waitFor(() => admin.db.scenario.id.find(0)!.picked, 'picked fire start');
   assert.notEqual(admin.db.scenario.id.find(0)!.ignitionX, before.ignitionX + 0.123);
   assert.equal([...admin.db.building.iter()].map((x) => x.baseRisk).join(','), scenarioRisks, 'moving the fire keeps the construction');
+  assert.equal(admin.db.sim.id.find(0)!.budgetLeft, budgetBefore, 'moving the fire keeps the budget');
+  assert.ok(admin.db.fix.id.find(someFix.id)!.approved, 'moving the fire keeps approved fixes');
   await admin.reducers.resetSim({});
   await waitFor(() => admin.db.scenario.id.find(0)!.number === 4242 && admin.db.scenario.id.find(0)!.picked, 'reset keeps the scenario');
   await a.reducers.newScenario({ number: 0 });

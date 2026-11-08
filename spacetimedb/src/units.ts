@@ -44,10 +44,14 @@ export function freshUnits(): UnitRow[] {
   ];
 }
 
-/** Ticks to drive from staging to a building: 5–10 (a 5–10 s drive on screen). */
-export function travelTicks(b: BuildingLike): number {
+/** Sim-minutes to drive from staging to a building: 10–20 (farther buildings take longer). */
+export function travelMinutes(b: BuildingLike): number {
   const d = Math.hypot(b.x + b.w / 2 - STAGING[0], b.y + b.h / 2 - STAGING[1]);
-  return Math.max(5, Math.min(10, 4 + Math.round(d / 140)));
+  return 2 * Math.max(5, Math.min(10, 4 + Math.round(d / 140)));
+}
+/** Ticks for that drive at the current speed (5–10 s on screen at 1×, never under 2 ticks). */
+export function travelTicks(b: BuildingLike, minutesPerTick = 2): number {
+  return Math.max(2, Math.ceil(travelMinutes(b) / Math.max(1, minutesPerTick)));
 }
 
 /** A unit assigned to a building (driving there or on scene). */
@@ -66,13 +70,13 @@ export function canReceive(b: BuildingLike | undefined): string | null {
 }
 
 /** Send a ready unit to a building. Mutates the chosen unit; returns it and a log line, or an error. */
-export function dispatch(units: UnitRow[], b: BuildingLike, ahead: boolean): { unit?: UnitRow; event?: string; error?: string } {
+export function dispatch(units: UnitRow[], b: BuildingLike, ahead: boolean, minutesPerTick = 2): { unit?: UnitRow; event?: string; error?: string } {
   const err = canReceive(b);
   if (err) return { error: err };
   if (units.some((u) => assigned(u) && u.targetId === b.id)) return { error: `an engine is already assigned to ${b.name}` };
   const u = units.find((x) => x.status === 'ready');
   if (!u) return { error: 'no engine free: release one first' };
-  const t = travelTicks(b);
+  const t = travelTicks(b, minutesPerTick);
   Object.assign(u, { status: 'enroute', targetId: b.id, ticksLeft: t, travelTicks: t });
   return { unit: u, event: ahead ? `${u.name} sent ahead of the fire to ${b.name}` : `${u.name} responding to ${b.name} (on fire)` };
 }
@@ -90,7 +94,7 @@ export function release(u: UnitRow): { event?: string; error?: string } {
  * buildings (most people still inside first) while more than RESERVE engines are free.
  * Returns the units that changed and the log lines.
  */
-export function stepUnits(units: UnitRow[], buildings: BuildingLike[]): { changed: UnitRow[]; events: string[] } {
+export function stepUnits(units: UnitRow[], buildings: BuildingLike[], minutesPerTick = 2): { changed: UnitRow[]; events: string[] } {
   const changed = new Set<UnitRow>();
   const events: string[] = [];
   const byId = new Map(buildings.map((b) => [b.id, b]));
@@ -127,7 +131,7 @@ export function stepUnits(units: UnitRow[], buildings: BuildingLike[]): { change
     .sort((a, b) => (b.residents - b.peopleOut) - (a.residents - a.peopleOut) || b.risk - a.risk || a.id - b.id);
   for (const b of burning) {
     if (units.filter((u) => u.status === 'ready').length <= RESERVE) break;
-    const r = dispatch(units, b, false);
+    const r = dispatch(units, b, false, minutesPerTick);
     if (r.unit) {
       changed.add(r.unit);
       events.push(r.event!);

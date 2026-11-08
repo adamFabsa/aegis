@@ -207,7 +207,14 @@ export function makeScenario(base: S.Seed, n: number): S.Seed {
 /** The current world with the fire starting at map cell (cx, cy). Throws if that spot cannot burn. */
 export function withIgnition(cur: S.Seed, cx: number, cy: number): S.Seed {
   const p = cur.params;
-  const block = ignitionBlock(p, footprintOwner(p, cur.buildings), Math.floor(cx), Math.floor(cy));
-  if (!block.length) throw new Error('nothing to burn there: pick grass or brush, not a road or a building');
+  const owner = footprintOwner(p, cur.buildings);
+  const x = Math.floor(cx), y = Math.floor(cy);
+  const at = (xx: number, yy: number) => (xx < 0 || yy < 0 || xx >= p.cols || yy >= p.rows ? -1 : yy * p.cols + xx);
+  const c = at(x, y);
+  // the clicked cell itself must burn (not a road), and not be a building or touch one
+  let nearBuilding = false;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const k = at(x + dx, y + dy); if (k >= 0 && owner[k] >= 0) nearBuilding = true; }
+  if (c < 0 || (p.fuel[c] ?? 0) <= 0 || nearBuilding) throw new Error('nothing to burn there: pick grass or brush, not a road or a building');
+  const block = ignitionBlock(p, owner, x, y);
   return withOutlook({ ...cur, params: { ...p, ignition: block } });
 }

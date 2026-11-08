@@ -70,3 +70,11 @@ test('protection lowers ignition without shifting the random streams', () => {
   const lost = (w: S.World) => w.buildings.filter((x) => x.status === 'lost').length;
   assert.ok(lost(all) <= lost(plain), `protected ${lost(all)} vs plain ${lost(plain)}`);
 });
+
+test('engine travel is in sim minutes: at 4× speed an engine still arrives in time', () => {
+  const b = { id: 1, name: 'B', kind: 'apartments', x: 800, y: 200, w: 60, h: 40, status: 'ok', residents: 10, peopleOut: 0, risk: 50 };
+  const slow = U.travelTicks(b, 2), fast = U.travelTicks(b, 8);
+  assert.ok(slow >= 5 && slow <= 10);
+  assert.ok(fast >= 2 && fast <= 3, `${fast} ticks at 8 min/tick`);
+  assert.equal(Math.ceil(U.travelMinutes(b) / 8), fast < 2 ? 2 : fast);
+});
