@@ -1355,39 +1355,45 @@ def export_windows(path):
         json.dump(data, f, separators=(',', ':'))
     print('[windows] wrote', path, flush=True)
 
-if '--export-windows' in argv:
-    BOX_W, BOX_H, ANCHOR_X, ANCHOR_Y = 520, 380, 220, 220
-    export_windows(os.path.join(ROOT, 'web', 'src', 'town', 'windows.json'))
-    sys.exit(0)
-
-# ------------------------------------------------------------------ main
-ext = 'webp' if FMT == 'webp' else 'png'
-for kind in KINDS:
-    is_prop = kind in PROPS
-    if is_prop:
-        BOX_W, BOX_H, ANCHOR_X, ANCHOR_Y = PROP_BOX
-    else:
+def main():
+    global BOX_W, BOX_H, ANCHOR_X, ANCHOR_Y
+    if '--export-windows' in argv:
         BOX_W, BOX_H, ANCHOR_X, ANCHOR_Y = 520, 380, 220, 220
-    for name in VARIANTS:
-        if kind == 'snag' and name != 'lost':
-            continue
-        if is_prop and kind != 'snag' and name in ('lost', 'burning', 'gutted'):
-            continue
-        v = VARIANT[name]
-        bpy.ops.wm.read_factory_settings(use_empty=True)
-        setup_render(v)
-        setup_camera()
-        setup_world(v)
-        c = Ctx(v)
-        W, D, H = (PROPS if is_prop else BUILDERS)[kind](c)
-        if not is_prop and v.get('damage'):
-            apply_damage(c, kind, W, D, H, v['damage'])
+        export_windows(os.path.join(ROOT, 'web', 'src', 'town', 'windows.json'))
+        return
+
+    # ------------------------------------------------------------------ main
+    ext = 'webp' if FMT == 'webp' else 'png'
+    for kind in KINDS:
+        is_prop = kind in PROPS
         if is_prop:
-            v_props = dict(v, roof_fire=False, embers=False, fire_glow=0)
-            c.v = v_props
-        c.lights(W, D, H)
-        out = os.path.join(OUT, f'{"prop_" if is_prop else ""}{kind}_{name}.{ext}')
-        bpy.context.scene.render.filepath = out
-        print(f'[lantern] rendering {kind}/{name} -> {out}', flush=True)
-        bpy.ops.render.render(write_still=True)
-print('[lantern] all done', flush=True)
+            BOX_W, BOX_H, ANCHOR_X, ANCHOR_Y = PROP_BOX
+        else:
+            BOX_W, BOX_H, ANCHOR_X, ANCHOR_Y = 520, 380, 220, 220
+        for name in VARIANTS:
+            if kind == 'snag' and name != 'lost':
+                continue
+            if is_prop and kind != 'snag' and name in ('lost', 'burning', 'gutted'):
+                continue
+            v = VARIANT[name]
+            bpy.ops.wm.read_factory_settings(use_empty=True)
+            setup_render(v)
+            setup_camera()
+            setup_world(v)
+            c = Ctx(v)
+            W, D, H = (PROPS if is_prop else BUILDERS)[kind](c)
+            if not is_prop and v.get('damage'):
+                apply_damage(c, kind, W, D, H, v['damage'])
+            if is_prop:
+                v_props = dict(v, roof_fire=False, embers=False, fire_glow=0)
+                c.v = v_props
+            c.lights(W, D, H)
+            out = os.path.join(OUT, f'{"prop_" if is_prop else ""}{kind}_{name}.{ext}')
+            bpy.context.scene.render.filepath = out
+            print(f'[lantern] rendering {kind}/{name} -> {out}', flush=True)
+            bpy.ops.render.render(write_still=True)
+    print('[lantern] all done', flush=True)
+
+
+if __name__ == '__main__':
+    main()

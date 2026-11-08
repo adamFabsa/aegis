@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 import type { Pack, Sim } from '../town/types';
 import { fmtClock, fmtUsd } from './format';
 
@@ -36,6 +36,17 @@ function LanternMark() {
 
 export function TopBar({ sim, look, onLook, onPrepare, onStartFire, onTogglePause, onReset, muted, onToggleMute }: TopBarProps) {
   const [menu, setMenu] = useState(false);
+  const [menuPos, setMenuPos] = useState<CSSProperties>({});
+  const menuBtn = useRef<HTMLButtonElement>(null);
+  const toggleMenu = () => {
+    const r = menuBtn.current?.getBoundingClientRect();
+    if (r) {
+      // a floating popover, so the panel's scroll area never clips it; opens upward from a bottom sheet
+      const up = r.top > window.innerHeight / 2;
+      setMenuPos({ right: Math.max(8, window.innerWidth - r.right), ...(up ? { bottom: window.innerHeight - r.top + 8 } : { top: r.bottom + 8 }) });
+    }
+    setMenu((m) => !m);
+  };
   const step = sim.phase === 'prep' ? 0 : sim.phase === 'fire' ? 1 : 2;
   const steps = [
     { label: 'Prepare', onClick: onPrepare },
@@ -44,7 +55,7 @@ export function TopBar({ sim, look, onLook, onPrepare, onStartFire, onTogglePaus
   ];
 
   return (
-    <header className="topbar map-chrome">
+    <header className="topbar">
       <div className="logo">
         <LanternMark />
         <span>Lantern</span>
@@ -70,6 +81,7 @@ export function TopBar({ sim, look, onLook, onPrepare, onStartFire, onTogglePaus
         ))}
       </ol>
 
+      <div className="tb-tools">
       <div className="status-pill">
         {sim.phase === 'prep' ? (
           <><span className="pill-lbl">Budget</span><span className="pill-val">{fmtUsd(sim.budgetLeft)}</span></>
@@ -98,11 +110,13 @@ export function TopBar({ sim, look, onLook, onPrepare, onStartFire, onTogglePaus
         )}
       </button>
       <div className="menu-wrap">
-        <button type="button" className="icon-btn" aria-label="Settings" aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
+        <button ref={menuBtn} type="button" className="icon-btn" aria-label="Settings" aria-expanded={menu} onClick={toggleMenu}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>
         </button>
         {menu && (
-          <div className="menu" role="menu">
+          <>
+          <div className="menu-scrim" onClick={() => setMenu(false)} />
+          <div className="menu" role="menu" style={menuPos}>
             <div className="menu-title">Look</div>
             {LOOKS.map((l) => (
               <button key={l.id} type="button" role="menuitemradio" aria-checked={look === l.id} className={look === l.id ? 'on' : ''} onClick={() => { onLook(l.id); setMenu(false); }}>
@@ -114,7 +128,9 @@ export function TopBar({ sim, look, onLook, onPrepare, onStartFire, onTogglePaus
             <button type="button" role="menuitem" className="danger" onClick={() => { onReset(); setMenu(false); }}>Reset everything</button>
             <p className="menu-note">Simulated neighborhood. Fire calibrated to the Eaton Fire.</p>
           </div>
+          </>
         )}
+      </div>
       </div>
     </header>
   );

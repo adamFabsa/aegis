@@ -91,6 +91,37 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
     camRef.current = cam;
   });
 
+  // Latest layout values for the stable select callback below.
+  const live = useRef({ w, h, I, buildings, onSelect });
+  useLayoutEffect(() => {
+    live.current = { w, h, I, buildings, onSelect };
+  });
+
+  // Eased camera moves for the buttons and for picking a building: zoom in log space, pan linearly.
+  const anim = useRef(0);
+  const animateTo = useCallback((target: Cam) => {
+    cancelAnimationFrame(anim.current);
+    const L = live.current;
+    const from = camRef.current;
+    if (!from) { setUserCam(target); return; }
+    const B = band(L.w, L.h, L.I);
+    const c0 = { x: from.x + B.mx / from.k, y: from.y + B.my / from.k };
+    const c1 = { x: target.x + B.mx / target.k, y: target.y + B.my / target.k };
+    const t0 = performance.now();
+    const D = 420;
+    const step = (now: number) => {
+      const u = Math.min(1, (now - t0) / D);
+      const e = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+      const k = Math.exp(Math.log(from.k) + (Math.log(target.k) - Math.log(from.k)) * e);
+      const cx = c0.x + (c1.x - c0.x) * e;
+      const cy = c0.y + (c1.y - c0.y) * e;
+      setUserCam({ k, x: cx - B.mx / k, y: cy - B.my / k });
+      if (u < 1) anim.current = requestAnimationFrame(step);
+    };
+    anim.current = requestAnimationFrame(step);
+  }, []);
+  useEffect(() => () => cancelAnimationFrame(anim.current), []);
+
   const zoomAt = (px: number, py: number, f: number) => {
     const c = camRef.current;
     if (!c) return;
@@ -120,6 +151,7 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
 
   const onPointerDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('.map-chrome')) return;
+    cancelAnimationFrame(anim.current);
     if (pointers.current.size === 0) moved.current = 0;
     pointers.current.set(e.pointerId, local(e));
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -150,13 +182,15 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
     pointers.current.delete(e.pointerId);
   };
 
-  const zoomButton = (f: number) => { const B = band(w, h, I); zoomAt(B.mx, B.my, f); };
-
-  // Latest layout values for the stable select callback below.
-  const live = useRef({ w, h, I, buildings, onSelect });
-  useLayoutEffect(() => {
-    live.current = { w, h, I, buildings, onSelect };
-  });
+  const zoomButton = (f: number) => {
+    const c = camRef.current;
+    if (!c) return;
+    const B = band(w, h, I);
+    const k2 = Math.min(MAX_K, Math.max(fitCam(w, h, I).k * 0.9, c.k * f));
+    const cx = c.x + B.mx / c.k;
+    const cy = c.y + B.my / c.k;
+    animateTo(clampCam({ k: k2, x: cx - B.mx / k2, y: cy - B.my / k2 }, w, h, I));
+  };
 
   // Tapping a building (on the map or in the panel) pans it into the free space above the panel.
   const select = useCallback((id: number | null) => {
@@ -166,8 +200,8 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
     const b = id == null ? null : L.buildings.find((x) => x.id === id);
     if (!c || !b) return;
     const [sx, sy] = project(b.x + b.w / 2, b.y + b.h / 2, (SPRITE[b.kind].roof * spriteScale(b)) / 2);
-    setUserCam(clampCam(centerOn(c.k, sx, sy, L.w, L.h, L.I), L.w, L.h, L.I));
-  }, []);
+    animateTo(clampCam(centerOn(c.k, sx, sy, L.w, L.h, L.I), L.w, L.h, L.I));
+  }, [animateTo]);
 
   // Marker size only changes in steps, so pinch-zoom does not re-render the town every frame.
   const tagScale = cam ? Math.round(Math.min(2.6, Math.max(1, 0.8 / cam.k)) * 5) / 5 : 1;
@@ -207,7 +241,7 @@ export function MapView({ sim, buildings, fireCells, pack, selectedId, onSelect,
         <button type="button" aria-label="Zoom out" onClick={() => zoomButton(1 / 1.35)}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M5 12h14" /></svg>
         </button>
-        <button type="button" aria-label="Show whole map" onClick={() => setUserCam(fitCam(w, h, I))}>
+        <button type="button" aria-label="Show whole map" onClick={() => animateTo(fitCam(w, h, I))}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
         </button>
       </div>

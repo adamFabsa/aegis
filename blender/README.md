@@ -36,3 +36,31 @@ paint huge fake shadows across the catcher.
 the on-screen outline of every window and door pane per building kind, in sprite-frame units.
 The web app uses it to light, flicker, darken or set fire to each room on its own.
 Re-run it whenever a building's facade changes.
+
+## Ground plate
+
+`build_ground.py` renders the whole board in one image per look: terrain (watered green in town,
+golden dry grass toward the hills, chaparral on the hills), asphalt with cracks and lane paint,
+concrete sidewalks with scored joints and real curbs, the park (striped lawn, gravel paths, pond,
+playground, benches), the parking lots with parked cars, and the soil cut along the board edge.
+
+```bash
+blender -b -P blender/build_ground.py -- --looks dusk,night,maquette --scale 2 --samples 64
+```
+
+Output: `web/public/sprites/ground_<look>.webp` plus a smaller `ground_<look>_lite.webp` for phones
+(needs `cwebp`). The frame covers view box x 0..1440, y 96..968 (`GROUND_PLATE` in `scene.ts`).
+The layout numbers at the top of the script mirror `scene.ts` and `mockWorld.ts`.
+
+## Vehicles
+
+`vehicles.py` holds the vehicle models (fastback sedan, crossover SUV, pickup, evacuation van,
+fire engine). `build_vehicles.py` renders each one facing the four street directions:
+
+```bash
+blender -b -P blender/build_vehicles.py -- --looks dusk,night --scale 3 --samples 48
+```
+
+Output: `web/public/sprites/veh_<model>_<e|w|s|n>_<look>.webp`, frame 80 × 60 with the vehicle's
+ground centre at (40, 36) (`VEH_BOX` in `web/src/town/vehicleData.ts`). Night renders have the
+head and tail lights on.

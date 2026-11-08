@@ -85,6 +85,12 @@ export function previousVariant(pack: Pack, variant: string): string | null {
   return null;
 }
 
+/** The Blender ground plate (blender/build_ground.py): where it sits in the view box, and which file. */
+export const GROUND_PLATE = { x: 0, y: 96, w: 1440, h: 872 };
+export function groundUrl(pack: Pack, lite: boolean): string {
+  return `${import.meta.env.BASE_URL}sprites/ground_${pack}${lite ? '_lite' : ''}.webp`;
+}
+
 export function spriteUrl(kind: BuildingKind, variant: string): string {
   return `${import.meta.env.BASE_URL}sprites/${kind}_${variant}.webp`;
 }
@@ -110,13 +116,13 @@ export function generatePlants(buildings: Pick<Building, 'x' | 'y' | 'w' | 'h'>[
   const isLot = (x: number, y: number) => LOTS.some((l) => x > l.x - 6 && x < l.x + l.w + 6 && y > l.y - 6 && y < l.y + l.h + 6);
   let n = 0;
   tries = 0;
-  while (n < 46 && tries++ < 3000) {
+  while (n < 78 && tries++ < 5000) {
     const x = rnd() * 1000;
     const y = rnd() * 620;
     if (inHills(x, y) || inHills(x + 30, y + 30) || isLot(x, y)) continue;
     if (SIDEWALKS.some((r) => x > r.x - 6 && x < r.x + r.w + 6 && y > r.y - 6 && y < r.y + r.h + 6)) continue;
     if (blocks.some(([a, b, c, d]) => x > a && x < c && y > b && y < d)) continue;
-    if (out.some((p) => p.type !== 'shrub' && Math.hypot(p.x - x, p.y - y) < 34)) continue;
+    if (out.some((p) => p.type !== 'shrub' && Math.hypot(p.x - x, p.y - y) < 28)) continue;
     // Altadena mix: oaks, eucalyptus windbreaks near the hills, palms in the yards
     const nearHills = inHills(x + 90, y + 90);
     out.push({ x, y, type: nearHills && n % 2 === 0 ? 'euc' : n % 4 === 1 ? 'palm' : n % 4 === 3 ? 'euc' : 'oak' });

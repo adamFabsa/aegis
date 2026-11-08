@@ -1,8 +1,8 @@
 import { memo, useMemo, type CSSProperties, type ReactNode, type Ref } from 'react';
 import type { Building, FireCell, Pack, Sim } from './types';
-import { CELL, GROUND_MATRIX, MAP_H, MAP_W, OX, OY, VIEW_H, VIEW_W, pointsAttr, project, projectVec, windVector } from './iso';
+import { CELL, GROUND_MATRIX, VIEW_H, VIEW_W, pointsAttr, project, projectVec, windVector } from './iso';
 import {
-  HILLS_EDGE, HILLS_PATH, LAMPS, LOTS, PARK, PROP_BOX, ROAD_LINES, ROADS, SIDEWALKS, SPRITE, SPRITE_BOX, propUrl,
+  GROUND_PLATE, LAMPS, groundUrl, PROP_BOX, SPRITE, SPRITE_BOX, propUrl,
   evacRoute, generatePlants, previousVariant, ridgePaths, spriteScale, spriteUrl, spriteVariant,
 } from './scene';
 import { PALETTES, STATUS_COLORS, type GroundPalette } from './palettes';
@@ -26,15 +26,6 @@ interface TownProps {
   tagScale?: number;
   units?: Unit[];
 }
-
-const LOT_STRIPES =
-  'M614 490 V514 M628 490 V514 M642 490 V514 M656 490 V514 M670 490 V514 M684 490 V514 M698 490 V514 M712 490 V514 M726 490 V514 ' +
-  'M614 558 V582 M628 558 V582 M642 558 V582 M656 558 V582 M670 558 V582 M684 558 V582 M698 558 V582 M712 558 V582 M726 558 V582 ' +
-  'M20 496 H46 M20 510 H46 M20 524 H46 M20 538 H46 M20 552 H46 M20 566 H46 M20 580 H46 ' +
-  'M98 496 H124 M98 510 H124 M98 524 H124 M98 538 H124 M98 552 H124 M98 566 H124 M98 580 H124';
-const CROSSWALKS =
-  'M363 421 v7 M369 421 v7 M375 421 v7 M381 421 v7 M387 421 v7 M363 468 v7 M369 468 v7 M375 468 v7 M381 468 v7 M387 468 v7 ' +
-  'M351 433 h7 M351 439 h7 M351 445 h7 M351 451 h7 M351 457 h7 M394 433 h7 M394 439 h7 M394 445 h7 M394 451 h7 M394 457 h7';
 
 const FLAMES = ['fireA', 'fireB', 'fireC'];
 const RIDGES = ridgePaths();
@@ -62,23 +53,6 @@ function Defs({ P }: { P: GroundPalette }) {
         <feColorMatrix in="n" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 3.2 -1.85" result="a" />
         <feComposite in="a" in2="SourceGraphic" operator="in" />
       </filter>
-      <filter id="asphalt" x="0" y="0" width="100%" height="100%">
-        <feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves={1} seed={3} result="n" />
-        <feColorMatrix in="n" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 2.2 -1.15" result="a" />
-        <feComposite in="a" in2="SourceGraphic" operator="in" />
-      </filter>
-      <pattern id="mow" width="40" height="40" patternUnits="userSpaceOnUse" patternTransform="rotate(30)">
-        <rect width="20" height="40" fill="#fff" opacity="0.06" />
-      </pattern>
-      <clipPath id="hillsClip"><path d={HILLS_PATH} /></clipPath>
-      <pattern id="brush" width="16" height="14" patternUnits="userSpaceOnUse">
-        <rect width="16" height="14" fill={P.brush} />
-        <circle cx="3" cy="4" r="2.4" fill={P.brushD} />
-        <circle cx="11" cy="9" r="2.8" fill={P.brushD} />
-        <circle cx="7" cy="12" r="1.4" fill={P.brushHi} />
-        <circle cx="13.5" cy="2.5" r="1.3" fill={P.brushHi} />
-        <path d="M1 10 l2 -3 M9 4 l1.5 -3 M14 13 l1 -2.5" stroke={P.brushHi} strokeWidth="0.7" fill="none" />
-      </pattern>
       <pattern id="ash" width="22" height="18" patternUnits="userSpaceOnUse">
         <rect width="22" height="18" fill={P.char} />
         <circle cx="4" cy="5" r="2.2" fill="#000" opacity="0.35" />
@@ -156,7 +130,7 @@ function Defs({ P }: { P: GroundPalette }) {
   );
 }
 
-const StaticGround = memo(function StaticGround({ P, lite }: { P: GroundPalette; lite: boolean }) {
+const StaticGround = memo(function StaticGround({ P, pack, lite }: { P: GroundPalette; pack: Pack; lite: boolean }) {
   return (
     <>
       {/* the San Gabriel Mountains behind the town, fading into haze */}
@@ -173,52 +147,11 @@ const StaticGround = memo(function StaticGround({ P, lite }: { P: GroundPalette;
         {RIDGES.map((d, i) => <path key={i} d={d} fill={`url(#mtn${i})`} />)}
       </g>
       <polygon points="575,160 1430,660 884,975 10,470" fill="#000" opacity={lite ? 0.22 : 0.35} filter={lite ? undefined : 'url(#blur20)'} />
-      <g transform={`translate(${OX} ${OY})`}>
-        <g transform={`matrix(0.866 0.5 0 1 ${-0.866 * MAP_H} ${0.5 * MAP_H})`}>
-          <rect width={MAP_W} height="22" fill={P.slabFront} />
-          <rect y="7" width={MAP_W} height="1.2" fill="#000" opacity="0.18" />
-          <rect y="14" width={MAP_W} height="1.2" fill="#000" opacity="0.14" />
-          <rect width={MAP_W} height="22" fill="url(#slabShade)" />
-        </g>
-        <g transform={`matrix(0.866 -0.5 0 1 ${0.866 * (MAP_W - MAP_H)} ${0.5 * (MAP_W + MAP_H)})`}>
-          <rect width={MAP_H} height="22" fill={P.slabSide} />
-          <rect y="7" width={MAP_H} height="1.2" fill="#000" opacity="0.18" />
-          <rect y="14" width={MAP_H} height="1.2" fill="#000" opacity="0.14" />
-          <rect width={MAP_H} height="22" fill="url(#slabShade)" />
-        </g>
-      </g>
+      {/* the board itself (terrain, roads, sidewalks, park, lots, soil edge) is one Blender render;
+          the flat polygon underneath only shows while the image loads */}
+      <polygon points="555,120 1421,620 884,930 18,430" fill={P.ground} />
+      <image href={groundUrl(pack, lite)} x={GROUND_PLATE.x} y={GROUND_PLATE.y} width={GROUND_PLATE.w} height={GROUND_PLATE.h} preserveAspectRatio="none" />
       <g transform={GROUND_MATRIX}>
-        <rect width={MAP_W} height={MAP_H} fill={P.ground} />
-        {!lite && (
-          <>
-            <rect width={MAP_W} height={MAP_H} fill="#000" filter="url(#patches)" opacity={P.patchOp} />
-            <rect width={MAP_W} height={MAP_H} fill="#fff" filter="url(#patchesHi)" opacity={P.patchOp * 0.6} />
-            <rect width={MAP_W} height={MAP_H} fill="#000" filter="url(#grain)" opacity={P.grainOp} />
-          </>
-        )}
-        <rect x={PARK.x} y={PARK.y} width={PARK.w} height={PARK.h} rx="14" fill={P.lawn} />
-        <rect x={PARK.x} y={PARK.y} width={PARK.w} height={PARK.h} rx="14" fill="url(#mow)" opacity={P.patchOp > 0.3 ? 0.45 : 1} />
-        <rect x={PARK.x} y={PARK.y} width={PARK.w} height={PARK.h} rx="14" fill="none" stroke={P.curb} strokeWidth="2" opacity="0.6" />
-        <ellipse cx="128" cy="86" rx="44" ry="26" fill={P.water} />
-        <ellipse cx="128" cy="86" rx="44" ry="26" fill="none" stroke={P.sidewalk} strokeWidth="3" />
-        <path d="M24 150 C 110 120 220 190 334 136" stroke={P.sidewalk} strokeWidth="5" fill="none" />
-        <path d={HILLS_PATH} fill="url(#brush)" />
-        <path d="M600 22 C 700 60 820 66 1000 40 M640 92 C 740 122 860 150 1000 140 M720 162 C 800 178 900 204 1000 232" stroke={P.brushHi} strokeWidth="5" fill="none" opacity="0.35" filter={lite ? undefined : 'url(#blur4)'} />
-        {/* elevation lip: a shaded band just inside the hills edge and a soft cast shadow onto the town side */}
-        <g clipPath="url(#hillsClip)">
-          <path d={HILLS_EDGE} stroke="#000" strokeWidth="26" fill="none" opacity={P.lipOp * (lite ? 0.6 : 1)} filter={lite ? undefined : 'url(#blur4)'} />
-          <path d={HILLS_EDGE} stroke={P.brushHi} strokeWidth="6" fill="none" opacity="0.35" transform="translate(-6 -6)" filter={lite ? undefined : 'url(#blur2)'} />
-        </g>
-        <path d={HILLS_EDGE} stroke={P.brushD} strokeWidth="4" fill="none" opacity="0.7" filter={lite ? undefined : 'url(#blur2)'} />
-        {LOTS.map((l, i) => <rect key={i} x={l.x} y={l.y} width={l.w} height={l.h} rx="4" fill={P.lot} />)}
-        <path d={LOT_STRIPES} stroke={P.roadLine} strokeWidth="1.4" />
-        {SIDEWALKS.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={P.sidewalk} />)}
-        {SIDEWALKS.map((r, i) => <rect key={`c${i}`} x={r.x} y={r.y} width={r.w} height={r.h} fill="none" stroke={P.curb} strokeWidth="1.5" opacity="0.7" />)}
-        {ROADS.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={P.road} />)}
-        {!lite && ROADS.map((r, i) => <rect key={`a${i}`} x={r.x} y={r.y} width={r.w} height={r.h} fill="#fff" filter="url(#asphalt)" opacity={P.asphaltOp} />)}
-        {ROADS.map((r, i) => <rect key={`e${i}`} x={r.x} y={r.y} width={r.w} height={r.h} fill="none" stroke="#000" strokeWidth="2" opacity="0.25" />)}
-        <path d={ROAD_LINES} stroke={P.roadLine} strokeWidth="1.6" strokeDasharray="12 10" fill="none" />
-        <path d={CROSSWALKS} stroke={P.roadLine} strokeWidth="3" opacity="0.8" />
         <g opacity={P.lampOp}>
           {LAMPS.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="34" fill="url(#lamp)" />)}
         </g>
@@ -455,7 +388,7 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
       onClick={() => onSelect(null)}
     >
       <Defs P={P} />
-      <StaticGround P={P} lite={lite} />
+      <StaticGround P={P} pack={pack} lite={lite} />
 
       {/* ground-level dynamic layer: fire cells, rings, routes */}
       <g transform={GROUND_MATRIX}>
@@ -493,20 +426,20 @@ export const Town = memo(function Town({ sim, buildings, fireCells, pack, select
           return null;
         })}
         {evacuating.map((b) => (
-          <path key={`e${b.id}`} d={'M' + evacRoute(b, shelter).map(([x, y]) => `${x} ${y}`).join(' L')} stroke={STATUS_COLORS.green} strokeWidth="5" fill="none" strokeDasharray="12 10" strokeLinecap="round" strokeLinejoin="round">
-            <animate attributeName="stroke-dashoffset" from="44" to="0" dur="1.2s" repeatCount="indefinite" />
+          <path key={`e${b.id}`} d={'M' + evacRoute(b, shelter).map(([x, y]) => `${x} ${y}`).join(' L')} stroke={STATUS_COLORS.green} strokeWidth="2.2" opacity="0.6" fill="none" strokeDasharray="3 9" strokeLinecap="round" strokeLinejoin="round">
+            <animate attributeName="stroke-dashoffset" from="24" to="0" dur="1.4s" repeatCount="indefinite" />
           </path>
         ))}
       </g>
 
       {/* cars, strolling residents, evacuation columns and vans */}
-      <StreetLife buildings={buildings} phase={sim.phase} />
+      <StreetLife buildings={buildings} phase={sim.phase} pack={pack} />
 
       {/* depth-sorted world */}
       {items.map((it) => <g key={it.key}>{it.node}</g>)}
 
       {/* fire units sit on top so engines at a building front and their water are never hidden */}
-      <FireUnits units={units} buildings={buildings} tickSeconds={TICK_SECONDS} />
+      <FireUnits units={units} buildings={buildings} tickSeconds={TICK_SECONDS} pack={pack} />
 
       {/* smoke, embers, fire light */}
       {fireOn && (

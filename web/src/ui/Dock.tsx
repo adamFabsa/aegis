@@ -22,8 +22,10 @@ interface DockProps {
   cells: FireCell[];
   onDispatch: (buildingId: number) => void;
   onRelease: (unitId: number) => void;
-  /** Screen y the phone sheet may grow up to (bottom of the top bar). */
+  /** Screen y the phone sheet may grow up to. */
   topLimit: number;
+  /** App bar (logo, steps, clock, sound, settings) shown at the top of the panel. */
+  bar?: ReactNode;
 }
 
 interface View { head: ReactNode; body: ReactNode; foot?: ReactNode }
@@ -499,7 +501,7 @@ export const Dock = forwardRef<HTMLElement, DockProps>(function Dock(props, ref)
   const { phone, vh } = usePhone();
 
   // sheet heights: peek (title + main button), half, full
-  const snaps = [Math.max(200, Math.round(vh * 0.27)), Math.round(vh * 0.5), Math.max(Math.round(vh * 0.5), vh - topLimit - 4)];
+  const snaps = [Math.max(250, Math.round(vh * 0.32)), Math.round(vh * 0.54), Math.max(Math.round(vh * 0.54), vh - topLimit - 56)];
   const [snap, setSnap] = useState(1);
   const [dragH, setDragH] = useState<number | null>(null);
   const drag = useRef<{ y: number; h: number; moved: boolean; id: number } | null>(null);
@@ -566,7 +568,8 @@ export const Dock = forwardRef<HTMLElement, DockProps>(function Dock(props, ref)
       <div className="panel-head" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
         onClickCapture={(e) => { if (justDragged.current) e.stopPropagation(); }}>
         <button type="button" className="grip" aria-label="Resize panel"><span /></button>
-        {view.head}
+        {props.bar}
+        <div className="head-view">{view.head}</div>
       </div>
       <div className="panel-body" ref={bodyRef}>{view.body}</div>
       {view.foot && <div className="panel-foot">{view.foot}</div>}

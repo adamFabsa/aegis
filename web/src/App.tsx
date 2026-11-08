@@ -2,7 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { MapView } from './town/MapView';
 import { useMockWorld } from './town/mockWorld';
 import { PALETTES } from './town/palettes';
-import { propUrl, spriteUrl } from './town/scene';
+import { groundUrl, propUrl, spriteUrl } from './town/scene';
+import { vehUrl } from './town/vehicleData';
 import type { BuildingKind, Pack } from './town/types';
 import { TopBar, type Look } from './ui/TopBar';
 import { Dock } from './ui/Dock';
@@ -26,6 +27,11 @@ export default function App() {
     for (const k of kinds) for (const v of ['night', 'dusk', 'maquette', 'burning', 'gutted', 'lost']) new Image().src = spriteUrl(k, v);
     for (const t of ['oak', 'palm', 'shrub', 'euc'] as const) for (const v of ['night', 'dusk', 'maquette'] as const) new Image().src = propUrl(t, v);
     new Image().src = propUrl('snag', 'night');
+    // the ground plate and the vehicles, so starting the fire never shows an empty board
+    const small = window.innerWidth < 760;
+    for (const p of ['dusk', 'night', 'maquette'] as const) new Image().src = groundUrl(p, small);
+    for (const m of ['sedanW', 'sedanK', 'sedanR', 'suvS', 'suvB', 'pickup', 'van', 'engine'] as const)
+      for (const h of ['e', 'w', 's', 'n'] as const) for (const l of ['dusk', 'night']) new Image().src = vehUrl(m, h, l);
   }, []);
 
   // Demo deep link: ?phase=fire&ticks=30&evac=12&prep=12&look=night&select=12
@@ -48,14 +54,12 @@ export default function App() {
   }, [world]);
 
   // The map frames the town in the space the floating bar and panel leave free.
-  const topRef = useRef<HTMLDivElement>(null);
   const dockRef = useRef<HTMLElement>(null);
   const [insets, setInsets] = useState({ top: 64, bottom: 240, left: 0 });
   useLayoutEffect(() => {
     const measure = () => {
-      const t = topRef.current?.getBoundingClientRect();
       const d = dockRef.current?.getBoundingClientRect();
-      const top = t ? t.bottom + 8 : 64;
+      const top = 12;
       // wide screens: the panel is a column on the left; phones: a sheet along the bottom
       const side = window.innerWidth > 760;
       const bottom = side ? 0 : d ? window.innerHeight - d.top + 8 : 240;
@@ -63,7 +67,6 @@ export default function App() {
       setInsets((p) => (Math.abs(p.top - top) > 4 || Math.abs(p.bottom - bottom) > 24 || Math.abs(p.left - left) > 4 ? { top, bottom, left } : p));
     };
     const ro = new ResizeObserver(measure);
-    if (topRef.current) ro.observe(topRef.current);
     if (dockRef.current) ro.observe(dockRef.current);
     window.addEventListener('resize', measure);
     return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
@@ -105,15 +108,6 @@ export default function App() {
         selectedId={selectedId} onSelect={setSelectedId}
         topInset={insets.top} bottomInset={insets.bottom} leftInset={insets.left} lite={lite} units={units}
       />
-        <div ref={topRef} className="top-slot">
-          <TopBar
-            sim={sim} look={look} onLook={setLook}
-            onPrepare={prepare} onStartFire={startFire}
-            onTogglePause={world.togglePause}
-            muted={muted} onToggleMute={toggleMute}
-            onReset={() => { world.reset(); setSelectedId(null); }}
-          />
-        </div>
         <Dock
           ref={dockRef}
           sim={sim} buildings={buildings} approved={approved} events={events} selected={selected}
@@ -127,6 +121,15 @@ export default function App() {
           onRelease={world.releaseUnit}
           pack={pack}
           topLimit={insets.top}
+          bar={
+            <TopBar
+              sim={sim} look={look} onLook={setLook}
+              onPrepare={prepare} onStartFire={startFire}
+              onTogglePause={world.togglePause}
+              muted={muted} onToggleMute={toggleMute}
+              onReset={() => { world.reset(); setSelectedId(null); }}
+            />
+          }
         />
     </div>
   );
