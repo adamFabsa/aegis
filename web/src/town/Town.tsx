@@ -1,0 +1,412 @@
+import { memo, useMemo, type ReactNode } from 'react';
+import type { Building, FireCell, Pack, Sim } from './types';
+import { CELL, GROUND_MATRIX, MAP_H, MAP_W, OX, OY, VIEW_H, VIEW_W, pointsAttr, project, projectVec, windVector } from './iso';
+import {
+  HILLS_EDGE, HILLS_PATH, LAMPS, LOTS, PARK, ROAD_LINES, ROADS, SIDEWALKS, SPRITE, SPRITE_BOX,
+  evacRoute, generatePlants, spriteScale, spriteUrl, spriteVariant,
+} from './scene';
+import { PALETTES, STATUS_COLORS, type GroundPalette } from './palettes';
+import { statusTag } from './status';
+
+interface TownProps {
+  sim: Sim;
+  buildings: Building[];
+  fireCells: FireCell[];
+  pack: Pack;
+  selectedId: number | null;
+  onSelect: (id: number | null) => void;
+}
+
+const LOT_STRIPES =
+  'M614 490 V514 M628 490 V514 M642 490 V514 M656 490 V514 M670 490 V514 M684 490 V514 M698 490 V514 M712 490 V514 M726 490 V514 ' +
+  'M614 558 V582 M628 558 V582 M642 558 V582 M656 558 V582 M670 558 V582 M684 558 V582 M698 558 V582 M712 558 V582 M726 558 V582 ' +
+  'M20 496 H46 M20 510 H46 M20 524 H46 M20 538 H46 M20 552 H46 M20 566 H46 M20 580 H46 ' +
+  'M98 496 H124 M98 510 H124 M98 524 H124 M98 538 H124 M98 552 H124 M98 566 H124 M98 580 H124';
+const CROSSWALKS =
+  'M363 421 v7 M369 421 v7 M375 421 v7 M381 421 v7 M387 421 v7 M363 468 v7 M369 468 v7 M375 468 v7 M381 468 v7 M387 468 v7 ' +
+  'M351 433 h7 M351 439 h7 M351 445 h7 M351 451 h7 M351 457 h7 M394 433 h7 M394 439 h7 M394 445 h7 M394 451 h7 M394 457 h7';
+
+const FLAMES = ['flA', 'flB', 'flC'];
+
+function Defs({ P }: { P: GroundPalette }) {
+  return (
+    <defs>
+      <filter id="grain" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves={2} seed={9} result="n" />
+        <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.4 1.45" result="a" />
+        <feComposite in="a" in2="SourceGraphic" operator="in" />
+      </filter>
+      <filter id="blur2" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="2.2" /></filter>
+      <filter id="blur4" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="4" /></filter>
+      <filter id="blur8" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="7" /></filter>
+      <filter id="blur20" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="20" /></filter>
+      <pattern id="brush" width="16" height="14" patternUnits="userSpaceOnUse">
+        <rect width="16" height="14" fill={P.brush} />
+        <circle cx="3" cy="4" r="2.4" fill={P.brushD} />
+        <circle cx="11" cy="9" r="2.8" fill={P.brushD} />
+        <circle cx="7" cy="12" r="1.4" fill={P.brushHi} />
+        <circle cx="13.5" cy="2.5" r="1.3" fill={P.brushHi} />
+        <path d="M1 10 l2 -3 M9 4 l1.5 -3 M14 13 l1 -2.5" stroke={P.brushHi} strokeWidth="0.7" fill="none" />
+      </pattern>
+      <pattern id="ash" width="22" height="18" patternUnits="userSpaceOnUse">
+        <rect width="22" height="18" fill={P.char} />
+        <circle cx="4" cy="5" r="2.2" fill="#000" opacity="0.35" />
+        <circle cx="15" cy="12" r="3" fill="#000" opacity="0.3" />
+        <circle cx="12" cy="3" r="1.2" fill="#8A817A" opacity="0.35" />
+        <circle cx="19" cy="7" r="0.9" fill="#8A817A" opacity="0.3" />
+        <circle cx="7" cy="14" r="0.8" fill="#FF6A2A" opacity="0.75" />
+        <circle cx="18" cy="16" r="0.6" fill="#FF8A3D" opacity="0.6" />
+      </pattern>
+      <linearGradient id="slabShade" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stopColor="#ffffff" stopOpacity="0.1" />
+        <stop offset="1" stopColor="#000000" stopOpacity="0.35" />
+      </linearGradient>
+      <radialGradient id="lamp">
+        <stop offset="0" stopColor="#FFD69A" stopOpacity="0.55" />
+        <stop offset="1" stopColor="#FFD69A" stopOpacity="0" />
+      </radialGradient>
+      <radialGradient id="groundGlow">
+        <stop offset="0" stopColor="#FF7A2E" stopOpacity="0.55" />
+        <stop offset="0.5" stopColor="#FF5A1F" stopOpacity="0.18" />
+        <stop offset="1" stopColor="#FF5A1F" stopOpacity="0" />
+      </radialGradient>
+      <radialGradient id="fireGlow">
+        <stop offset="0" stopColor="#FF8A3D" stopOpacity="0.55" />
+        <stop offset="0.45" stopColor="#FF5A1F" stopOpacity="0.18" />
+        <stop offset="1" stopColor="#FF5A1F" stopOpacity="0" />
+      </radialGradient>
+      <radialGradient id="roofGlow">
+        <stop offset="0" stopColor="#FF8A3D" stopOpacity="0.75" />
+        <stop offset="0.5" stopColor="#FF5A1F" stopOpacity="0.28" />
+        <stop offset="1" stopColor="#FF5A1F" stopOpacity="0" />
+      </radialGradient>
+      <linearGradient id="flameGrad" x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0" stopColor="#FF3D17" stopOpacity="0" />
+        <stop offset="0.18" stopColor="#FF4A1C" />
+        <stop offset="0.55" stopColor="#FF9A2E" />
+        <stop offset="1" stopColor="#FFE7A3" />
+      </linearGradient>
+      <g id="flA">
+        <g>
+          <animateTransform attributeName="transform" type="scale" values="1 1;0.9 1.16;1.08 0.92;1 1" dur="0.62s" repeatCount="indefinite" />
+          <path d="M0 0 C-7 -2 -9 -10 -5 -17 C-4 -12 -1 -11 -1 -15 C-1 -20 2 -24 1 -29 C6 -24 9 -17 7 -10 C9 -12 9 -15 8 -17 C12 -11 10 -2 0 0 Z" fill="url(#flameGrad)" />
+          <path d="M0 -1 C-4 -2 -5 -7 -2 -12 C-1 -9 1 -9 1 -13 C4 -9 5 -4 0 -1 Z" fill="#FFF2B8" opacity="0.9" />
+        </g>
+      </g>
+      <g id="flB">
+        <g>
+          <animateTransform attributeName="transform" type="scale" values="1 1;1.1 0.9;0.92 1.18;1 1" dur="0.78s" repeatCount="indefinite" />
+          <path d="M0 0 C-6 -1 -8 -8 -4 -14 C-3 -10 0 -10 0 -14 C0 -18 3 -20 2 -24 C6 -19 8 -13 6 -7 C8 -9 8 -11 7 -13 C10 -8 9 -1 0 0 Z" fill="url(#flameGrad)" />
+          <path d="M0 -1 C-3 -2 -4 -6 -1 -10 C0 -7 2 -7 2 -10 C4 -6 4 -3 0 -1 Z" fill="#FFF2B8" opacity="0.85" />
+        </g>
+      </g>
+      <g id="flC">
+        <g>
+          <animateTransform attributeName="transform" type="scale" values="1 1;0.94 1.22;1.05 0.9;1 1" dur="0.5s" repeatCount="indefinite" />
+          <path d="M0 0 C-5 -2 -6 -9 -3 -15 C-2 -11 0 -12 0 -17 C4 -13 7 -8 5 -3 C4 -1 2 0 0 0 Z" fill="url(#flameGrad)" />
+        </g>
+      </g>
+      <g id="oak">
+        <ellipse cx="4" cy="1" rx="12" ry="4" fill="#000" opacity="0.22" />
+        <rect x="-1.3" y="-11" width="2.6" height="11" fill={P.trunk} />
+        <circle cx="0" cy="-17" r="9.5" fill={P.canD} />
+        <circle cx="-3" cy="-19" r="7.2" fill={P.can} />
+        <circle cx="3.5" cy="-21" r="5.4" fill={P.canHi} />
+      </g>
+      <g id="palm">
+        <ellipse cx="6" cy="1" rx="10" ry="3" fill="#000" opacity="0.2" />
+        <path d="M0 0 Q2 -16 -1 -34" stroke={P.trunk} strokeWidth="2.2" fill="none" strokeLinecap="round" />
+        <path d="M-1 -34 q-9 -1 -14 6 M-1 -34 q9 -2 14 5 M-1 -34 q-5 -7 -12 -8 M-1 -34 q6 -7 12 -6 M-1 -34 q1 -6 0 -10 M-1 -34 q-3 4 -6 9 M-1 -34 q4 3 6 9" stroke={P.palm} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+      </g>
+      <g id="snag">
+        <path d="M0 0 V-14 M0 -9 l-5 -5 M0 -11 l4 -6 M0 -6 l5 -3" stroke="#1A1513" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+      </g>
+      <g id="shrub">
+        <ellipse cx="2" cy="1" rx="7" ry="2.4" fill="#000" opacity="0.2" />
+        <ellipse cx="0" cy="-3" rx="6" ry="4.4" fill={P.shrubD} />
+        <ellipse cx="-1.6" cy="-4.6" rx="4" ry="3" fill={P.shrub} />
+      </g>
+    </defs>
+  );
+}
+
+const StaticGround = memo(function StaticGround({ P }: { P: GroundPalette }) {
+  return (
+    <>
+      <polygon points="575,160 1430,660 884,975 10,470" fill="#000" opacity="0.35" filter="url(#blur20)" />
+      <g transform={`translate(${OX} ${OY})`}>
+        <g transform={`matrix(0.866 0.5 0 1 ${-0.866 * MAP_H} ${0.5 * MAP_H})`}>
+          <rect width={MAP_W} height="22" fill={P.slabFront} />
+          <rect y="7" width={MAP_W} height="1.2" fill="#000" opacity="0.18" />
+          <rect y="14" width={MAP_W} height="1.2" fill="#000" opacity="0.14" />
+          <rect width={MAP_W} height="22" fill="url(#slabShade)" />
+        </g>
+        <g transform={`matrix(0.866 -0.5 0 1 ${0.866 * (MAP_W - MAP_H)} ${0.5 * (MAP_W + MAP_H)})`}>
+          <rect width={MAP_H} height="22" fill={P.slabSide} />
+          <rect y="7" width={MAP_H} height="1.2" fill="#000" opacity="0.18" />
+          <rect y="14" width={MAP_H} height="1.2" fill="#000" opacity="0.14" />
+          <rect width={MAP_H} height="22" fill="url(#slabShade)" />
+        </g>
+      </g>
+      <g transform={GROUND_MATRIX}>
+        <rect width={MAP_W} height={MAP_H} fill={P.ground} />
+        <rect width={MAP_W} height={MAP_H} fill="#000" filter="url(#grain)" opacity={P.grainOp} />
+        <rect x={PARK.x} y={PARK.y} width={PARK.w} height={PARK.h} rx="14" fill={P.lawn} />
+        <ellipse cx="128" cy="86" rx="44" ry="26" fill={P.water} />
+        <ellipse cx="128" cy="86" rx="44" ry="26" fill="none" stroke={P.sidewalk} strokeWidth="3" />
+        <path d="M24 150 C 110 120 220 190 334 136" stroke={P.sidewalk} strokeWidth="5" fill="none" />
+        <path d={HILLS_PATH} fill="url(#brush)" />
+        <path d="M600 22 C 700 60 820 66 1000 40 M640 92 C 740 122 860 150 1000 140 M720 162 C 800 178 900 204 1000 232" stroke={P.brushHi} strokeWidth="5" fill="none" opacity="0.35" filter="url(#blur4)" />
+        <path d={HILLS_EDGE} stroke={P.brushD} strokeWidth="5" fill="none" opacity="0.6" filter="url(#blur2)" />
+        {LOTS.map((l, i) => <rect key={i} x={l.x} y={l.y} width={l.w} height={l.h} rx="4" fill={P.lot} />)}
+        <path d={LOT_STRIPES} stroke={P.roadLine} strokeWidth="1.4" />
+        {SIDEWALKS.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={P.sidewalk} />)}
+        {ROADS.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={P.road} />)}
+        <path d={ROAD_LINES} stroke={P.roadLine} strokeWidth="1.6" strokeDasharray="12 10" fill="none" />
+        <path d={CROSSWALKS} stroke={P.roadLine} strokeWidth="3" opacity="0.8" />
+        <g opacity={P.lampOp}>
+          {LAMPS.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="34" fill="url(#lamp)" />)}
+        </g>
+      </g>
+    </>
+  );
+});
+
+function BuildingSprite({ b, pack, selected, onSelect }: { b: Building; pack: Pack; selected: boolean; onSelect: (id: number) => void }) {
+  const s = spriteScale(b);
+  const cx = b.x + b.w / 2;
+  const cy = b.y + b.h / 2;
+  const [sx, sy] = project(cx, cy);
+  const roof = SPRITE[b.kind].roof * s;
+  const variant = spriteVariant(pack, b.status);
+  const hull: [number, number][] = [
+    project(b.x, b.y, roof), project(b.x + b.w, b.y, roof), project(b.x + b.w, b.y, 0),
+    project(b.x + b.w, b.y + b.h, 0), project(b.x, b.y + b.h, 0), project(b.x, b.y + b.h, roof),
+  ];
+  const roofPts = [[0.2, 0.3], [0.45, 0.62], [0.72, 0.35], [0.86, 0.72], [0.3, 0.82], [0.6, 0.14], [0.52, 0.45], [0.12, 0.62]]
+    .map(([fx, fy]) => project(b.x + fx * b.w, b.y + fy * b.h, roof));
+  const [rx, ry] = project(cx, cy, roof);
+  const label = `${b.name}, ${b.kind}, ${b.status}`;
+
+  return (
+    <g>
+      <image
+        href={spriteUrl(b.kind, variant)}
+        x={sx - SPRITE_BOX.ax * s}
+        y={sy - SPRITE_BOX.ay * s}
+        width={SPRITE_BOX.w * s}
+        height={SPRITE_BOX.h * s}
+        preserveAspectRatio="none"
+        style={{ pointerEvents: 'none' }}
+      />
+      {b.status === 'burning' && (
+        <g style={{ pointerEvents: 'none' }}>
+          <ellipse cx={rx} cy={ry} rx={0.433 * (b.w + b.h) + 24} ry={0.25 * (b.w + b.h) + 30} fill="url(#roofGlow)" style={{ mixBlendMode: 'screen' }}>
+            <animate attributeName="opacity" values="0.8;1;0.85;1;0.8" dur="1.3s" repeatCount="indefinite" />
+          </ellipse>
+          {roofPts.map(([px, py], i) => (
+            <use key={i} href={`#${FLAMES[i % 3]}`} transform={`translate(${px} ${py}) scale(${i % 4 === 0 ? 1.5 : 1.1})`} />
+          ))}
+          {[0, 1, 2].map((i) => (
+            <circle key={i} cx={roofPts[i * 2][0]} cy={ry - 12} r="10" fill="#2A2627" filter="url(#blur8)">
+              <animate attributeName="r" values="8;38" dur="5s" begin={`${-i * 1.6}s`} repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0;0.75;0" dur="5s" begin={`${-i * 1.6}s`} repeatCount="indefinite" />
+              <animateMotion path="M0 0 C -30 -40 -80 -70 -150 -95" dur="5s" begin={`${-i * 1.6}s`} repeatCount="indefinite" />
+            </circle>
+          ))}
+        </g>
+      )}
+      {b.status === 'lost' && (
+        <g style={{ pointerEvents: 'none' }}>
+          {[0, 1].map((i) => (
+            <circle key={i} cx={roofPts[i * 3][0]} cy={ry - 10} r="8" fill="#6B6460" filter="url(#blur8)">
+              <animate attributeName="r" values="6;26" dur="8s" begin={`${-i * 4}s`} repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0;0.45;0" dur="8s" begin={`${-i * 4}s`} repeatCount="indefinite" />
+              <animateMotion path="M0 0 C -20 -40 -50 -70 -100 -100" dur="8s" begin={`${-i * 4}s`} repeatCount="indefinite" />
+            </circle>
+          ))}
+        </g>
+      )}
+      <polygon
+        points={pointsAttr(hull)}
+        fill="transparent"
+        stroke={selected ? STATUS_COLORS.amber : 'none'}
+        strokeWidth={selected ? 1.5 : 0}
+        strokeDasharray="5 4"
+        style={{ cursor: 'pointer', pointerEvents: 'all' }}
+        onClick={(e) => { e.stopPropagation(); onSelect(b.id); }}
+        role="button"
+        aria-label={label}
+      />
+    </g>
+  );
+}
+
+export function Town({ sim, buildings, fireCells, pack, selectedId, onSelect }: TownProps) {
+  const P = PALETTES[pack];
+  // plants only depend on building footprints, which never change during a run
+  const footprintKey = buildings.map((b) => `${b.x},${b.y},${b.w},${b.h}`).join('|');
+  const plants = useMemo(
+    () => generatePlants(footprintKey.split('|').map((s) => { const [x, y, w, h] = s.split(',').map(Number); return { x, y, w, h }; })),
+    [footprintKey],
+  );
+  const shelter = buildings.find((b) => b.kind === 'shelter');
+
+  const cellState = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const c of fireCells) if (c.state) m.set(c.y * 1000 + c.x, c.state);
+    return m;
+  }, [fireCells]);
+  const burning = fireCells.filter((c) => c.state === 1);
+  const burned = fireCells.filter((c) => c.state === 2);
+  const fireOn = burning.length > 0;
+  const cellPath = (cells: FireCell[]) => cells.map((c) => `M${c.x * CELL} ${c.y * CELL}h${CELL}v${CELL}h${-CELL}z`).join('');
+
+  const inBuilding = (mx: number, my: number) => buildings.some((b) => mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h);
+
+  // fire centroid for smoke + glow
+  let fcx = 0, fcy = 0;
+  for (const c of burning) { fcx += c.x * CELL + CELL / 2; fcy += c.y * CELL + CELL / 2; }
+  if (burning.length) { fcx /= burning.length; fcy /= burning.length; }
+  const [gsx, gsy] = project(fcx, fcy);
+  const [wx, wy] = windVector(sim.windDirDeg);
+  const [wsx, wsy] = projectVec(wx, wy);
+  const smokePath = `M0 0 C ${wsx * 140} ${wsy * 140 - 70} ${wsx * 340} ${wsy * 340 - 140} ${wsx * 580} ${wsy * 580 - 200}`;
+
+  // ---------------- billboards sorted back-to-front by map depth (x + y)
+  const items: { depth: number; key: string; node: ReactNode }[] = [];
+  for (const [i, p] of plants.entries()) {
+    const st = cellState.get(Math.floor(p.y / CELL) * 1000 + Math.floor(p.x / CELL)) ?? 0;
+    if (p.type === 'shrub' && st === 2) continue;
+    const [px, py] = project(p.x, p.y);
+    const href = st === 2 ? '#snag' : `#${p.type}`;
+    items.push({ depth: p.x + p.y, key: `p${i}`, node: <use href={href} x={px} y={py} /> });
+  }
+  for (const b of buildings) {
+    items.push({
+      depth: b.x + b.w / 2 + b.y + b.h / 2,
+      key: `b${b.id}`,
+      node: <BuildingSprite b={b} pack={pack} selected={selectedId === b.id} onSelect={onSelect} />,
+    });
+  }
+  let flameCount = 0;
+  for (const c of burning) {
+    if (flameCount > 260 || c.fuel < 0.3) continue;
+    const mx = c.x * CELL + CELL / 2;
+    const my = c.y * CELL + CELL / 2;
+    if (inBuilding(mx, my)) continue;
+    const [fx, fy] = project(mx, my);
+    const h = (c.x * 7 + c.y * 13) % 3;
+    items.push({ depth: mx + my, key: `f${c.id}`, node: <use href={`#${FLAMES[h]}`} x={fx} y={fy} /> });
+    flameCount++;
+  }
+  items.sort((a, b) => a.depth - b.depth);
+
+  const evacuating = buildings.filter((b) => b.status === 'evacuating');
+
+  return (
+    <svg
+      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+      preserveAspectRatio="xMidYMid meet"
+      className="town-svg"
+      role="img"
+      aria-label="Simulated neighborhood map"
+      onClick={() => onSelect(null)}
+    >
+      <Defs P={P} />
+      <StaticGround P={P} />
+
+      {/* ground-level dynamic layer: fire cells, rings, routes */}
+      <g transform={GROUND_MATRIX}>
+        {fireOn && <circle cx={fcx} cy={fcy} r="300" fill="url(#groundGlow)" opacity={P.glowOp} />}
+        <path d={cellPath(burned)} fill="url(#ash)" filter="url(#blur2)" opacity="0.92" />
+        <path d={cellPath(burning)} fill="#FF5A1F" filter="url(#blur2)">
+          <animate attributeName="opacity" values="0.75;1;0.8;0.95;0.75" dur="1.4s" repeatCount="indefinite" />
+        </path>
+        {buildings.map((b) => {
+          const ring = { x: b.x - 16, y: b.y - 16, w: b.w + 32, h: b.h + 32 };
+          if (b.status === 'behind') {
+            return (
+              <rect key={`r${b.id}`} x={ring.x} y={ring.y} width={ring.w} height={ring.h} rx="18" fill={STATUS_COLORS.red} fillOpacity="0.12" stroke={STATUS_COLORS.red} strokeWidth="2.6">
+                <animate attributeName="opacity" values="1;0.35;1" dur="1.6s" repeatCount="indefinite" />
+              </rect>
+            );
+          }
+          if (b.prepared && sim.phase === 'prep') {
+            return <rect key={`r${b.id}`} x={ring.x - 6} y={ring.y - 6} width={ring.w + 12} height={ring.h + 12} rx="20" fill="#D9D2C2" fillOpacity="0.18" stroke={STATUS_COLORS.green} strokeWidth="2.4" strokeDasharray="7 5" />;
+          }
+          return null;
+        })}
+        {evacuating.map((b) => (
+          <path key={`e${b.id}`} d={'M' + evacRoute(b, shelter).map(([x, y]) => `${x} ${y}`).join(' L')} stroke={STATUS_COLORS.green} strokeWidth="5" fill="none" strokeDasharray="12 10" strokeLinecap="round" strokeLinejoin="round">
+            <animate attributeName="stroke-dashoffset" from="44" to="0" dur="1.2s" repeatCount="indefinite" />
+          </path>
+        ))}
+      </g>
+
+      {/* residents walking to the shelter */}
+      {evacuating.map((b) => {
+        const route = evacRoute(b, shelter).map(([x, y]) => project(x, y));
+        const d = 'M' + route.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join(' L');
+        let len = 0;
+        for (let i = 1; i < route.length; i++) len += Math.hypot(route[i][0] - route[i - 1][0], route[i][1] - route[i - 1][1]);
+        const dur = Math.max(5, len / 40);
+        return (
+          <g key={`w${b.id}`}>
+            {Array.from({ length: 7 }, (_, i) => (
+              <circle key={i} r="2.8" fill={i === 3 ? STATUS_COLORS.amber : '#E8F7EE'} stroke="#0B0F17" strokeWidth="0.8">
+                <animateMotion path={d} dur={`${dur}s`} begin={`${(-i * dur) / 7}s`} repeatCount="indefinite" />
+              </circle>
+            ))}
+          </g>
+        );
+      })}
+
+      {/* depth-sorted world */}
+      {items.map((it) => <g key={it.key}>{it.node}</g>)}
+
+      {/* smoke, embers, fire light */}
+      {fireOn && (
+        <g style={{ pointerEvents: 'none' }}>
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <circle key={i} cx={gsx} cy={gsy} r="30" fill={P.smoke} filter="url(#blur20)">
+              <animate attributeName="r" values="26;120" dur="11s" begin={`${-i * 1.8}s`} repeatCount="indefinite" />
+              <animate attributeName="opacity" values={`0;${P.smokeOp};0`} dur="11s" begin={`${-i * 1.8}s`} repeatCount="indefinite" />
+              <animateMotion path={smokePath} dur="11s" begin={`${-i * 1.8}s`} repeatCount="indefinite" />
+            </circle>
+          ))}
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <circle key={`e${i}`} cx={gsx + (i - 3) * 14} cy={gsy + (i % 3) * 10} r={1.3 + (i % 3) * 0.3} fill="#FFC46B">
+              <animateMotion path={`M0 0 C ${wsx * 60} ${-50 - i * 6} ${wsx * 160} ${-70} ${wsx * (220 + i * 30)} -30`} dur={`${3 + (i % 3)}s`} begin={`${-i * 0.6}s`} repeatCount="indefinite" />
+              <animate attributeName="opacity" values="1;1;0" dur={`${3 + (i % 3)}s`} begin={`${-i * 0.6}s`} repeatCount="indefinite" />
+            </circle>
+          ))}
+          <ellipse cx={gsx} cy={gsy} rx="460" ry="300" fill="url(#fireGlow)" opacity={P.glowOp} style={{ mixBlendMode: 'screen' }}>
+            <animate attributeName="rx" values="440;470;450;440" dur="2.6s" repeatCount="indefinite" />
+          </ellipse>
+        </g>
+      )}
+
+      {/* status tags */}
+      <g style={{ pointerEvents: 'none' }}>
+        {buildings.map((b) => {
+          const s = spriteScale(b);
+          const [tx, ty] = project(b.x + b.w / 2, b.y + b.h / 2, SPRITE[b.kind].tag * s + 26);
+          const tag = statusTag(b, sim.phase);
+          const label = `${b.name}`;
+          const width = 30 + (label.length + tag.text.length + 3) * 6.6;
+          return (
+            <g key={`t${b.id}`} transform={`translate(${tx} ${ty})`}>
+              <rect x={-width / 2} y="-13" width={width} height="26" rx="13" fill="rgba(11,15,23,0.88)" stroke={tag.color} strokeWidth={selectedId === b.id ? 2 : 1} />
+              <circle cx={-width / 2 + 14} cy="0" r="4" fill={tag.color} />
+              <text x={-width / 2 + 24} y="4.2" fontSize="12" fontWeight="600" fill="#EEF1F7" fontFamily="Inter, system-ui, sans-serif">
+                {label}
+                <tspan fill={tag.color}>{` · ${tag.text}`}</tspan>
+              </text>
+            </g>
+          );
+        })}
+      </g>
+    </svg>
+  );
+}
