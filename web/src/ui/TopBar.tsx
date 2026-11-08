@@ -26,13 +26,11 @@ const LOOKS: { id: Look; label: string; hint: string }[] = [
   { id: 'maquette', label: 'Studio Model', hint: 'White architectural model' },
 ];
 
-function LanternMark() {
+function AegisMark() {
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#F2A93B" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M9 3h6" /><path d="M12 3v2" />
-      <path d="M7 8a5 5 0 0 1 10 0v8a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3z" />
-      <path d="M12 10c1.2 1.3 1.6 2.4 1 3.6a1.2 1.2 0 0 1-2 0c-.6-1.2-.2-2.3 1-3.6z" />
-      <path d="M9 21h6" />
+      <path d="M12 2.8l7.5 3v5.6c0 4.6-3.1 8.4-7.5 9.8-4.4-1.4-7.5-5.2-7.5-9.8V5.8z" />
+      <path d="M12 8.2c1.6 1.7 2.1 3.2 1.4 4.8a1.6 1.6 0 0 1-2.8 0c-.7-1.6-.2-3.1 1.4-4.8z" fill="#F2A93B" fillOpacity="0.25" />
     </svg>
   );
 }
@@ -60,8 +58,8 @@ export function TopBar({ sim, look, onLook, onPrepare, onStartFire, onTogglePaus
   return (
     <header className="topbar">
       <div className="logo">
-        <LanternMark />
-        <span>Lantern</span>
+        <AegisMark />
+        <span>Aegis</span>
       </div>
 
       <ol className="stepper" aria-label="Simulation steps">

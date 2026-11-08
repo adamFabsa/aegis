@@ -261,7 +261,7 @@ test('an urgent task stays urgent after someone claims it', () => {
   assert.equal(t.claimedBy, 'Alex', 'on-site staff never take over a human claim');
 });
 
-test('Lantern with nobody touching anything never saves fewer people than no Lantern (same fire)', () => {
+test('Aegis with nobody touching anything never saves fewer people than no Aegis (same fire)', () => {
   for (let i = 0; i < 10; i++) {
     const s = 3000 + i;
     const w = buildWorldFromSeed(SEED);

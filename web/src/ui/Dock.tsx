@@ -29,7 +29,7 @@ interface DockProps {
   fixesFor: (buildingId: number) => FixView[];
   /** when a building counts as prepared */
   prepared: PreparedRule;
-  /** "Lantern recommends": approve the best-value fixes that fit the budget (live only) */
+  /** "Aegis recommends": approve the best-value fixes that fit the budget (live only) */
   onRecommend?: () => void;
   /** run the rest of the fire instantly and show the comparison (live only) */
   onEndCompare?: () => void;
@@ -574,7 +574,7 @@ function results(p: DockProps): View {
       <>
         {rows.length > 0 && (
           <table className="compare">
-            <thead><tr><th /><th>With Lantern</th><th>Without</th></tr></thead>
+            <thead><tr><th /><th>With Aegis</th><th>Without</th></tr></thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.label}><th scope="row">{r.label}</th><td className={r.better ? 'ok' : ''}>{r.a}</td><td>{r.b}</td></tr>
@@ -582,7 +582,7 @@ function results(p: DockProps): View {
             </tbody>
           </table>
         )}
-        <p className="hint">Without Lantern: the same fire with no fixes, no fire units, and evacuation only once the fire is 10 minutes away. Simulated neighborhood; fire calibrated to the real Eaton Fire.</p>
+        <p className="hint">Without Aegis: the same fire with no fixes, no fire units, and evacuation only once the fire is 10 minutes away. Simulated neighborhood; fire calibrated to the real Eaton Fire.</p>
         <h3 className="section">Every building</h3>
         <ul className="list">
           {list.sort((a, b) => urgency(b) - urgency(a)).map((b) => (

@@ -1,4 +1,4 @@
-// Lantern sim preview — runs the real engine (spacetimedb/src/sim.ts) in the browser, no Spacetime needed.
+// Aegis sim preview — runs the real engine (spacetimedb/src/sim.ts) in the browser, no Spacetime needed.
 // Two parts: Controller (no DOM, tested in Node by preview/test_preview.ts) and the view (SVG + panels).
 // `node --experimental-strip-types preview/build.ts` inlines this file + the engine into preview/index.html.
 import * as S from '../spacetimedb/src/sim.ts';
@@ -568,15 +568,15 @@ export function mountView(ctl, params) {
       const p = ppl.find((x) => x.id === state.resident) ?? ppl[0];
       const b = ctl.building(p.buildingId);
       const msgs = html('div', { class: 'msgs' }, phone);
-      if (p.status === 'inside') html('div', { class: 'bubble lantern' }, msgs, ctl.sim.phase === 'prep' ? `Lantern: ${b.name} has an evacuation plan on file.` : 'Lantern: no evacuation order for your building yet.');
+      if (p.status === 'inside') html('div', { class: 'bubble lantern' }, msgs, ctl.sim.phase === 'prep' ? `Aegis: ${b.name} has an evacuation plan on file.` : 'Aegis: no evacuation order for your building yet.');
       else {
         const eta = b.fireEtaMin > 0 ? ` Fire is ${S.fmtMin(b.fireEtaMin)} away.` : '';
-        html('div', { class: 'bubble lantern' }, msgs, `Lantern: Evacuation order for ${b.name}.${eta} Are you safe?`);
+        html('div', { class: 'bubble lantern' }, msgs, `Aegis: Evacuation order for ${b.name}.${eta} Are you safe?`);
         const reply = { safe: 'I’m safe', cant_move: 'I can’t get out', claimed: 'I can’t get out', out: 'I’m out', left_behind: '…' }[p.status];
         if (reply && p.status !== 'pinged') html('div', { class: 'bubble me' }, msgs, reply);
         const task = ctl.world.tasks.find((t) => t.personId === p.id && t.kind === 'help_person');
-        if (p.status === 'claimed' && task) html('div', { class: 'bubble lantern' }, msgs, `Lantern: Help is on the way — ${task.claimedBy.replace(S.AUTO_SUFFIX, '')} is coming to floor ${p.floor}.`);
-        if (p.status === 'out') html('div', { class: 'bubble lantern' }, msgs, 'Lantern: You are checked in at the shelter. ✓');
+        if (p.status === 'claimed' && task) html('div', { class: 'bubble lantern' }, msgs, `Aegis: Help is on the way — ${task.claimedBy.replace(S.AUTO_SUFFIX, '')} is coming to floor ${p.floor}.`);
+        if (p.status === 'out') html('div', { class: 'bubble lantern' }, msgs, 'Aegis: You are checked in at the shelter. ✓');
         if (p.status === 'left_behind') html('div', { class: 'bubble alert' }, msgs, 'Building lost before this resident got out.');
         if (p.status === 'pinged' && task) html('div', { class: 'bubble alert' }, msgs, 'No reply — escalated to staff.');
       }
@@ -653,7 +653,7 @@ export function mountView(ctl, params) {
     tb.replaceChildren();
     const h = html('div', { class: 'rrow head' }, tb);
     html('div', {}, h, '');
-    html('div', {}, h, 'With Lantern');
+    html('div', {}, h, 'With Aegis');
     html('div', {}, h, 'Without');
     for (const [k, a, b2, better] of rows) {
       const r = html('div', { class: 'rrow' }, tb);

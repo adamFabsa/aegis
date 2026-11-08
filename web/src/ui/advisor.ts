@@ -1,4 +1,4 @@
-// Lantern AI: the step-by-step instructions on the phone.
+// Aegis AI: the step-by-step instructions on the phone.
 //   Before the fire  — what to fix, ranked like the server's approve_recommended (people first, then expected
 //                      claims avoided per dollar), so "Approve the plan" does exactly what the list says.
 //   During the fire  — State Farm's question: who has the most urgent need, how to coordinate help, and that
@@ -160,7 +160,7 @@ function prepAdvice(input: AdvisorInput, approvedKeys: Record<number, string[]>)
   const prepared = buildings.filter((b) => real(b) && b.prepared).length;
   const total = buildings.filter(real).length;
   if (!plan.length) {
-    items.push({ id: 'prep-done', tone: 'good', title: prepared === total ? 'Every building is prepared' : 'Nothing else fits the budget', why: 'Start the fire to see how the neighborhood holds up against the same fire without Lantern.' });
+    items.push({ id: 'prep-done', tone: 'good', title: prepared === total ? 'Every building is prepared' : 'Nothing else fits the budget', why: 'Start the fire to see how the neighborhood holds up against the same fire without Aegis.' });
   }
   const planUsd = plan.reduce((n, s) => n + s.usd, 0);
   const planPeople = plan.reduce((n, s) => n + s.people, 0);
@@ -213,7 +213,7 @@ function fireAdvice(input: AdvisorInput): Advice {
         id: `help-${t.id}`, rank: 0 - t.priority * 10, tone: 'now',
         title: `Send staff to ${p.name}${p.note ? ` (${p.note})` : ''}`,
         why: silent
-          ? `${b.name}, floor ${p.floor}. No reply for ${fmtMin(minsSince(p))}, so Lantern escalated.`
+          ? `${b.name}, floor ${p.floor}. No reply for ${fmtMin(minsSince(p))}, so Aegis escalated.`
           : `${b.name}, floor ${p.floor}. The AI read the reply as ${p.status === 'cant_move' ? 'cannot get out alone' : 'needs help'}.`,
         quote: silent ? undefined : p.replyText,
         people: 1, buildingId: b.id,
@@ -295,11 +295,11 @@ function fireAdvice(input: AdvisorInput): Advice {
     }
   }
 
-  // 5. No one overlooked: residents who have not answered yet (Lantern escalates them automatically).
+  // 5. No one overlooked: residents who have not answered yet (Aegis escalates them automatically).
   const started = new Set(buildings.filter((b) => b.evacStarted).map((b) => b.id));
   const waiting = persons.filter((p) => started.has(p.buildingId) && p.status === 'pinged' && !p.replyText && !tasks.some((t) => t.personId === p.id && !t.done));
   if (waiting.length) {
-    items.push({ id: 'waiting', rank: 200, tone: 'info', title: `${waiting.length} resident${waiting.length === 1 ? ' has' : 's have'} not answered yet`, why: 'If they stay silent, Lantern asks staff to check their floor. No one is left off the list.' });
+    items.push({ id: 'waiting', rank: 200, tone: 'info', title: `${waiting.length} resident${waiting.length === 1 ? ' has' : 's have'} not answered yet`, why: 'If they stay silent, Aegis asks staff to check their floor. No one is left off the list.' });
   }
   const clear = buildings.filter((b) => real(b) && b.status === 'clear');
   if (clear.length) items.push({ id: 'clear', rank: 300, tone: 'good', title: `${clear.map((b) => b.name).join(', ')}: everyone out`, why: 'Accounted for at Shelter A.' });
@@ -325,14 +325,14 @@ function fireAdvice(input: AdvisorInput): Advice {
   const [headline, detail] = urgent
     ? [`${urgent} thing${urgent === 1 ? '' : 's'} to do now`, 'Most urgent first. People before property.']
     : rescues
-      ? [`Staff are on ${rescues} rescue${rescues === 1 ? '' : 's'}`, `Everyone who asked for help has someone on the way.${watching ? ` Lantern is watching ${watching} building${watching === 1 ? '' : 's'} in the fire.` : ''}`]
+      ? [`Staff are on ${rescues} rescue${rescues === 1 ? '' : 's'}`, `Everyone who asked for help has someone on the way.${watching ? ` Aegis is watching ${watching} building${watching === 1 ? '' : 's'} in the fire.` : ''}`]
       : watching
-        ? [`Watching ${watching} building${watching === 1 ? '' : 's'}`, burning ? `${burning} on fire. Engines and staff are on it; Lantern flags anything new.` : 'The fire is close. Lantern flags anything new.']
+        ? [`Watching ${watching} building${watching === 1 ? '' : 's'}`, burning ? `${burning} on fire. Engines and staff are on it; Aegis flags anything new.` : 'The fire is close. Aegis flags anything new.']
         : walking
-          ? [`${walking} resident${walking === 1 ? '' : 's'} still on the way out`, 'Lantern checks each one in at Shelter A.']
+          ? [`${walking} resident${walking === 1 ? '' : 's'} still on the way out`, 'Aegis checks each one in at Shelter A.']
           : lost
-            ? [`${lost} resident${lost === 1 ? '' : 's'} left behind`, 'Firefighters have their floor and room. Lantern is watching everyone else.']
-            : ['On track', 'Lantern is watching every building and every resident.'];
+            ? [`${lost} resident${lost === 1 ? '' : 's'} left behind`, 'Firefighters have their floor and room. Aegis is watching everyone else.']
+            : ['On track', 'Aegis is watching every building and every resident.'];
   return {
     phase: 'fire',
     headline,
@@ -349,7 +349,7 @@ function fireAdvice(input: AdvisorInput): Advice {
 
 function endedAdvice(input: AdvisorInput, approved: Record<number, string[]>): Advice {
   const r = input.results;
-  if (!r) return { phase: 'ended', headline: 'The fire is out', detail: 'Comparing with the same fire without Lantern…', stats: [], items: [] };
+  if (!r) return { phase: 'ended', headline: 'The fire is out', detail: 'Comparing with the same fire without Aegis…', stats: [], items: [] };
   const savedPeople = r.with.peopleSafe - r.without.peopleSafe;
   const avoided = r.without.damageUsd - r.with.damageUsd;
   const fewerClaims = r.without.claims - r.with.claims;
@@ -362,25 +362,25 @@ function endedAdvice(input: AdvisorInput, approved: Record<number, string[]>): A
     ? `Across many fires, these fixes cut expected claims by ${fmtUsd(Math.round(expected.avoided))}.`
     : 'Across many fires, prep cuts expected claims.';
   const missed = fixedBuildings.length > 0 && fixedBuildings.every((b) => !b.touched && b.status !== 'lost');
-  // Lantern's own run: who was left behind, and where
+  // Aegis's own run: who was left behind, and where
   const leftBehind = input.persons.filter((p) => p.status === 'left_behind');
   const left = leftBehind.length || Math.max(0, r.with.peopleTotal - r.with.peopleSafe);
   const where = [...new Set(leftBehind.map((p) => p.buildingId))].map((id) => input.buildings.find((b) => b.id === id)).filter((b): b is Building => !!b);
   const neverStarted = where.length > 0 && where.every((b) => !b.evacStarted);
 
   const headline = savedPeople > 0 ? `${savedPeople} more ${savedPeople === 1 ? 'person' : 'people'} safe`
-    : savedPeople < 0 ? `${-savedPeople} fewer safe than without Lantern`
+    : savedPeople < 0 ? `${-savedPeople} fewer safe than without Aegis`
       : !left ? (avoided > 0 ? `Everyone safe, ${fmtUsd(Math.round(avoided))} less damage` : 'Everyone safe')
-        : avoided > 0 ? `${fmtUsd(Math.round(avoided))} less damage` : 'Same outcome as without Lantern';
+        : avoided > 0 ? `${fmtUsd(Math.round(avoided))} less damage` : 'Same outcome as without Aegis';
   const parts: string[] = [];
-  if (avoided > 0) parts.push(`Compared with the same fire without Lantern: ${fmtUsd(Math.round(avoided))} less damage${fewerClaims > 0 ? ` and ${fewerClaims} fewer insurance claim${fewerClaims === 1 ? '' : 's'}` : ''}.`);
-  else if (avoided < 0) parts.push(`Same fire, but it burned a different path this time: ${fmtUsd(Math.round(-avoided))} more damage than without Lantern.`);
-  else parts.push(fixed ? 'Compared with the same fire without Lantern: the damage came out the same this time.' : 'Compared with the same fire without Lantern. Damage was the same: the buildings were not prepared before the fire.');
+  if (avoided > 0) parts.push(`Compared with the same fire without Aegis: ${fmtUsd(Math.round(avoided))} less damage${fewerClaims > 0 ? ` and ${fewerClaims} fewer insurance claim${fewerClaims === 1 ? '' : 's'}` : ''}.`);
+  else if (avoided < 0) parts.push(`Same fire, but it burned a different path this time: ${fmtUsd(Math.round(-avoided))} more damage than without Aegis.`);
+  else parts.push(fixed ? 'Compared with the same fire without Aegis: the damage came out the same this time.' : 'Compared with the same fire without Aegis. Damage was the same: the buildings were not prepared before the fire.');
   if (savedPeople < 0) parts.push('Some evacuations started late. Start them when the coach first asks.');
 
   // prevention: from whether fixes were made, never claiming more than the results show
   const prep: Instruction = !fixed
-    ? { id: 'why-prep', tone: 'soon', title: 'Next time: prepare first', why: 'Approve Lantern’s plan before the fire (Run again) to cut ignition risk and the claims that follow.' }
+    ? { id: 'why-prep', tone: 'soon', title: 'Next time: prepare first', why: 'Approve Aegis’s plan before the fire (Run again) to cut ignition risk and the claims that follow.' }
     : avoided > 0
       ? { id: 'why-prep', tone: 'good', title: 'Prevention paid first', why: 'Fixes made before the fire lowered ignition risk and documented Safer from Wildfires measures, so the claim never happens.' }
       : {
@@ -401,7 +401,7 @@ function endedAdvice(input: AdvisorInput, approved: Record<number, string[]>): A
     stats: [
       // neutral colors when both runs kept the same number of people safe
       { label: 'safe', value: `${r.with.peopleSafe}/${r.with.peopleTotal}`, tone: savedPeople > 0 ? 'ok' : savedPeople < 0 ? 'bad' : undefined },
-      { label: 'without Lantern', value: `${r.without.peopleSafe}/${r.without.peopleTotal}`, tone: savedPeople > 0 ? 'bad' : undefined },
+      { label: 'without Aegis', value: `${r.without.peopleSafe}/${r.without.peopleTotal}`, tone: savedPeople > 0 ? 'bad' : undefined },
       { label: 'buildings lost', value: `${r.with.buildingsLost} vs ${r.without.buildingsLost}` },
     ],
     items: [prep, people],

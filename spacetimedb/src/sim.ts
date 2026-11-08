@@ -1,9 +1,9 @@
-// Lantern simulation engine.
+// Aegis simulation engine.
 //
 // PURE functions only: no SpacetimeDB imports, no Date, no Math.random, no I/O, no async.
 // The same code runs in three places:
-//   1. the scheduled `tick` reducer (live "with Lantern" run; rng = () => ctx.random()),
-//   2. `run_baseline` (instant "without Lantern" run; rng = mulberry32(seed)),
+//   1. the scheduled `tick` reducer (live "with Aegis" run; rng = () => ctx.random()),
+//   2. `run_baseline` (instant "without Aegis" run; rng = mulberry32(seed)),
 //   3. plain Node (tests in spacetimedb/tests, calibration scripts in data/sim).
 //
 // Row interfaces below mirror the Spacetime tables in LANTERN_SPEC.md §4 field-for-field,
@@ -172,7 +172,7 @@ export interface FireParams {
   vanRatePerHour: number; // assisted residents transported per van per hour
   walkRatePerHour: number; // per staff when there is no van
   outsideHelpPerHour: number; // no staff at all (neighbours / 911)
-  mutualAidPerHour: number; // Lantern only: per cleared building with staff, help sent to staffless buildings
+  mutualAidPerHour: number; // Aegis only: per cleared building with staff, help sent to staffless buildings
   behindMarginMin: number; // an evacuating building is "behind" only if it misses the fire by more than this
 
   urgentEtaMin: number; // task priority bumps when fire is closer than this
@@ -462,7 +462,7 @@ export interface SubstepResult {
 /** Advance the fire by one step (stepMinutes of sim time). */
 export function fireSubstep(eng: Engine, g: FireGrid, rng: Rng, wind: WindSample, draw?: Draw): SubstepResult {
   const p = eng.p;
-  // Keyed fires (the live fire and the without-Lantern baseline) are MONOTONE: every spread link and every
+  // Keyed fires (the live fire and the without-Aegis baseline) are MONOTONE: every spread link and every
   // building has one fixed random threshold for the whole fire and fires once enough hazard has built up
   // (the same per-step odds as a coin flip each step). So less fuel, a lower risk or an engine on scene can
   // only delay or prevent a burn, never cause one: "the same fire" stays the same wherever nothing changed.
@@ -935,7 +935,7 @@ export function stepSimulation(world: World, p: FireParams, rngSrc: RngSource, o
   }
   const silent = new Set(p.silentPersonIds);
   const replyP = 1 - Math.pow(1 - Math.min(1, p.autoReplyPerMin), mpt);
-  // Lantern knows which buildings are already clear and sends their staff to buildings with none.
+  // Aegis knows which buildings are already clear and sends their staff to buildings with none.
   const aid = mode === 'lantern' ? world.buildings.filter((x) => x.status === 'clear' && x.staff > 0 && x.kind !== 'shelter') : [];
   const extraFor = (b: BuildingRow) => (b.staff === 0 && b.kind !== 'shelter' ? p.mutualAidPerHour * aid.length : 0);
 
@@ -985,7 +985,7 @@ export function stepSimulation(world: World, p: FireParams, rngSrc: RngSource, o
         h--;
       }
     } else {
-      // Lantern: simulated residents answer their check-in.
+      // Aegis: simulated residents answer their check-in.
       for (const x of ppl) {
         if (x.status === 'pinged' && !x.needsHelp && !silent.has(x.id) && R.people() < replyP) {
           x.status = 'safe';
@@ -1426,17 +1426,17 @@ export function fastForward(world: World, p: FireParams, rngSrc: RngSource, opts
   const o: StepOptions = { mode: opts.mode, etaRuns: opts.etaRuns }; // same ETA settings as the live tick, so outcomes match a live run
   let started = 0;
   for (let i = 0; i < 100000 && world.sim.phase === 'fire'; i++) {
-    // "Skip to the end" plays the rest of the fire as if the operator follows Lantern's evacuation advice.
+    // "Skip to the end" plays the rest of the fire as if the operator follows Aegis's evacuation advice.
     if (opts.followCoach) for (const id of coachEvacuations(world)) if (!startEvacuation(world, id, p).error) started++;
     world.sim.running = true;
     stepSimulation(world, p, rngSrc, o);
     opts.afterStep?.(world); // e.g. the module's fire engines keep driving and protecting
   }
-  return started; // evacuations Lantern's advice started along the way
+  return started; // evacuations Aegis's advice started along the way
 }
 
 /**
- * The "without Lantern" run: the SAME fire (same seed, same wind), no fixes, nobody moves until the fire
+ * The "without Aegis" run: the SAME fire (same seed, same wind), no fixes, nobody moves until the fire
  * is autoStartEtaMin away, no check-ins / escalation / claims / mutual aid. Pass the same fireSeed the
  * live run used (default p.fireSeed). runs > 1 averages over fireSeed, fireSeed+1, …
  */
@@ -1468,7 +1468,7 @@ export function runBaseline(seed: Seed, opts: { fireSeed?: number; runs?: number
 }
 
 /**
- * "Lantern recommends": unapproved fixes ranked by expected loss avoided per dollar, greedily within the
+ * "Aegis recommends": unapproved fixes ranked by expected loss avoided per dollar, greedily within the
  * remaining budget. Expected loss avoided = value × riskDrop/100 for buildings the fire is expected to reach
  * (10% weight otherwise); a van counts as the people it protects (needs-help residents who would not get
  * out before the fire), valued at $1M each for ranking only. Returns fix ids in order.

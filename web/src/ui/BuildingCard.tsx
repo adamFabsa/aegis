@@ -129,7 +129,7 @@ function PrepBody({ b, world }: { b: Building; world: CardWorld }) {
   const lossBefore = expectedLoss(b, profile, b.baseRisk);
   const checklist = world.checklistFor?.(b.id) ?? [];
   const done = world.approved[b.id] ?? [];
-  // Lantern AI's ranking for the whole neighborhood (the phone coach's list), narrowed to this building
+  // Aegis AI's ranking for the whole neighborhood (the phone coach's list), narrowed to this building
   const next = useMemo(() => prepPlan(world, (id, key) => (world.approved[id] ?? []).includes(key)).find((s) => s.b.id === b.id),
     [world, b.id]);
   const [justApproved, setJustApproved] = useState<string | null>(null);
@@ -151,7 +151,7 @@ function PrepBody({ b, world }: { b: Building; world: CardWorld }) {
       <Race b={b} />
       {next ? (
         <div className="bcard-ai">
-          <p className="bcard-kicker"><span>Lantern AI · next fix</span>{measure && <span className="bcard-measure" title={measure.measure}>+1 insurer measure</span>}</p>
+          <p className="bcard-kicker"><span>Aegis AI · next fix</span>{measure && <span className="bcard-measure" title={measure.measure}>+1 insurer measure</span>}</p>
           <p className="bcard-fix">{next.f.name}</p>
           <p className="bcard-why">
             {next.f.addVans > 0
@@ -165,7 +165,7 @@ function PrepBody({ b, world }: { b: Building; world: CardWorld }) {
       ) : (
         <p className="bcard-done">
           {b.prepared ? '✓ Prepared. ' : ''}{done.length ? `${done.length} fix${done.length === 1 ? '' : 'es'} approved. ` : ''}
-          {world.fixesFor(b.id).some((f) => !done.includes(f.key)) ? 'Nothing else here makes Lantern’s plan.' : 'Nothing left to fix here.'}
+          {world.fixesFor(b.id).some((f) => !done.includes(f.key)) ? 'Nothing else here makes Aegis’s plan.' : 'Nothing left to fix here.'}
         </p>
       )}
       {justApproved && <p className="bcard-flash" role="status">✓ Approved: {justApproved}</p>}
@@ -254,7 +254,7 @@ function ShelterBody({ world }: { world: CardWorld }) {
         <Stat label="people out" value={out} sub={`/${total}`} color={out ? STATUS_COLORS.green : undefined} />
         <Stat label="buildings all out" value={clear} sub={`/${real.length}`} color={clear ? STATUS_COLORS.green : undefined} />
       </dl>
-      <p className="bcard-done">Every evacuation ends here; Lantern counts residents in as they arrive.</p>
+      <p className="bcard-done">Every evacuation ends here; Aegis counts residents in as they arrive.</p>
     </>
   );
 }

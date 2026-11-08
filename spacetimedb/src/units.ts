@@ -2,8 +2,8 @@
  * Fire engines (the public `unit` table). Pure functions over plain rows so they can be unit-tested.
  *
  *  - The fire department answers buildings that are already burning (auto-dispatch), as it would without
- *    Lantern, but always keeps one engine in reserve.
- *  - Lantern's advisor can send an engine AHEAD of the fire (dispatch_unit). An engine on scene before the
+ *    Aegis, but always keeps one engine in reserve.
+ *  - Aegis's advisor can send an engine AHEAD of the fire (dispatch_unit). An engine on scene before the
  *    fire arrives lowers that building's ignition probability (sim.ts, p.engineProtect).
  *  - Engines drive back to staging when their building is lost or when released.
  * Travel is counted in ticks (one tick = 1 s of real time) so trucks drive at the same pace at any speed.
@@ -33,7 +33,7 @@ interface BuildingLike {
 
 /** Staging lot (map units), the same point the web client drives engines from (web/src/town/scene.ts STAGING). */
 export const STAGING: [number, number] = [72, 540];
-/** Engines the auto-dispatch leaves free for Lantern's own call. */
+/** Engines the auto-dispatch leaves free for Aegis's own call. */
 export const RESERVE = 1;
 
 export function freshUnits(): UnitRow[] {

@@ -2,7 +2,7 @@
   "name": "lantern-worker",
   "version": "0.1.0",
   "private": true,
-  "description": "Lantern Gemini worker: classifies resident free-text replies and writes building risk notes into SpacetimeDB.",
+  "description": "Aegis Gemini worker: classifies resident free-text replies and writes building risk notes into SpacetimeDB.",
   "type": "module",
   "scripts": {
     "dev": "node --env-file-if-exists=.env --watch --import tsx src/index.ts",

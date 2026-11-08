@@ -13,7 +13,7 @@ export function tidy(msg: string): string {
 /** A reducer call that never answers (connection dropped) must not leave a button spinning forever. */
 export async function settle(r: Result, ms = 20000): Promise<string | null> {
   let t = 0;
-  const late = new Promise<string>((res) => { t = window.setTimeout(() => res('No answer from the Lantern server. Try again.'), ms); });
+  const late = new Promise<string>((res) => { t = window.setTimeout(() => res('No answer from the Aegis server. Try again.'), ms); });
   try {
     return await Promise.race([Promise.resolve(r), late]);
   } finally {

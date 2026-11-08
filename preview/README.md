@@ -1,4 +1,4 @@
-# Lantern sim preview
+# Aegis sim preview
 
 `preview/index.html` — open it in any browser (double-click; no server, no install). It runs the **same engine
 as the Spacetime module** (`spacetimedb/src/sim.ts` + the generated seed), single-player, so you can:

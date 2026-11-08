@@ -61,7 +61,7 @@ export function ScenarioBar({ world, pick, onNew, compact = false, style, band =
         <b>{pick.busy ? 'Re-running the fire from there…' : `${compact ? 'Tap' : 'Click'} where the fire should start`}</b>
         {pick.error
           ? <small className="err">{pick.error}</small>
-          : <small>{pick.busy ? 'Lantern re-ranks every building for the new fire start.' : 'Grass or brush. Lantern re-runs the fire from there.'}</small>}
+          : <small>{pick.busy ? 'Aegis re-ranks every building for the new fire start.' : 'Grass or brush. Aegis re-runs the fire from there.'}</small>}
       </span>
       <button type="button" className="sc-btn" onClick={pick.cancel}>Cancel</button>
     </div>

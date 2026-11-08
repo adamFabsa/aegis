@@ -1,4 +1,4 @@
-// The phone: Lantern AI's step-by-step instructions (default), a resident checking in, and staff claiming
+// The phone: Aegis AI's step-by-step instructions (default), a resident checking in, and staff claiming
 // help tasks. Drawn inside a phone frame on wide screens, as a tab on phones, and full screen at ?view=phone.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Building, Person, ScenarioResult, Sim, Task } from '../town/types';
@@ -35,7 +35,7 @@ export interface PhoneProps {
   initialRole?: 'advisor' | 'resident' | 'staff';
   initialPerson?: number;
   initialStaff?: string;
-  /** Lantern AI (the advisor tab): shown when fixesFor is given */
+  /** Aegis AI (the advisor tab): shown when fixesFor is given */
   units?: Unit[];
   fixesFor?: (buildingId: number) => FixView[];
   approved?: Record<number, string[]>;
@@ -89,8 +89,8 @@ function ResidentView({ sim, buildings, persons, tasks, onReply, initialPerson }
         }))} />
       <div className="chat" aria-live="polite">
         {!pinged ? (
-          <Bubble from="lantern">{sim.phase === 'prep' ? `Hi ${p.name.split(' ')[0]}, Lantern watches the fire risk for ${b.name}. Nothing to do right now.`
-            : sim.phase === 'ended' ? `The fire is out. ${b.name} did not need to evacuate. Lantern will message you if anything changes.`
+          <Bubble from="lantern">{sim.phase === 'prep' ? `Hi ${p.name.split(' ')[0]}, Aegis watches the fire risk for ${b.name}. Nothing to do right now.`
+            : sim.phase === 'ended' ? `The fire is out. ${b.name} did not need to evacuate. Aegis will message you if anything changes.`
               : `Fire is burning in the hills. ${b.name} has not been asked to leave yet. Keep this phone close.`}</Bubble>
         ) : (
           <Bubble from="lantern">Fire is approaching {b.name}. Evacuation has started. Are you safe?</Bubble>
@@ -111,7 +111,7 @@ function ResidentView({ sim, buildings, persons, tasks, onReply, initialPerson }
             <button type="button" className="btn fire" onClick={() => void reply('cant_move')}>I can't get out</button>
           </div>
           <form className="phone-text" onSubmit={(e) => { e.preventDefault(); if (text.trim()) { void reply('text', text.trim()); setText(''); } }}>
-            <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Or type a message" aria-label="Message to Lantern" />
+            <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Or type a message" aria-label="Message to Aegis" />
             <button type="submit" className="btn small" disabled={!text.trim()}>Send</button>
           </form>
         </div>
@@ -228,7 +228,7 @@ function AdvisorView(props: PhoneProps) {
   return (
     <div className="phone-body ai">
       <div className="ai-head">
-        <p className="ai-kicker"><span className="ai-spark" aria-hidden="true" />Lantern AI · {sim.phase === 'prep' ? 'before the fire' : sim.phase === 'fire' ? 'live' : 'debrief'}</p>
+        <p className="ai-kicker"><span className="ai-spark" aria-hidden="true" />Aegis AI · {sim.phase === 'prep' ? 'before the fire' : sim.phase === 'fire' ? 'live' : 'debrief'}</p>
         {/* updated in place (no remount, no fade): the headline is never blank between two updates */}
         <h3 className="ai-headline">{advice.headline}</h3>
         <p className="ai-detail">{advice.detail}</p>
@@ -240,7 +240,7 @@ function AdvisorView(props: PhoneProps) {
       </div>
       {advice.note && (
         <blockquote className="ai-note">
-          <span className="ai-note-by">{props.workerOnline ? `Lantern AI on ${advice.note.building}` : `Why ${advice.note.building} is at risk`}</span>
+          <span className="ai-note-by">{props.workerOnline ? `Aegis AI on ${advice.note.building}` : `Why ${advice.note.building} is at risk`}</span>
           {advice.note.text}
         </blockquote>
       )}
@@ -273,7 +273,7 @@ function AdvisorView(props: PhoneProps) {
           Approve all {advice.plan.count} · {fmtUsd(advice.plan.cost)}
         </button>
       )}
-      {sim.phase === 'ended' && <p className="ai-tag">Like a good neighbor, Lantern was there, before the fire.</p>}
+      {sim.phase === 'ended' && <p className="ai-tag">Like a good neighbor, Aegis was there, before the fire.</p>}
       <p className="ai-foot">Risk from a model trained on 132,522 CAL FIRE damage inspections · fire calibrated to the 2025 Eaton Fire{props.workerOnline ? ' · notes and replies read by the AI worker' : ''}</p>
     </div>
   );
@@ -302,7 +302,7 @@ function AlertsView(props: PhoneProps) {
     }
   };
   if (sim.phase === 'prep') {
-    return <div className="phone-body"><p className="phone-empty al-empty">No alerts yet. When the fire starts, Lantern lists every resident who needs someone here, building by building.</p></div>;
+    return <div className="phone-body"><p className="phone-empty al-empty">No alerts yet. When the fire starts, Aegis lists every resident who needs someone here, building by building.</p></div>;
   }
   const list = buildings
     .map((b) => ({ b, a: alerts.get(b.id) }))
@@ -384,7 +384,7 @@ export function Phone(props: PhoneProps & { framed?: boolean; onClose?: () => vo
       <div className="phone-status"><span>{props.sim.phase === 'prep' ? '9:41' : fmtClock(props.sim.simMinutes + 9 * 60 + 41)}</span>{props.onClose && <button type="button" className="phone-close" aria-label="Hide phone" onClick={props.onClose}>×</button>}</div>
       <div className="phone-app">
         <div className="phone-title">
-          <span>Lantern</span>
+          <span>Aegis</span>
           <span className="sf-badge" title="Built for the State Farm challenge"><img src="/brand/state-farm.svg" alt="State Farm" /></span>
         </div>
         <div className="tabs phone-tabs" role="tablist">

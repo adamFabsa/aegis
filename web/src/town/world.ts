@@ -94,7 +94,7 @@ export interface WorldApi {
   startEvacuation: (id: number) => void;
   approveFix: (id: number, key: string) => void;
   approveRecommended?: () => void;
-  /** live only: Lantern's coach sends on-site staff to a waiting resident now */
+  /** live only: Aegis's coach sends on-site staff to a waiting resident now */
   assignStaff?: (taskId: number) => Result;
   endAndCompare?: () => void;
   togglePause: () => void;

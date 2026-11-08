@@ -49,7 +49,7 @@ test('scripted demo in the preview == the same script on the bare engine', () =>
   }
   assert.deepEqual(ctl.results!.with, computeResults(w, P, 'with_lantern'));
   assert.deepEqual(ctl.results!.without, runBaseline(SEED, { fireSeed: P.fireSeed }));
-  assert.ok(ctl.results!.with.peopleSafe > ctl.results!.without.peopleSafe, 'Lantern saves more people on the demo fire');
+  assert.ok(ctl.results!.with.peopleSafe > ctl.results!.without.peopleSafe, 'Aegis saves more people on the demo fire');
 });
 
 test('claims are exclusive and tasks get unique ids', () => {

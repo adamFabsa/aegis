@@ -1,4 +1,4 @@
-# Lantern web (Part B)
+# Aegis web (Part B)
 
 Isometric town (Blender-rendered sprites, see `../blender/README.md`), the manager's dashboard, and the resident /
 staff phone. It renders the **live SpacetimeDB module** (Part C's reducers driving Part A's engine) through the

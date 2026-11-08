@@ -176,9 +176,9 @@ export const TICK_SECONDS = 0.7;
 interface World {
   sim: Sim; buildings: Building[]; cells: FireCell[]; burnCount: Record<number, number>; approved: Record<number, FixKey[]>; events: LogEvent[]; units: Unit[];
   persons: Person[]; tasks: Task[]; helpCredit: Record<number, number>;
-  /** the "without Lantern" run: no fixes, no units, evacuation only when the fire is 10 minutes out, no pings or tasks */
+  /** the "without Aegis" run: no fixes, no units, evacuation only when the fire is 10 minutes out, no pings or tasks */
   baseline?: boolean;
-  /** one fire per run: the live run and the "without Lantern" baseline draw from the same seed */
+  /** one fire per run: the live run and the "without Aegis" baseline draw from the same seed */
   seed: number;
   /** buildings the fire front has already reached (each gets one ignition roll, at its current risk) */
   exposed: Record<number, boolean>;
@@ -437,7 +437,7 @@ function step(w: World): World {
     }
     if (b.kind === 'shelter') return b;
     if (b.status === 'lost' || b.status === 'clear') return b;
-    // once the fire is 10 minutes out people leave on their own, with or without Lantern
+    // once the fire is 10 minutes out people leave on their own, with or without Aegis
     if (!b.evacStarted && b.status !== 'burning' && b.fireEtaMin >= 0 && b.fireEtaMin <= 10) {
       b.evacStarted = true;
       selfEvac.push(b.id);
@@ -479,7 +479,7 @@ function step(w: World): World {
   const persons = w.persons.map((p) => (selfEvac.includes(p.buildingId) && p.status === 'inside' && !w.baseline
     ? { ...p, status: 'pinged' as const, pingedAtTick: sim.tick, replyAt: p.plan === 'silent' ? -1 : sim.tick + 1 }
     : { ...p }));
-  for (const id of selfEvac) if (!w.baseline) events = log(events, sim.tick, `Fire 10 minutes from ${buildings.find((b) => b.id === id)?.name}: residents leaving on their own, Lantern pinged everyone`, 'warn');
+  for (const id of selfEvac) if (!w.baseline) events = log(events, sim.tick, `Fire 10 minutes from ${buildings.find((b) => b.id === id)?.name}: residents leaving on their own, Aegis pinged everyone`, 'warn');
   let tasks = w.tasks.map((t) => ({ ...t }));
   const helpCredit = { ...w.helpCredit };
   for (const b of buildings) {

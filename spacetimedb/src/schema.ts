@@ -120,7 +120,7 @@ const mitigation = table({ name: 'mitigation', public: true }, {
   note: t.string(),
 });
 
-/** Fire engines (units.ts): auto-dispatched to burning buildings, or sent ahead of the fire by Lantern's advisor. */
+/** Fire engines (units.ts): auto-dispatched to burning buildings, or sent ahead of the fire by Aegis's advisor. */
 const unit = table({ name: 'unit', public: true }, {
   id: t.u32().primaryKey(),
   name: t.string(),                        // "Engine 1"

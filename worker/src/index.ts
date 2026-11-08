@@ -1,5 +1,5 @@
 /**
- * Lantern Gemini worker — a peer SpacetimeDB client.
+ * Aegis Gemini worker — a peer SpacetimeDB client.
  *  - person.replyText (free text)  → Gemini triage → set_reply_class   ('unclear' is left for humans)
  *  - building.explanation empty / still the module's template (seed, reset, every new scenario) → 2-sentence note
  *    written from the building, building_profile and fix rows → set_explanation
@@ -153,5 +153,5 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('unhandledRejection', (e) => log.error('unhandled rejection', { error: errMsg(e) }));
 
-log.info('Lantern AI worker starting', { provider: providerName() });
+log.info('Aegis AI worker starting', { provider: providerName() });
 connect();

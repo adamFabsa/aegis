@@ -261,7 +261,7 @@ export function useLiveWorld(): WorldApi {
     togglePause: () => void store.call((c) => c.reducers.setRunning({ running: !store.snapshot.sim.running })),
     reset: () => void store.call((c) => c.reducers.resetSim({})),
     advance: (n: number) => void store.call((c) => c.reducers.advanceTicks({ ticks: Math.min(500, Math.max(1, Math.round(n))) })),
-    // Fire engines live in the module's unit table (auto-dispatch to burning buildings + Lantern's own calls).
+    // Fire engines live in the module's unit table (auto-dispatch to burning buildings + Aegis's own calls).
     dispatchUnit: (buildingId: number) => store.call((c) => c.reducers.dispatchUnit({ buildingId })),
     releaseUnit: (unitId: number) => store.call((c) => c.reducers.releaseUnit({ unitId })),
     replyCheckin: (personId: number, choice: 'safe' | 'cant_move' | 'text', text = '') => store.call((c) => c.reducers.replyCheckin({ personId, choice, text })),

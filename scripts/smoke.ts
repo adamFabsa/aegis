@@ -84,7 +84,7 @@ try {
   await worker.reducers.setReplyClass({ personId: ROBERT, choice: 'needs_medical' });
   await waitFor(() => admin.db.person.id.find(ROBERT)?.status === 'cant_move', 'worker classification');
   assert.ok([...admin.db.task.iter()].some((t) => t.personId === ROBERT && !t.done && t.priority === 3), 'Robert has an urgent task');
-  // Lantern's coach sends on-site staff at once (the engine then completes the rescue at the staff × van pace).
+  // Aegis's coach sends on-site staff at once (the engine then completes the rescue at the staff × van pace).
   const robertTask = [...admin.db.task.iter()].find((t) => t.personId === ROBERT && !t.done)!;
   // (on-site staff may claim him first on their own; either way he ends up with on-site staff)
   const assigned = await a.reducers.assignStaff({ taskId: robertTask.id }).then(() => null, (e: Error) => e.message);

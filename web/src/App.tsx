@@ -135,7 +135,7 @@ export default function App() {
   useEffect(() => { const on = () => setVw(window.innerWidth); window.addEventListener('resize', on); return () => window.removeEventListener('resize', on); }, []);
   const [phoneOpen, setPhoneOpen] = useState(true);
   const phoneLayout = vw <= 760;
-  // the phone carries Lantern AI's instructions in every phase, so it is on screen from the start
+  // the phone carries Aegis AI's instructions in every phase, so it is on screen from the start
   const showFrame = vw >= 1180 && phoneOpen;
   const phoneProps = {
     sim, buildings, persons: world.persons, tasks: world.tasks,
@@ -156,8 +156,8 @@ export default function App() {
     offline.searchParams.set('mock', '1');
     return (
       <div className="phone-page" style={{ justifyContent: 'center', textAlign: 'center' }}>
-        <p className="eyebrow">Lantern</p>
-        <h2>{conn.state === 'error' ? 'Can’t reach the Lantern server' : 'Connecting to Lantern…'}</h2>
+        <p className="eyebrow">Aegis</p>
+        <h2>{conn.state === 'error' ? 'Can’t reach the Aegis server' : 'Connecting to Aegis…'}</h2>
         <p className="hint">{conn.server}{conn.message ? ` · ${conn.message}` : ''}</p>
         {conn.state === 'error' && <button type="button" className="btn primary wide" onClick={() => window.location.assign(offline.toString())}>Open the offline demo instead</button>}
       </div>
