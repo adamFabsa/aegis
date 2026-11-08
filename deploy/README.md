@@ -1,5 +1,24 @@
 # Hosting Aegis
 
+**Live:** https://aegis-beta-nine.vercel.app · database `aegis-hackutd` on SpacetimeDB Maincloud
+(dashboard: https://spacetimedb.com/aegis-hackutd).
+
+| Piece | Where |
+|---|---|
+| Database + game logic (SpacetimeDB module) | SpacetimeDB **Maincloud**, database `aegis-hackutd` |
+| Website | **Vercel** project `aegis` (GitHub `adamFabsa/aegis`, Root Directory `web`, Vite); every push to `main` redeploys |
+| AI worker (Gemini / Claude) | not hosted: run it from any machine (below), or on a server with `deploy/setup.sh` |
+
+Vercel environment variables (Production + Preview): `VITE_SPACETIME_URI=wss://maincloud.spacetimedb.com`,
+`VITE_SPACETIME_DB=aegis-hackutd`. Update the module with
+`spacetime publish --no-config aegis-hackutd --server maincloud --module-path spacetimedb --yes` (signed in with
+`spacetime login` as the database owner). Reset the hosted game: `spacetime call --no-config aegis-hackutd --server maincloud new_scenario 0`.
+
+AI worker against the hosted database: in `worker/.env` set `SPACETIME_SERVER=https://maincloud.spacetimedb.com`,
+`SPACETIME_DATABASE=aegis-hackutd` and the AI key, run `npm --prefix worker start`, then register the identity it prints:
+`spacetime call --no-config aegis-hackutd --server maincloud register_worker <identity>`.
+
+## Alternative: one Vultr server for the website and the worker
 | Piece | Where |
 |---|---|
 | Database + game logic (SpacetimeDB module) | SpacetimeDB **Maincloud**, database `aegis-hackutd` |
