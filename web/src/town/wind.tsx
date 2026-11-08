@@ -64,16 +64,22 @@ export const WindStreaks = memo(function WindStreaks({ dirDeg, mph, pack, phase,
   );
 });
 
-/** Compact wind reading for the map controls: an arrow in the on-screen wind direction, heading and speed. */
+/**
+ * Compact wind reading for the map controls: an arrow pointing where the wind blows (on screen), and the wind
+ * named the way people say it, by where it comes FROM ("NE wind" blows toward the SW).
+ */
 export function WindCompass({ dirDeg, mph }: { dirDeg: number; mph: number }) {
   const { deg } = windScreen(dirDeg);
-  const name = compass(dirDeg);
+  const from = compass(dirDeg + 180);
+  const toward = compass(dirDeg);
   return (
-    <div className="wind-cell" role="img" aria-label={`Wind toward ${name} at ${mph} mph`} title={`Wind toward ${name} at ${mph} mph`}>
+    <div className="wind-cell" role="img" aria-label={`${from} wind at ${mph} mph, blowing toward the ${toward}`} title={`${from} wind · ${mph} mph (blowing toward the ${toward})`}>
       <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style={{ transform: `rotate(${deg.toFixed(1)}deg)` }}>
         <path d="M3 12h15M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      <b>{name}</b>
+      {/* reads top to bottom as "NE wind · 32 mph" in the 40px column */}
+      <b>{from}</b>
+      <small>wind</small>
       <small>{mph} mph</small>
     </div>
   );

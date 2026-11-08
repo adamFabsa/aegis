@@ -9,7 +9,7 @@ import { STATUS_COLORS } from '../town/palettes';
 import { statusTag } from '../town/status';
 import { expectedLoss } from './impact';
 import { prepPlan } from './advisor';
-import { KIND_LABEL, fmtMin, fmtUsd } from './format';
+import { KIND_LABEL, fmtUsd } from './format';
 
 type CardWorld = Pick<WorldApi,
   'sim' | 'buildings' | 'persons' | 'tasks' | 'units' | 'approved' | 'fixesFor' | 'profileFor' | 'checklistFor' |
@@ -27,16 +27,21 @@ interface Props {
 }
 
 const MIN_RISK = 5;
-/** arrow tip this far above the roof centre */
+/** arrow tip this far from the building's outline (beside it) or the roof centre (above / below it) */
 const GAP = 16;
+const SIDE_GAP = 8;
 const ARROW = 9;
 /** keep clear of the zoom column on the map's right edge */
 const ZOOM_W = 58;
+/** a click on the card's buttons this soon after it appeared was aimed at the map underneath: ignore it */
+const ARM_MS = 400;
 const riskColor = (r: number) => (r >= 70 ? STATUS_COLORS.red : r >= 40 ? STATUS_COLORS.amber : STATUS_COLORS.green);
 
 export function BuildingCard({ b, world, left, right, top = 12, onClose }: Props) {
   const pos = useRef<HTMLDivElement>(null);
-  useAnchor(pos, b.id, left, right, top);
+  const shownAt = useRef(0);
+  useLayoutEffect(() => { shownAt.current = performance.now(); }, [b.id]);
+  useAnchor(pos, b.id, left, right, top, shownAt);
 
   useEffect(() => {
     const on = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -48,7 +53,10 @@ export function BuildingCard({ b, world, left, right, top = 12, onClose }: Props
   const shelter = b.kind === 'shelter';
   const pill = pillFor(b, sim.phase);
   return (
-    <div ref={pos} className="bcard-pos" role="dialog" aria-label={`${b.name} details`}>
+    <div ref={pos} className="bcard-pos" role="dialog" aria-label={`${b.name} details`}
+      onClickCapture={(e) => {
+        if (performance.now() - shownAt.current < ARM_MS && (e.target as HTMLElement).closest('.btn')) { e.stopPropagation(); e.preventDefault(); }
+      }}>
       <div key={b.id} className="bcard">
         <header className="bcard-head">
           <b className="bcard-name">{b.name}</b>
@@ -56,7 +64,8 @@ export function BuildingCard({ b, world, left, right, top = 12, onClose }: Props
           <button type="button" className="bcard-x" aria-label="Close" onClick={onClose}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
           </button>
-          <small className="bcard-sub">{KIND_LABEL[b.kind]}{!shelter && b.residents ? ` · ${b.residents} residents` : ''}</small>
+          {/* before the fire the residents count sits in "need help 6/22"; the insurer checklist takes its place */}
+          <small className="bcard-sub">{KIND_LABEL[b.kind]}{shelter ? null : sim.phase === 'prep' ? <Checklist b={b} world={world} /> : b.residents ? ` · ${b.residents} residents` : ''}</small>
         </header>
         {shelter ? <ShelterBody world={world} /> : sim.phase === 'prep' ? <PrepBody b={b} world={world} /> : sim.phase === 'fire' ? <FireBody b={b} world={world} /> : <EndedBody b={b} />}
       </div>
@@ -83,25 +92,33 @@ function Stat({ value, label, sub, color }: { value: ReactNode; label: string; s
   );
 }
 
-/** The race: when the fire arrives, how long getting everyone out takes, and the margin. */
+/** "1h 28m" → "1h28" (one-line rows) */
+function short(min: number): string {
+  const m = Math.round(min);
+  return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m}m`;
+}
+
+/** The insurer checklist as a compact tail on the card's sub-line: "· checklist 1/6". */
+function Checklist({ b, world }: { b: Building; world: CardWorld }) {
+  const checklist = world.checklistFor?.(b.id) ?? [];
+  if (!checklist.length) return null;
+  const documented = checklist.filter((m) => m.status === 'met').length;
+  return <span aria-label={`Insurer checklist: ${documented} of ${checklist.length} documented`}> · insurer checklist <b className={documented ? 'ok' : ''}>{documented}/{checklist.length}</b></span>;
+}
+
+/** The race in one row: when the fire arrives, how long getting everyone out takes, and the margin. */
 function Race({ b }: { b: Building }) {
   const eta = b.fireEtaMin;
   const need = b.evacNeededMin;
-  if (eta < 0) {
-    return (
-      <dl className="bcard-stats">
-        <Stat label="fire arrives" value="—" sub=" no path" />
-        <Stat label="evacuation" value={fmtMin(need)} />
-      </dl>
-    );
-  }
+  if (eta < 0) return <p className="bcard-race"><span>No fire path</span><span>out in <b>{short(need)}</b></span></p>;
   const late = need > eta;
+  const tone = late ? STATUS_COLORS.red : STATUS_COLORS.green;
   return (
-    <dl className="bcard-stats">
-      <Stat label="fire arrives" value={eta === 0 ? 'Now' : fmtMin(eta)} color={eta === 0 ? STATUS_COLORS.red : undefined} />
-      <Stat label="evacuation" value={fmtMin(need)} color={late ? STATUS_COLORS.red : STATUS_COLORS.green} />
-      <Stat label={late ? 'too slow' : 'to spare'} value={fmtMin(Math.abs(eta - need))} color={late ? STATUS_COLORS.red : STATUS_COLORS.green} />
-    </dl>
+    <p className="bcard-race">
+      <span>fire <b style={eta < 1 ? { color: STATUS_COLORS.red } : undefined}>{eta < 1 ? 'here' : short(eta)}</b></span>
+      <span>out in <b style={{ color: tone }}>{short(need)}</b></span>
+      <span style={{ color: tone }}><b>{short(Math.abs(eta - need))}</b> {late ? 'too slow' : 'to spare'}</span>
+    </p>
   );
 }
 
@@ -111,7 +128,6 @@ function PrepBody({ b, world }: { b: Building; world: CardWorld }) {
   const loss = expectedLoss(b, profile);
   const lossBefore = expectedLoss(b, profile, b.baseRisk);
   const checklist = world.checklistFor?.(b.id) ?? [];
-  const documented = checklist.filter((m) => m.status === 'met').length;
   const done = world.approved[b.id] ?? [];
   // Lantern AI's ranking for the whole neighborhood (the phone coach's list), narrowed to this building
   const next = useMemo(() => prepPlan(world, (id, key) => (world.approved[id] ?? []).includes(key)).find((s) => s.b.id === b.id),
@@ -133,24 +149,14 @@ function PrepBody({ b, world }: { b: Building; world: CardWorld }) {
         <Stat label="need help" value={b.needsHelp} sub={`/${b.residents}`} />
       </dl>
       <Race b={b} />
-      {checklist.length > 0 && (
-        <div className="bcard-check" aria-label={`Insurer checklist: ${documented} of ${checklist.length} documented`}>
-          <span>Insurer checklist</span>
-          <span className="bcard-dots" aria-hidden="true">
-            {checklist.map((m) => <i key={m.measure} className={m.status} title={m.measure} />)}
-          </span>
-          <b>{documented} of {checklist.length}</b>
-        </div>
-      )}
       {next ? (
         <div className="bcard-ai">
-          <p className="bcard-kicker">Lantern AI · best next fix</p>
+          <p className="bcard-kicker"><span>Lantern AI · next fix</span>{measure && <span className="bcard-measure" title={measure.measure}>+1 insurer measure</span>}</p>
           <p className="bcard-fix">{next.f.name}</p>
           <p className="bcard-why">
             {next.f.addVans > 0
-              ? next.people > 0 ? `Gets the ${next.people} residents who need help out before the fire` : `Adds ${next.f.addVans} van: a faster evacuation`
+              ? next.people > 0 ? `Gets ${next.people} who need help out before the fire` : `Adds ${next.f.addVans} van: a faster evacuation`
               : `Risk ${Math.round(b.risk)} → ${Math.max(MIN_RISK, Math.round(b.risk - next.f.riskDrop))}${next.usd > 0 ? ` · claim −${fmtUsd(Math.round(next.usd))}` : ''}`}
-            {measure ? ' · +1 insurer measure' : ''}
           </p>
           <button type="button" className="btn small primary-small" onClick={() => { world.approveFix(b.id, next.f.key); setJustApproved(next.f.name); }}>
             Approve · {fmtUsd(next.f.cost)}
@@ -199,7 +205,7 @@ function FireBody({ b, world }: { b: Building; world: CardWorld }) {
       {(waiting > 0 || engine) && (
         <ul className="bcard-lines">
           {waiting > 0 && <li className="warn">{waiting} waiting for staff</li>}
-          {engine && <li className="unit">{engine.name} {engine.status === 'onscene' ? 'on scene' : 'en route'}</li>}
+          {engine && <li className="unit">{engine.name} {engine.status !== 'onscene' ? 'en route' : b.status === 'burning' ? 'on scene, water on' : 'standing by'}</li>}
         </ul>
       )}
       {b.status === 'lost' && <p className="bcard-done">Collapsed. {b.residents - b.peopleOut > 0 ? `${b.residents - b.peopleOut} were still inside.` : 'Everyone was already out.'}</p>}
@@ -255,17 +261,21 @@ function ShelterBody({ world }: { world: CardWorld }) {
 
 // ------------------------------------------------------------------ anchoring
 /**
- * Keeps the card above the anchor on the roof. The screen point comes from the anchor's own coordinates and
- * the SVG's viewBox (no layout reads), so it can run every frame; a MutationObserver on the viewBox re-places
- * it in the same task the camera writes, so the card never trails the town by a frame.
+ * Keeps the card beside the building (right of its outline, else left; above or below the roof only when
+ * neither side has room), so the buildings above and around it stay clickable. The screen point comes from the
+ * anchor's own coordinates and the SVG's viewBox (no layout reads), so it can run every frame; a
+ * MutationObserver on the viewBox re-places it in the same task the camera writes, so the card never trails
+ * the town by a frame.
  */
-function useAnchor(ref: RefObject<HTMLDivElement | null>, id: number, left: number, right: number, top: number) {
+function useAnchor(ref: RefObject<HTMLDivElement | null>, id: number, left: number, right: number, top: number, shownAt: RefObject<number>) {
   const box = useRef({ left, right, top });
   useLayoutEffect(() => { box.current = { left, right, top }; }, [left, right, top]);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     let anchor: SVGCircleElement | null = null;
+    /** the building's click outline, in SVG units (it never moves; only the viewBox does) */
+    let hull: { x0: number; x1: number } | null = null;
     let svg: SVGSVGElement | null = null;
     let svgRect = { left: 0, top: 0, width: 0, height: 0 };
     let size = { w: el.offsetWidth, h: el.offsetHeight };
@@ -283,6 +293,11 @@ function useAnchor(ref: RefObject<HTMLDivElement | null>, id: number, left: numb
     const find = () => {
       if (anchor?.isConnected) return true;
       anchor = document.querySelector<SVGCircleElement>(`[data-building-anchor="${id}"]`);
+      const poly = document.querySelector<SVGPolygonElement>(`polygon[data-bid="${id}"]`);
+      try {
+        const bb = poly?.getBBox();
+        hull = bb && bb.width > 0 ? { x0: bb.x, x1: bb.x + bb.width } : null;
+      } catch { hull = null; }
       const s = anchor?.ownerSVGElement ?? null;
       if (s !== svg) {
         mo.disconnect();
@@ -304,8 +319,12 @@ function useAnchor(ref: RefObject<HTMLDivElement | null>, id: number, left: numb
         if (vb && vb.width > 0 && vb.height > 0 && svgRect.width > 0) {
           // preserveAspectRatio="xMidYMid meet"
           const k = Math.min(svgRect.width / vb.width, svgRect.height / vb.height);
-          const ax = svgRect.left + (svgRect.width - vb.width * k) / 2 + (anchor.cx.baseVal.value - vb.x) * k;
+          const ox = svgRect.left + (svgRect.width - vb.width * k) / 2;
+          const ax = ox + (anchor.cx.baseVal.value - vb.x) * k;
           const ay = svgRect.top + (svgRect.height - vb.height * k) / 2 + (anchor.cy.baseVal.value - vb.y) * k;
+          // the building's left and right edges on screen (or a guess around the roof centre)
+          const hl = hull ? ox + (hull.x0 - vb.x) * k : ax - 30;
+          const hr = hull ? ox + (hull.x1 - vb.x) * k : ax + 30;
           const B = box.current;
           const { w: vw, h: vh } = view;
           const x0 = B.left + 8;
@@ -313,27 +332,41 @@ function useAnchor(ref: RefObject<HTMLDivElement | null>, id: number, left: numb
           const onScreen = ax >= B.left && ax <= vw - B.right && ay >= 0 && ay <= vh;
           if (onScreen) {
             const { w, h } = size;
-            let x = Math.min(Math.max(ax - w / 2, x0), Math.max(x0, x1 - w));
-            // above the building; below it when there is no room above
-            let below = false;
-            let y = ay - GAP - ARROW - h;
-            if (y < B.top) { below = true; y = ay + GAP + ARROW; }
+            let side: 'r' | 'l' | 't' | 'b';
+            let x: number;
+            let y: number;
+            if (hr + SIDE_GAP + ARROW + w <= x1) { side = 'r'; x = hr + SIDE_GAP + ARROW; }
+            else if (hl - SIDE_GAP - ARROW - w >= x0) { side = 'l'; x = hl - SIDE_GAP - ARROW - w; }
+            else { side = 't'; x = Math.min(Math.max(ax - w / 2, x0), Math.max(x0, x1 - w)); }
+            if (side === 't') {
+              // above the building; below it when there is no room above
+              y = ay - GAP - ARROW - h;
+              if (y < B.top) { side = 'b'; y = ay + GAP + ARROW; }
+            } else {
+              // level with the roof: the arrow sits a third of the way down the card
+              y = ay - Math.min(70, h * 0.3);
+            }
             y = Math.min(Math.max(y, B.top), vh - h - 8);
             const dpr = window.devicePixelRatio || 1;
             x = Math.round(x * dpr) / dpr;
             y = Math.round(y * dpr) / dpr;
-            const arrow = Math.round(Math.min(w - 18, Math.max(18, ax - x)));
-            state = `${x} ${y} ${arrow} ${below ? 1 : 0}`;
+            const arrow = side === 'r' || side === 'l'
+              ? Math.round(Math.min(h - 18, Math.max(18, ay - y)))
+              : Math.round(Math.min(w - 18, Math.max(18, ax - x)));
+            state = `${x} ${y} ${arrow} ${side}`;
           }
         }
       }
       if (state === last) return;
+      const wasOff = last === '' || last === 'off';
       last = state;
       if (state === 'off') { el.classList.add('off'); return; }
-      const [x, y, arrow, below] = state.split(' ');
+      // the card (re)appearing under the pointer: its buttons wait a moment before they take a click
+      if (wasOff) shownAt.current = performance.now();
+      const [x, y, arrow, side] = state.split(' ');
       el.style.transform = `translate(${x}px, ${y}px)`;
       el.style.setProperty('--arrow', `${arrow}px`);
-      el.classList.toggle('below', below === '1');
+      el.dataset.side = side;
       el.classList.remove('off');
     };
     const loop = () => { place(); raf = requestAnimationFrame(loop); };
@@ -341,5 +374,5 @@ function useAnchor(ref: RefObject<HTMLDivElement | null>, id: number, left: numb
     const onResize = () => { view = { w: window.innerWidth, h: window.innerHeight }; if (svg) { const r = svg.getBoundingClientRect(); svgRect = { left: r.left, top: r.top, width: r.width, height: r.height }; } place(); };
     window.addEventListener('resize', onResize);
     return () => { cancelAnimationFrame(raf); mo.disconnect(); ro.disconnect(); window.removeEventListener('resize', onResize); };
-  }, [ref, id]);
+  }, [ref, id, shownAt]);
 }
