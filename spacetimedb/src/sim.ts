@@ -213,6 +213,7 @@ export interface SeedBuilding {
   valueUsd: number;
   baseRisk: number;
   referenceFireEtaMin?: number; // median MC arrival from ignition (computed offline)
+  reachProbability?: number; // share of simulated Eaton-like fires that reach it (0..1, computed offline)
   explanation?: string;
   features?: Record<string, unknown>;
   fixes: SeedFix[];

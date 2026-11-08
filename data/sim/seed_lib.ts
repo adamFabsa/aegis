@@ -271,6 +271,12 @@ export function assembleSeed(opts: { calibration?: Calibration } = {}): Seed & {
   // evac = base + 60·9/(vanRate·vans)  ⇒  vanRate = 540 / (180 − base).
   p.vanRatePerHour = Math.round((540 / (180 - p.evacBaseMin)) * 1000) / 1000;
 
+  // Share of the 1,000 calibration fires that reached each building (data/sim/calibrate.ts).
+  const perBuilding = ((cal.report as { calibrationReport?: { perBuilding?: Record<string, { reachedPct?: number }> } } | undefined)?.calibrationReport?.perBuilding) ?? {};
+  const reachFor = (name: string) => {
+    const pct = perBuilding[name]?.reachedPct;
+    return typeof pct === 'number' ? Math.round(pct) / 100 : undefined;
+  };
   const buildings: SeedBuilding[] = nb.buildings.map((b) => {
     const r = risk[String(b.id)];
     const baseRisk = r ? r.baseRisk : 50;
@@ -313,6 +319,7 @@ export function assembleSeed(opts: { calibration?: Calibration } = {}): Seed & {
       valueUsd: b.valueUsd,
       baseRisk,
       referenceFireEtaMin: cal.referenceFireEtaMin?.[String(b.id)],
+      reachProbability: reachFor(b.name),
       explanation,
       features: { ...b.features, floors: b.floors },
       fixes,

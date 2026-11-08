@@ -38,6 +38,16 @@ if (task) {
 
 The examples use generated bindings directly; B may use the SDK's React provider/hooks with the same bindings. Copy readonly rows before sorting. Catch reducer promise rejections and show their messages (especially `already claimed`). Persist staff connection tokens so reconnecting preserves the identity needed to complete claimed tasks.
 
+## Sponsor-track tables (public, read-only for clients)
+
+| Table | Rows | Used for |
+|---|---|---|
+| `presence` | one per live connection (`connectionId`, `identity`, `worker`, `connectedAt`), maintained by the `clientConnected` / `clientDisconnected` hooks | the "Live on SpacetimeDB · N devices · AI worker on" chip |
+| `building_profile` | one per building: `reachProbability` (share of 1,000 calibrated fires that reach it), recorded construction, `sources` | expected loss = value × reach × risk, data lineage on the card |
+| `mitigation` | six per building (California *Safer from Wildfires* measures): `status` met / missing / unverified, `fixId`, `note` | insurer checklist; `approve_fix` / `approve_recommended` mark the measure a fix completes as documented |
+
+All three are rebuilt by `seed_world` / `reset_sim` / `set_phase('prep')`. Logic: `spacetimedb/src/insurance.ts` (tested in `spacetimedb/tests/insurance.test.ts`).
+
 ## Reducers
 
 | Wire name / generated method | Arguments | Rules |

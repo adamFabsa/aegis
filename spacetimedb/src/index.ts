@@ -10,6 +10,7 @@ import db, { simTick } from './schema';
 import { parseSeed } from './seed';
 import * as S from './sim';
 import { SEED } from './seed_data';
+import { DATA_SOURCES, applyFixToChecklist, mitigationRows, type MitigationRow } from './insurance';
 export default db;
 type Context = ReducerCtx<typeof db.schemaType>;
 
@@ -113,6 +114,8 @@ function seedWorld(ctx: Context, seed: S.Seed) {
   for (const e of [...ctx.db.eventLog.iter()]) ctx.db.eventLog.id.delete(e.id);
   for (const r of [...ctx.db.result.iter()]) ctx.db.result.scenario.delete(r.scenario);
   for (const o of [...ctx.db.taskOwner.iter()]) ctx.db.taskOwner.taskId.delete(o.taskId);
+  for (const r of [...ctx.db.buildingProfile.iter()]) ctx.db.buildingProfile.buildingId.delete(r.buildingId);
+  for (const r of [...ctx.db.mitigation.iter()]) ctx.db.mitigation.id.delete(r.id);
   const w = S.buildWorldFromSeed(seed);
   if (ctx.db.sim.id.find(0)) ctx.db.sim.id.update(w.sim);
   else ctx.db.sim.insert(w.sim);
@@ -120,6 +123,18 @@ function seedWorld(ctx: Context, seed: S.Seed) {
   for (const p of w.people) ctx.db.person.insert(p);
   for (const f of w.fixes) ctx.db.fix.insert(f);
   for (const c of w.cells) ctx.db.fireCell.insert(c);
+  for (const b of seed.buildings) {
+    const f = (b.features ?? {}) as Record<string, unknown>;
+    const str = (k: string) => (typeof f[k] === 'string' ? (f[k] as string) : '');
+    ctx.db.buildingProfile.insert({
+      buildingId: b.id,
+      reachProbability: b.reachProbability ?? (b.referenceFireEtaMin !== undefined && b.referenceFireEtaMin >= 0 ? 1 : 0.1),
+      roof: str('roof'), vents: str('vents'), eaves: str('eaves'), windows: str('windows'), siding: str('siding'),
+      yearBuilt: typeof f.yearBuilt === 'number' ? Math.max(0, Math.round(f.yearBuilt)) : 0,
+      sources: DATA_SOURCES,
+    });
+    for (const m of mitigationRows(b)) ctx.db.mitigation.insert(m);
+  }
   savePings(ctx, {});
   log(ctx, 'World seeded — simulated neighborhood; fire calibrated to the 2025 Eaton Fire; risk from CAL FIRE DINS', 0);
 }
@@ -137,6 +152,19 @@ export const init = db.init((ctx) => {
   storeSeed(ctx, seed);
   seedWorld(ctx, seed);
   ctx.db.simTick.insert({ scheduledId: 0n, scheduledAt: ScheduleAt.interval(1_000_000n) });
+});
+
+// Presence: every connected client (dashboard, phones, the AI worker) is a row; screens show the live count.
+export const onConnect = db.clientConnected((ctx) => {
+  if (!ctx.connectionId) return;
+  const connectionId = ctx.connectionId.toHexString();
+  const worker = !!ctx.db.admin.id.find(0)?.worker?.isEqual(ctx.sender);
+  const row = { connectionId, identity: ctx.sender, worker, connectedAt: ctx.timestamp };
+  if (ctx.db.presence.connectionId.find(connectionId)) ctx.db.presence.connectionId.update(row);
+  else ctx.db.presence.insert(row);
+});
+export const onDisconnect = db.clientDisconnected((ctx) => {
+  if (ctx.connectionId) ctx.db.presence.connectionId.delete(ctx.connectionId.toHexString());
 });
 
 // ───────────────────────────── admin / worker ─────────────────────────────
@@ -157,6 +185,10 @@ export const register_worker = db.reducer({ identity: t.identity() }, (ctx, { id
   requireAdmin(ctx);
   const admin = ctx.db.admin.id.find(0)!;
   ctx.db.admin.id.update({ ...admin, worker: identity });
+  for (const p of [...ctx.db.presence.iter()]) {
+    const isWorker = p.identity.isEqual(identity);
+    if (p.worker !== isWorker) ctx.db.presence.connectionId.update({ ...p, worker: isWorker });
+  }
   log(ctx, 'Worker identity registered');
 });
 
@@ -229,8 +261,16 @@ export const approve_fix = db.reducer({ fixId: t.u32() }, (ctx, { fixId }) => {
   ctx.db.sim.id.update(sim);
   ctx.db.building.id.update(b);
   ctx.db.fix.id.update(f);
+  documentFix(ctx, f);
   log(ctx, r.event ?? `Approved ${f.name} for ${b.name}`);
 });
+
+/** An approved fix documents the insurance mitigation measure it completes. */
+function documentFix(ctx: Context, f: { id: number; name: string; buildingId: number }) {
+  const rows: MitigationRow[] = [...ctx.db.mitigation.iter()].filter((m) => m.buildingId === f.buildingId).map((m) => ({ ...m, status: m.status as MitigationRow['status'] }));
+  const changed = applyFixToChecklist(rows, f);
+  if (changed) ctx.db.mitigation.id.update(changed);
+}
 
 /** "Lantern recommends": approve the best-value unapproved fixes that fit the remaining budget. */
 export const approve_recommended = db.reducer((ctx) => {
@@ -246,6 +286,7 @@ export const approve_recommended = db.reducer((ctx) => {
     if (r.error) continue;
     ctx.db.fix.id.update(f);
     ctx.db.building.id.update(b);
+    documentFix(ctx, f);
     lines.push(r.event ?? '');
   }
   ctx.db.sim.id.update(world.sim);

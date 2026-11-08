@@ -94,6 +94,32 @@ const simTick = table({ name: 'sim_tick' }, {
   scheduledAt: t.scheduleAt(),
 });
 
+// ── Sponsor-track additions (public, reactive) ──
+/** Live connections (connect/disconnect lifecycle hooks): the dashboard shows "N devices connected". */
+const presence = table({ name: 'presence', public: true }, {
+  connectionId: t.string().primaryKey(),   // ConnectionId hex
+  identity: t.identity(),
+  worker: t.bool(),                        // the registered Gemini worker
+  connectedAt: t.timestamp(),
+});
+/** Static per-building facts the dashboard needs for business impact and data lineage. */
+const buildingProfile = table({ name: 'building_profile', public: true }, {
+  buildingId: t.u32().primaryKey(),
+  reachProbability: t.f64(),               // share of 1,000 simulated Eaton-like fires that reach it
+  roof: t.string(), vents: t.string(), eaves: t.string(), windows: t.string(), siding: t.string(),
+  yearBuilt: t.u32(),
+  sources: t.string(),                     // where each number comes from
+});
+/** Insurer-ready checklist (California "Safer from Wildfires" measures) per building. */
+const mitigation = table({ name: 'mitigation', public: true }, {
+  id: t.u32().primaryKey(),                // buildingId * 10 + index
+  buildingId: t.u32(),
+  measure: t.string(),
+  status: t.string(),                      // 'met' | 'missing' | 'unverified'
+  fixId: t.u32(),                          // fix that completes it (0 = none)
+  note: t.string(),
+});
+
 // Private operational state; the public contract above is unchanged.
 const admin = table({ name: 'admin' }, {
   id: t.u32().primaryKey(), identity: t.identity(), worker: t.identity().optional(),
@@ -108,6 +134,7 @@ const taskOwner = table({ name: 'task_owner' }, {
   taskId: t.u64().primaryKey(), identity: t.identity(),
 });
 export const db = schema({ sim, building, person, task, fix, fireCell, eventLog, result, simTick,
+  presence, buildingProfile, mitigation,
   admin, worldSeed, engineState, taskOwner });
 export default db;
 export { simTick };

@@ -167,6 +167,10 @@ export default function App() {
         onPhone={vw >= 1180 && sim.phase !== 'prep' && !phoneOpen ? () => setPhoneOpen(true) : undefined}
       />
       <WindChip deg={sim.windDirDeg} mph={sim.windMph} style={phoneLayout ? { right: 8, top: 'calc(130px + env(safe-area-inset-top))' } : { left: insets.left + 4, bottom: 16 }} />
+      {world.live && (
+        <LiveChip tick={sim.tick} phase={sim.phase} devices={world.live.devices} worker={world.live.workerOnline}
+          style={phoneLayout ? { right: 8, top: 'calc(180px + env(safe-area-inset-top))' } : { left: insets.left + 4, bottom: 66 }} />
+      )}
       {showFrame && <Phone {...phoneProps} framed onClose={() => setPhoneOpen(false)} />}
         <Dock
           ref={dockRef}
@@ -177,6 +181,8 @@ export default function App() {
           prepared={world.prepared}
           onRecommend={world.approveRecommended}
           onEndCompare={world.endAndCompare}
+          profileFor={world.profileFor}
+          checklistFor={world.checklistFor}
           onEvacuate={world.startEvacuation}
           onStartFire={startFire}
           onRestart={() => { world.reset(); setSelectedId(null); }}
@@ -200,6 +206,19 @@ export default function App() {
             />
           }
         />
+    </div>
+  );
+}
+
+/** Proof the app runs on SpacetimeDB: the shared tick and every connected device, live. */
+function LiveChip({ tick, phase, devices, worker, style }: { tick: number; phase: string; devices: number; worker: boolean; style: React.CSSProperties }) {
+  return (
+    <div className="wind live-chip map-chrome" style={style} aria-label={`Live on SpacetimeDB, ${devices} devices connected`}>
+      <span className="dot" aria-hidden="true" />
+      <span>
+        <b>Live on SpacetimeDB</b>
+        <small>{phase === 'fire' ? `tick ${tick} · ` : ''}{devices} device{devices === 1 ? '' : 's'}{worker ? ' · AI worker on' : ''}</small>
+      </span>
     </div>
   );
 }

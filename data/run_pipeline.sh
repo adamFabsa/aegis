@@ -21,6 +21,6 @@ $NODE data/sim/make_seed.ts > /dev/null
 $NODE data/sim/pick_demo_seed.ts                         # representative demo fire → calibration.json
 $NODE data/sim/make_seed.ts                              # → seed/*.json + spacetimedb/src/seed_data.ts
 $NODE preview/build.ts                                   # → preview/index.html (same engine, in a browser)
-$NODE --test spacetimedb/tests/sim.test.ts preview/test_preview.ts
+$NODE --test spacetimedb/tests/sim.test.ts spacetimedb/tests/insurance.test.ts preview/test_preview.ts
 # Optional: load into Tiger Data and re-run the spread query in the database
 # TIGER_DATABASE_URL=... $PY data/tiger_load.py

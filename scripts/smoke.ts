@@ -38,7 +38,12 @@ try {
   await assert.rejects(a.reducers.seedWorld({ json: JSON.stringify(seed) }), /administrator only/);
   await assert.rejects(a.reducers.registerWorker({ identity: a.identity! }), /administrator only/);
   await assert.rejects(a.reducers.setExplanation({ buildingId: 12, text: 'bad' }), /worker only/);
+  // Presence: every connected client is a row (the dashboard's "N devices" chip).
+  await waitFor(() => admin.db.presence.count() >= 4n, 'presence rows for the four clients');
   await admin.reducers.registerWorker({ identity: worker.identity! });
+  await waitFor(() => [...admin.db.presence.iter()].some((p) => p.worker && p.identity.isEqual(worker.identity!)), 'worker flagged in presence');
+  assert.equal(admin.db.buildingProfile.count(), 8n, 'a profile row per building');
+  assert.equal([...admin.db.mitigation.iter()].filter((m) => m.buildingId === 12).length, 6, 'Building 12 has the six insurer measures');
   await worker.reducers.setExplanation({ buildingId: 12, text: 'Smoke-test explanation.' });
   const initialBudget = admin.db.sim.id.find(0)!.budgetLeft;
   await admin.reducers.approveFix({ fixId: 121 });
@@ -46,6 +51,10 @@ try {
   assert.equal(admin.db.building.id.find(12)!.vans, 2);
   assert.equal(admin.db.sim.id.find(0)!.budgetLeft, initialBudget - 48000);
   await assert.rejects(admin.reducers.approveFix({ fixId: 121 }), /already approved/);
+  // Approving the vent screens documents the "ember-resistant vents" insurer measure.
+  const ventsFix = [...admin.db.fix.iter()].find((f) => f.buildingId === 12 && f.name === 'Ember-resistant vent screens')!;
+  await admin.reducers.approveFix({ fixId: ventsFix.id });
+  await waitFor(() => [...admin.db.mitigation.iter()].some((m) => m.buildingId === 12 && m.measure === 'Ember- and flame-resistant vents' && m.status === 'met'), 'vents measure documented');
   const invalidSeed = { ...seed, people: [] };
   await assert.rejects(admin.reducers.seedWorld({ json: JSON.stringify(invalidSeed) }), /Occupancy mismatch/);
   assert.equal(admin.db.fix.id.find(121)!.approved, true);
@@ -95,9 +104,10 @@ try {
   assert.equal(admin.db.task.count(), 0n);
   assert.equal(admin.db.result.count(), 0n);
   assert.equal(admin.db.building.id.find(12)!.vans, 1);
+  assert.ok([...admin.db.mitigation.iter()].every((m) => !/approved/.test(m.note)), 'reset restores the checklist');
   assert.equal(admin.db.sim.id.find(0)!.budgetLeft, 500000);
   await admin.reducers.seedWorld({ json: JSON.stringify(readSeed()) });
-  console.log('PASS: seed rollback, authorization, fixes, cross-client check-ins, atomic competing claims, rescue ownership, worker writes, scheduled escalation/end, baseline and reset.');
+  console.log('PASS: seed rollback, authorization, presence, insurer checklist, fixes, cross-client check-ins, atomic competing claims, rescue ownership, worker writes, scheduled escalation/end, baseline and reset.');
 } finally {
   for (const c of clients) c.disconnect();
 }

@@ -42,6 +42,19 @@ export const Building = __t.object("Building", {
 });
 export type Building = __Infer<typeof Building>;
 
+export const BuildingProfile = __t.object("BuildingProfile", {
+  buildingId: __t.u32(),
+  reachProbability: __t.f64(),
+  roof: __t.string(),
+  vents: __t.string(),
+  eaves: __t.string(),
+  windows: __t.string(),
+  siding: __t.string(),
+  yearBuilt: __t.u32(),
+  sources: __t.string(),
+});
+export type BuildingProfile = __Infer<typeof BuildingProfile>;
+
 export const EngineState = __t.object("EngineState", {
   id: __t.u32(),
   json: __t.string(),
@@ -76,6 +89,16 @@ export const Fix = __t.object("Fix", {
 });
 export type Fix = __Infer<typeof Fix>;
 
+export const Mitigation = __t.object("Mitigation", {
+  id: __t.u32(),
+  buildingId: __t.u32(),
+  measure: __t.string(),
+  status: __t.string(),
+  fixId: __t.u32(),
+  note: __t.string(),
+});
+export type Mitigation = __Infer<typeof Mitigation>;
+
 export const Person = __t.object("Person", {
   id: __t.u32(),
   name: __t.string(),
@@ -88,6 +111,14 @@ export const Person = __t.object("Person", {
   replyText: __t.string(),
 });
 export type Person = __Infer<typeof Person>;
+
+export const Presence = __t.object("Presence", {
+  connectionId: __t.string(),
+  identity: __t.identity(),
+  worker: __t.bool(),
+  connectedAt: __t.timestamp(),
+});
+export type Presence = __Infer<typeof Presence>;
 
 export const Result = __t.object("Result", {
   scenario: __t.string(),

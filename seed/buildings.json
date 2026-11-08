@@ -16,6 +16,7 @@
       "valueUsd": 18500000,
       "baseRisk": 78.7,
       "referenceFireEtaMin": 104,
+      "reachProbability": 0.82,
       "explanation": "Risk 79 if an Eaton-like fire reaches it — driven by roof: wood/combustible, vents: coarse mesh (>1/8in), year built: 1960-1989. Biggest single fix: Class A roof (−28).",
       "features": {
         "roof": "Wood",
@@ -76,6 +77,7 @@
       "valueUsd": 12000000,
       "baseRisk": 69.6,
       "referenceFireEtaMin": 88,
+      "reachProbability": 0.47,
       "explanation": "Risk 70 if an Eaton-like fire reaches it — driven by vents: coarse mesh (>1/8in), year built: 1960-1989, windows: single pane. Biggest single fix: Clear brush to 30 ft (−27).",
       "features": {
         "roof": "Asphalt",
@@ -136,6 +138,7 @@
       "valueUsd": 24000000,
       "baseRisk": 63,
       "referenceFireEtaMin": 120,
+      "reachProbability": 0.67,
       "explanation": "Risk 63 if an Eaton-like fire reaches it — driven by vents: coarse mesh (>1/8in), year built: 1960-1989, windows: single pane. Biggest single fix: Clear brush to 30 ft (−16).",
       "features": {
         "roof": "Asphalt",
@@ -196,6 +199,7 @@
       "valueUsd": 31000000,
       "baseRisk": 14.2,
       "referenceFireEtaMin": -1,
+      "reachProbability": 0.09,
       "explanation": "Risk 14 if an Eaton-like fire reaches it — driven by vents: fine mesh (<=1/8in), siding: stucco/brick/cement, windows: multi pane. Biggest single fix: Clear brush to 30 ft (−10).",
       "features": {
         "roof": "Tile",
@@ -242,6 +246,7 @@
       "valueUsd": 9500000,
       "baseRisk": 28.9,
       "referenceFireEtaMin": -1,
+      "reachProbability": 0.01,
       "explanation": "Risk 29 if an Eaton-like fire reaches it — driven by roof: metal, vents: fine mesh (<=1/8in), siding: metal. Biggest single fix: Class A roof (−13).",
       "features": {
         "roof": "Metal",
@@ -281,6 +286,7 @@
       "valueUsd": 13500000,
       "baseRisk": 29.5,
       "referenceFireEtaMin": -1,
+      "reachProbability": 0.03,
       "explanation": "Risk 30 if an Eaton-like fire reaches it — driven by vents: coarse mesh (>1/8in), year built: 1990-2007, siding: stucco/brick/cement. Biggest single fix: Ember-resistant vent screens (−7).",
       "features": {
         "roof": "Tile",
@@ -327,6 +333,7 @@
       "valueUsd": 7500000,
       "baseRisk": 75.6,
       "referenceFireEtaMin": 86,
+      "reachProbability": 1,
       "explanation": "Risk 76 if an Eaton-like fire reaches it — driven by roof: wood/combustible, vents: coarse mesh (>1/8in), year built: before 1960. Biggest single fix: Class A roof (−30).",
       "features": {
         "roof": "Wood",
@@ -380,6 +387,7 @@
       "valueUsd": 6000000,
       "baseRisk": 37.7,
       "referenceFireEtaMin": -1,
+      "reachProbability": 0.05,
       "explanation": "Shelter A is the evacuation destination. Model risk 38.",
       "features": {
         "roof": "Metal",

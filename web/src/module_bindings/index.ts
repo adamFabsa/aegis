@@ -56,10 +56,13 @@ import StartEvacuationReducer from "./start_evacuation_reducer";
 
 // Import all table schema definitions
 import BuildingRow from "./building_table";
+import BuildingProfileRow from "./building_profile_table";
 import EventLogRow from "./event_log_table";
 import FireCellRow from "./fire_cell_table";
 import FixRow from "./fix_table";
+import MitigationRow from "./mitigation_table";
 import PersonRow from "./person_table";
+import PresenceRow from "./presence_table";
 import ResultRow from "./result_table";
 import SimRow from "./sim_table";
 import TaskRow from "./task_table";
@@ -79,6 +82,17 @@ const tablesSchema = __schema({
       { name: 'building_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, BuildingRow),
+  buildingProfile: __table({
+    name: 'building_profile',
+    indexes: [
+      { accessor: 'buildingId', name: 'building_profile_building_id_idx_btree', algorithm: 'btree', columns: [
+        'buildingId',
+      ] },
+    ],
+    constraints: [
+      { name: 'building_profile_building_id_key', constraint: 'unique', columns: ['buildingId'] },
+    ],
+  }, BuildingProfileRow),
   eventLog: __table({
     name: 'event_log',
     indexes: [
@@ -112,6 +126,17 @@ const tablesSchema = __schema({
       { name: 'fix_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, FixRow),
+  mitigation: __table({
+    name: 'mitigation',
+    indexes: [
+      { accessor: 'id', name: 'mitigation_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'mitigation_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, MitigationRow),
   person: __table({
     name: 'person',
     indexes: [
@@ -123,6 +148,17 @@ const tablesSchema = __schema({
       { name: 'person_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, PersonRow),
+  presence: __table({
+    name: 'presence',
+    indexes: [
+      { accessor: 'connectionId', name: 'presence_connection_id_idx_btree', algorithm: 'btree', columns: [
+        'connectionId',
+      ] },
+    ],
+    constraints: [
+      { name: 'presence_connection_id_key', constraint: 'unique', columns: ['connectionId'] },
+    ],
+  }, PresenceRow),
   result: __table({
     name: 'result',
     indexes: [

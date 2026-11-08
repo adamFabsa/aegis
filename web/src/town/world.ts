@@ -23,6 +23,33 @@ export interface PreparedRule {
 
 export type ConnectionState = { state: 'connecting' | 'live' | 'error'; server: string; message?: string };
 
+/** Static per-building facts (building_profile table): business impact + data lineage. */
+export interface BuildingProfile {
+  /** share of 1,000 simulated Eaton-like fires that reach the building */
+  reachProbability: number;
+  roof: string;
+  vents: string;
+  eaves: string;
+  windows: string;
+  siding: string;
+  yearBuilt: number;
+  sources: string;
+}
+
+/** One insurer mitigation measure (mitigation table; California "Safer from Wildfires"). */
+export interface Measure {
+  measure: string;
+  status: 'met' | 'missing' | 'unverified';
+  fixId: number;
+  note: string;
+}
+
+/** Live SpacetimeDB facts for the "running inside SpacetimeDB" chip. */
+export interface LiveInfo {
+  devices: number;
+  workerOnline: boolean;
+}
+
 /** Errors come back as a message (null = ok). Live calls are async, mock calls are not. */
 export type Result = string | null | Promise<string | null>;
 
@@ -40,6 +67,10 @@ export interface WorldApi {
   fixesFor: (buildingId: number) => FixView[];
   prepared: PreparedRule;
   connection?: ConnectionState;
+  /** live only: per-building profile, insurer checklist and presence */
+  profileFor?: (buildingId: number) => BuildingProfile | undefined;
+  checklistFor?: (buildingId: number) => Measure[];
+  live?: LiveInfo;
   setSpeed: (s: 1 | 2 | 4) => void;
   setPhase: (phase: Phase) => void;
   startEvacuation: (id: number) => void;

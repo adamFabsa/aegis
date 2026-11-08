@@ -1,7 +1,8 @@
 import { forwardRef, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Building, FireCell, Pack, Person, ScenarioResult, Sim, Task } from '../town/types';
 import { unaccounted, type LogEvent, type Unit } from '../town/mockWorld';
-import type { FixView, PreparedRule } from '../town/world';
+import type { BuildingProfile, FixView, Measure, PreparedRule } from '../town/world';
+import { expectedLoss, fixAvoids, portfolio } from './impact';
 import { STATUS_COLORS } from '../town/palettes';
 import { statusTag } from '../town/status';
 import { spriteUrl, spriteVariant } from '../town/scene';
@@ -24,6 +25,9 @@ interface DockProps {
   onRecommend?: () => void;
   /** run the rest of the fire instantly and show the comparison (live only) */
   onEndCompare?: () => void;
+  /** live only: building profile (fire reach, data sources) and the insurer mitigation checklist */
+  profileFor?: (buildingId: number) => BuildingProfile | undefined;
+  checklistFor?: (buildingId: number) => Measure[];
   onEvacuate: (id: number) => void;
   onStartFire: () => void;
   onRestart: () => void;
@@ -127,6 +131,8 @@ function prepList(p: DockProps): View {
   const list = buildings.filter((b) => b.kind !== 'shelter').sort((a, b) => b.risk - a.risk);
   const prepared = list.filter((b) => b.prepared).length;
   const avgRisk = Math.round(list.reduce((s, b) => s + b.risk, 0) / Math.max(1, list.length));
+  const loss = portfolio(list, p.profileFor);
+  const spent = list.reduce((s, b) => s + p.fixesFor(b.id).filter((f) => (p.approved[b.id] ?? []).includes(f.key)).reduce((t, f) => t + f.cost, 0), 0);
   return {
     head: (
       <>
@@ -135,12 +141,19 @@ function prepList(p: DockProps): View {
         <Stats items={[
           { label: 'budget left', value: fmtUsd(sim.budgetLeft) },
           { label: 'prepared', value: <>{prepared}<small>/{list.length}</small></>, tone: prepared === list.length ? 'ok' : '' },
-          { label: 'average risk', value: avgRisk, tone: avgRisk >= 70 ? 'bad' : '' },
+          ...(loss ? [{ label: 'expected loss', value: fmtUsd(Math.round(loss.now)), tone: (loss.avoided > 0 ? 'ok' : '') as 'ok' | '' }] : [{ label: 'average risk', value: avgRisk, tone: (avgRisk >= 70 ? 'bad' : '') as 'bad' | '' }]),
         ]} />
       </>
     ),
     body: (
       <>
+        {loss && (
+          <p className="hint impact-line">
+            {loss.avoided > 0
+              ? <>Prep so far avoids <b>{fmtUsd(Math.round(loss.avoided))}</b> of expected loss for <b>{fmtUsd(spent)}</b> spent.</>
+              : <>Expected loss if an Eaton-like fire starts: <b>{fmtUsd(Math.round(loss.now))}</b> across the portfolio.</>}
+          </p>
+        )}
         <h3 className="section">Highest risk first</h3>
         <ul className="list" aria-label="Buildings by risk">
           {list.map((b) => (
@@ -173,6 +186,11 @@ function prepDetail(p: DockProps, b: Building): View {
   const { sim, approved, onSelect, onApprove, pack } = p;
   const done = approved[b.id] ?? [];
   const ref = p.prepared.referenceEta(b);
+  const profile = p.profileFor?.(b.id);
+  const lossNow = expectedLoss(b, profile);
+  const lossBefore = expectedLoss(b, profile, b.baseRisk);
+  const checklist = p.checklistFor?.(b.id) ?? [];
+  const documented = checklist.filter((m) => m.status === 'met').length;
   return {
     head: (
       <>
@@ -195,6 +213,20 @@ function prepDetail(p: DockProps, b: Building): View {
             <p>{b.explanation}</p>
           </div>
         )}
+        {profile && lossNow !== undefined && (
+          <>
+            <h3 className="section">Business impact</h3>
+            <dl className="facts">
+              <div><dt>expected loss</dt><dd className={lossBefore !== undefined && lossNow < lossBefore ? 'ok' : ''}>{fmtUsd(Math.round(lossNow))}</dd></div>
+              <div><dt>fire reaches it</dt><dd>{Math.round(profile.reachProbability * 100)}%</dd></div>
+              <div><dt>building value</dt><dd>{fmtUsd(b.valueUsd)}</dd></div>
+            </dl>
+            <p className="hint">
+              {lossBefore !== undefined && lossNow < lossBefore ? `Down from ${fmtUsd(Math.round(lossBefore))} before fixes. ` : ''}
+              Value × chance an Eaton-like fire reaches it × chance it is lost if reached.
+            </p>
+          </>
+        )}
         <h3 className="section">Fixes</h3>
         <ul className="list" aria-label="Fixes">
           {p.fixesFor(b.id).map((f) => {
@@ -206,7 +238,7 @@ function prepDetail(p: DockProps, b: Building): View {
                   <span className="tick" aria-hidden="true">{on && <Check />}</span>
                   <span className="item-text">
                     <span className="item-name">{f.name}</span>
-                    <span className="item-detail">{f.addVans ? `Adds ${f.addVans} van, faster evacuation` : `Lowers risk by ${f.riskDrop}${f.simulated ? ' (simulated)' : ''}`}</span>
+                    <span className="item-detail">{f.addVans ? `Adds ${f.addVans} van, faster evacuation` : `Lowers risk by ${f.riskDrop}${f.simulated ? ' (simulated)' : ''}${profile && !on && fixAvoids(b, profile, f) > 0 ? ` · avoids ${fmtUsd(Math.round(fixAvoids(b, profile, f)))}` : ''}`}</span>
                   </span>
                   <span className="cost">{on ? 'Done' : afford ? fmtUsd(f.cost) : 'Over budget'}</span>
                 </button>
@@ -214,11 +246,30 @@ function prepDetail(p: DockProps, b: Building): View {
             );
           })}
         </ul>
+        {checklist.length > 0 && (
+          <>
+            <h3 className="section">Insurance mitigation · {documented} of {checklist.length} documented</h3>
+            <ul className="list checklist" aria-label="Insurance mitigation measures">
+              {checklist.map((m) => (
+                <li key={m.measure} className="item static">
+                  <span className={`tick measure ${m.status}`} aria-hidden="true">{m.status === 'met' ? <Check /> : m.status === 'missing' ? '✕' : '?'}</span>
+                  <span className="item-text">
+                    <span className="item-name measure-name">{m.measure}</span>
+                    <span className="item-detail">{m.note}</span>
+                  </span>
+                  <span className={`state ${m.status === 'met' ? 'ok' : m.status === 'missing' ? 'bad' : 'muted'}`}>{m.status === 'met' ? 'Documented' : m.status === 'missing' ? 'Missing' : 'Unverified'}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="hint">California’s Safer from Wildfires rule (10 CCR § 2644.9) requires insurers that price wildfire risk to discount documented mitigation; the state cites 4% to 40%+.</p>
+          </>
+        )}
         <p className="hint">
           {b.prepared ? `Prepared. Risk is under ${p.prepared.riskMax} and evacuation beats the fire, so the building earns a better insurance rating.`
             : ref >= 0 ? `Prepared when risk is under ${p.prepared.riskMax} and evacuation takes under ${fmtMin(ref)}${ref === b.fireEtaMin ? ', when a fire like Eaton would reach it' : ''}.`
               : `Prepared when risk is under ${p.prepared.riskMax}. A fire like Eaton is not expected to reach it.`}
         </p>
+        {profile && <p className="hint sources">{profile.sources}</p>}
       </>
     ),
     foot: (

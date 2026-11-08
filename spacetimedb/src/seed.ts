@@ -99,6 +99,7 @@ export function parseSeed(json: string): Seed {
       fixes: [],
     };
     if (o.referenceFireEtaMin !== undefined) b.referenceFireEtaMin = number(o, 'referenceFireEtaMin', undefined, -1, 1e6);
+    if (o.reachProbability !== undefined) b.reachProbability = number(o, 'reachProbability', undefined, 0, 1);
     if (o.features && typeof o.features === 'object' && !Array.isArray(o.features)) b.features = o.features as Record<string, unknown>;
     if (b.x + b.w > mapW || b.y + b.h > mapH || b.needsHelp > b.residents) throw new Error('Invalid building footprint/occupancy');
     b.fixes = array(o.fixes ?? [], 'fixes', 100).map((fv): SeedFix => {

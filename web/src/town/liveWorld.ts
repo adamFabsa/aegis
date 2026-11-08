@@ -8,7 +8,7 @@ import { DbConnection } from '../module_bindings';
 import type * as Rows from '../module_bindings/types';
 import type { Building, BuildingKind, BuildingStatus, FireCell, Person, PersonStatus, Phase, ScenarioResult, Sim, Task } from './types';
 import type { LogEvent, Unit } from './mockWorld';
-import type { ConnectionState, FixView, WorldApi } from './world';
+import type { BuildingProfile, ConnectionState, FixView, Measure, WorldApi } from './world';
 import { CELL } from './iso';
 
 const q = new URLSearchParams(window.location.search);
@@ -33,6 +33,10 @@ interface Snapshot {
   fixes: Rows.Fix[];
   results?: { with: ScenarioResult; without: ScenarioResult };
   connection: ConnectionState;
+  profiles: Map<number, BuildingProfile>;
+  checklists: Map<number, Measure[]>;
+  devices: number;
+  workerOnline: boolean;
 }
 
 const EMPTY_SIM: Sim = { phase: 'prep', running: false, tick: 0, simMinutes: 0, minutesPerTick: 2, budgetLeft: 0, windDirDeg: 225, windMph: 0 };
@@ -71,7 +75,7 @@ class LiveStore {
   private footprints = new Map<number, { key: string; inside: number[]; ring: number[] }>();
   private resolveReady!: (c: DbConnection) => void;
   readonly ready = new Promise<DbConnection>((r) => { this.resolveReady = r; });
-  snapshot: Snapshot = { sim: EMPTY_SIM, buildings: [], cells: [], persons: [], tasks: [], events: [], approved: {}, fixes: [], connection: { state: 'connecting', server: `${SERVER} / ${DATABASE}` } };
+  snapshot: Snapshot = { sim: EMPTY_SIM, buildings: [], cells: [], persons: [], tasks: [], events: [], approved: {}, fixes: [], connection: { state: 'connecting', server: `${SERVER} / ${DATABASE}` }, profiles: new Map(), checklists: new Map(), devices: 0, workerOnline: false };
 
   connect() {
     if (this.conn) return;
@@ -109,6 +113,9 @@ class LiveStore {
     c.db.fix.onInsert(touch); c.db.fix.onUpdate(touch); c.db.fix.onDelete(touch);
     c.db.eventLog.onInsert(touch); c.db.eventLog.onDelete(touch);
     c.db.result.onInsert(touch); c.db.result.onUpdate(touch); c.db.result.onDelete(touch);
+    c.db.presence.onInsert(touch); c.db.presence.onUpdate(touch); c.db.presence.onDelete(touch);
+    c.db.buildingProfile.onInsert(touch); c.db.buildingProfile.onUpdate(touch); c.db.buildingProfile.onDelete(touch);
+    c.db.mitigation.onInsert(touch); c.db.mitigation.onUpdate(touch); c.db.mitigation.onDelete(touch);
     c.db.fireCell.onInsert(touch);
     c.db.fireCell.onDelete(touch);
     c.db.fireCell.onUpdate((_ctx, oldRow, newRow) => {
@@ -178,7 +185,20 @@ class LiveStore {
     const wo = c.db.result.scenario.find('without_lantern');
     const strip = (r: Rows.Result): ScenarioResult => ({ peopleSafe: r.peopleSafe, peopleTotal: r.peopleTotal, buildingsLost: r.buildingsLost, damageUsd: r.damageUsd, claims: r.claims });
 
-    this.snapshot = { sim, buildings, cells, persons, tasks, events, approved, fixes, results: w && wo ? { with: strip(w), without: strip(wo) } : undefined, connection: this.snapshot.connection };
+    const profiles = new Map<number, BuildingProfile>();
+    for (const r of c.db.buildingProfile.iter()) profiles.set(r.buildingId, { reachProbability: r.reachProbability, roof: r.roof, vents: r.vents, eaves: r.eaves, windows: r.windows, siding: r.siding, yearBuilt: r.yearBuilt, sources: r.sources });
+    const checklists = new Map<number, Measure[]>();
+    for (const r of [...c.db.mitigation.iter()].sort((a, b) => a.id - b.id)) {
+      const list = checklists.get(r.buildingId) ?? [];
+      list.push({ measure: r.measure, status: r.status as Measure['status'], fixId: r.fixId, note: r.note });
+      checklists.set(r.buildingId, list);
+    }
+    const present = [...c.db.presence.iter()];
+
+    this.snapshot = {
+      sim, buildings, cells, persons, tasks, events, approved, fixes, results: w && wo ? { with: strip(w), without: strip(wo) } : undefined, connection: this.snapshot.connection,
+      profiles, checklists, devices: present.length, workerOnline: present.some((x) => x.worker),
+    };
     this.emit();
   }
 
@@ -249,6 +269,9 @@ export function useLiveWorld(): WorldApi {
     // A building is prepared when its (rounded) risk is under 70 and evacuation beats the fire (spacetimedb/src/sim.ts).
     prepared: { riskMax: 70, referenceEta: (b: Building) => b.fireEtaMin },
     connection: snap.connection,
+    profileFor: (id: number) => snap.profiles.get(id),
+    checklistFor: (id: number) => snap.checklists.get(id) ?? [],
+    live: { devices: snap.devices, workerOnline: snap.workerOnline },
     ...actions,
   };
 }
