@@ -44,6 +44,26 @@ function Defs({ P }: { P: GroundPalette }) {
       <filter id="blur4" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="4" /></filter>
       <filter id="blur8" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="7" /></filter>
       <filter id="blur20" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="20" /></filter>
+      {/* low-frequency terrain patches: darker and lighter blotches so the ground is not one flat colour */}
+      <filter id="patches" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves={3} seed={4} result="n" />
+        <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -3.2 1.75" result="a" />
+        <feComposite in="a" in2="SourceGraphic" operator="in" />
+      </filter>
+      <filter id="patchesHi" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.016" numOctaves={2} seed={21} result="n" />
+        <feColorMatrix in="n" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 3.2 -1.85" result="a" />
+        <feComposite in="a" in2="SourceGraphic" operator="in" />
+      </filter>
+      <filter id="asphalt" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves={1} seed={3} result="n" />
+        <feColorMatrix in="n" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 2.2 -1.15" result="a" />
+        <feComposite in="a" in2="SourceGraphic" operator="in" />
+      </filter>
+      <pattern id="mow" width="40" height="40" patternUnits="userSpaceOnUse" patternTransform="rotate(30)">
+        <rect width="20" height="40" fill="#fff" opacity="0.06" />
+      </pattern>
+      <clipPath id="hillsClip"><path d={HILLS_PATH} /></clipPath>
       <pattern id="brush" width="16" height="14" patternUnits="userSpaceOnUse">
         <rect width="16" height="14" fill={P.brush} />
         <circle cx="3" cy="4" r="2.4" fill={P.brushD} />
@@ -154,18 +174,30 @@ const StaticGround = memo(function StaticGround({ P }: { P: GroundPalette }) {
       </g>
       <g transform={GROUND_MATRIX}>
         <rect width={MAP_W} height={MAP_H} fill={P.ground} />
+        <rect width={MAP_W} height={MAP_H} fill="#000" filter="url(#patches)" opacity={P.patchOp} />
+        <rect width={MAP_W} height={MAP_H} fill="#fff" filter="url(#patchesHi)" opacity={P.patchOp * 0.6} />
         <rect width={MAP_W} height={MAP_H} fill="#000" filter="url(#grain)" opacity={P.grainOp} />
         <rect x={PARK.x} y={PARK.y} width={PARK.w} height={PARK.h} rx="14" fill={P.lawn} />
+        <rect x={PARK.x} y={PARK.y} width={PARK.w} height={PARK.h} rx="14" fill="url(#mow)" />
+        <rect x={PARK.x} y={PARK.y} width={PARK.w} height={PARK.h} rx="14" fill="none" stroke={P.curb} strokeWidth="2" opacity="0.6" />
         <ellipse cx="128" cy="86" rx="44" ry="26" fill={P.water} />
         <ellipse cx="128" cy="86" rx="44" ry="26" fill="none" stroke={P.sidewalk} strokeWidth="3" />
         <path d="M24 150 C 110 120 220 190 334 136" stroke={P.sidewalk} strokeWidth="5" fill="none" />
         <path d={HILLS_PATH} fill="url(#brush)" />
         <path d="M600 22 C 700 60 820 66 1000 40 M640 92 C 740 122 860 150 1000 140 M720 162 C 800 178 900 204 1000 232" stroke={P.brushHi} strokeWidth="5" fill="none" opacity="0.35" filter="url(#blur4)" />
-        <path d={HILLS_EDGE} stroke={P.brushD} strokeWidth="5" fill="none" opacity="0.6" filter="url(#blur2)" />
+        {/* elevation lip: a shaded band just inside the hills edge and a soft cast shadow onto the town side */}
+        <g clipPath="url(#hillsClip)">
+          <path d={HILLS_EDGE} stroke="#000" strokeWidth="26" fill="none" opacity={P.lipOp} filter="url(#blur4)" />
+          <path d={HILLS_EDGE} stroke={P.brushHi} strokeWidth="6" fill="none" opacity="0.35" transform="translate(-6 -6)" filter="url(#blur2)" />
+        </g>
+        <path d={HILLS_EDGE} stroke={P.brushD} strokeWidth="4" fill="none" opacity="0.7" filter="url(#blur2)" />
         {LOTS.map((l, i) => <rect key={i} x={l.x} y={l.y} width={l.w} height={l.h} rx="4" fill={P.lot} />)}
         <path d={LOT_STRIPES} stroke={P.roadLine} strokeWidth="1.4" />
         {SIDEWALKS.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={P.sidewalk} />)}
+        {SIDEWALKS.map((r, i) => <rect key={`c${i}`} x={r.x} y={r.y} width={r.w} height={r.h} fill="none" stroke={P.curb} strokeWidth="1.5" opacity="0.7" />)}
         {ROADS.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={P.road} />)}
+        {ROADS.map((r, i) => <rect key={`a${i}`} x={r.x} y={r.y} width={r.w} height={r.h} fill="#fff" filter="url(#asphalt)" opacity={P.asphaltOp} />)}
+        {ROADS.map((r, i) => <rect key={`e${i}`} x={r.x} y={r.y} width={r.w} height={r.h} fill="none" stroke="#000" strokeWidth="2" opacity="0.25" />)}
         <path d={ROAD_LINES} stroke={P.roadLine} strokeWidth="1.6" strokeDasharray="12 10" fill="none" />
         <path d={CROSSWALKS} stroke={P.roadLine} strokeWidth="3" opacity="0.8" />
         <g opacity={P.lampOp}>

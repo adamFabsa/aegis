@@ -433,8 +433,8 @@ class Ctx:
             stone=make_mat('stone', p['stone'], rough=0.8, noise=0.5, nscale=30, bump=0.35, bscale=90),
             trim=make_mat('trim', p['trim'], rough=0.55, noise=0.15, nscale=12),
             roof=make_mat('roof', p['roof'], rough=0.95, noise=0.6, nscale=40, bump=0.4, bscale=300),
-            metal=make_mat('metal', p['metal'], rough=0.35, metal=0.8),
-            metalL=make_mat('metalL', p['metalL'], rough=0.4, metal=0.6),
+            metal=make_mat('metal', p['metal'], rough=0.35 if not self.maq else 0.6, metal=0.0 if self.maq else 0.8),
+            metalL=make_mat('metalL', p['metalL'], rough=0.4 if not self.maq else 0.6, metal=0.0 if self.maq else 0.6),
             concrete=make_mat('concrete', p['concrete'], rough=0.9, noise=0.4, nscale=25, bump=0.2),
             asphalt=make_mat('asphalt', p['asphalt'], rough=0.95, noise=0.4, nscale=60, bump=0.3, bscale=400),
             grass=make_mat('grass', p['grass'], rough=0.95, noise=0.7 if not self.maq else 0.15, nscale=3, bump=0.5, bscale=500),
@@ -454,7 +454,7 @@ class Ctx:
             green=make_mat('green', p['green'], rough=0.9, noise=0.6, nscale=5, bump=0.4),
             deck=make_mat('deck', p['deck'], rough=0.7, brick=3.0),
             wood=make_mat('wood', p['wood'], rough=0.6),
-            spandrel=make_mat('spandrel', p['spandrel'], rough=0.4, metal=0.5),
+            spandrel=make_mat('spandrel', p['spandrel'], rough=0.4 if not self.maq else 0.7, metal=0.0 if self.maq else 0.5),
             rail=make_mat('rail', '#DCEBF2', rough=0.02, trans=1.0),
             lit1=make_mat('lit1', p['glass'], rough=0.05, emit=v['lit_col'], estr=v['lit_str'], emit_var=True),
             lit2=make_mat('lit2', p['glass'], rough=0.05, emit='#FFE0B0' if not v.get('roof_fire') else '#FF8A3D', estr=v['lit_str'] * 0.55, emit_var=True),
@@ -811,7 +811,7 @@ def build_office(c):
     c.glass = []
     boxes('cw', cw, M['cw'])
     span = []
-    for f in range(NF + 1):
+    for f in range(NF):
         z0 = f * FH
         span += [(-hw, hw, -hd - 0.05, -hd, z0, z0 + 0.75), (hw, hw + 0.05, -hd, hd, z0, z0 + 0.75)]
     boxes('spandrels', span, M['spandrel'])
@@ -820,7 +820,7 @@ def build_office(c):
     boxes('mullions', mull, M['metalL'])
     c.trim.append((-hw - 0.05, hw + 0.05, -hd - 0.05, hd + 0.05, H - 0.3, H))
     for (a, b, y0, y1) in ((-hw, hw, -hd - 0.05, -hd + 0.15), (-hw, hw, hd - 0.15, hd), (-hw, -hw + 0.15, -hd, hd), (hw - 0.15, hw + 0.05, -hd, hd)):
-        c.metal.append((a, b, y0, y1, H, H + 0.6))
+        c.trim.append((a, b, y0, y1, H, H + 0.6))
     boxes('roofdeck', [(-hw + 0.1, hw - 0.1, -hd + 0.1, hd - 0.1, H - 0.3, H + 0.04)], M['roof'])
     py0, py1 = -hd - 2.0, -hd
     c.lobby += [(-17.5, 17.5, py0 - 0.03, py0 + 0.01, 0.0, 3.3), (17.5, 17.54, py0, py1, 0.0, 3.3)]
