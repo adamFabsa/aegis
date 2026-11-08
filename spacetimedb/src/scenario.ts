@@ -160,12 +160,9 @@ function randomIgnition(p: S.FireParams, buildings: S.SeedBuilding[], rng: S.Rng
   return block.length ? block : p.ignition;
 }
 
-/** Fire arrival (median, as the pipeline's reference ETA) and reach chance per building, re-simulated. */
-export function withOutlook(seed: S.Seed, runs = 160): S.Seed {
-  const p = seed.params;
-  const bs = seed.buildings.map((b) => ({ id: b.id, x: b.x, y: b.y, w: b.w, h: b.h, risk: b.baseRisk }));
-  const eta = S.referenceEtas(p, bs, S.mulberry32(p.fireSeed ^ 0x5eed), runs);
-  // reach: share of runs whose fire exposes the building within the ETA horizon
+/** Share of simulated fires (sequential draws) that reach each building within the ETA horizon. */
+function reachOf(p: S.FireParams, buildings: S.SeedBuilding[], runs: number): number[] {
+  const bs = buildings.map((b) => ({ id: b.id, x: b.x, y: b.y, w: b.w, h: b.h, risk: b.baseRisk }));
   const eng = S.makeEngine(p, p.fuel, bs);
   const n = p.cols * p.rows;
   const g0: S.FireGrid = { state: new Uint8Array(n), burn: new Uint8Array(n), bstate: new Uint8Array(bs.length), burning: [] };
@@ -181,10 +178,24 @@ export function withOutlook(seed: S.Seed, runs = 160): S.Seed {
     }
     seen.forEach((v, i) => { hits[i] += v; });
   }
+  return hits.map((h) => h / runs);
+}
+
+/** Fire arrival (median, as the pipeline's reference ETA) and reach chance per building, re-simulated. */
+export function withOutlook(seed: S.Seed, runs = 160): S.Seed {
+  const p = seed.params;
+  const bs = seed.buildings.map((b) => ({ id: b.id, x: b.x, y: b.y, w: b.w, h: b.h, risk: b.baseRisk }));
+  const eta = S.referenceEtas(p, bs, S.mulberry32(p.fireSeed ^ 0x5eed), runs);
+  const reach = reachOf(p, seed.buildings, runs);
   return {
     ...seed,
-    buildings: seed.buildings.map((b, i) => ({ ...b, referenceFireEtaMin: eta[i], reachProbability: Math.round((hits[i] / runs) * 100) / 100 })),
+    buildings: seed.buildings.map((b, i) => ({ ...b, referenceFireEtaMin: eta[i], reachProbability: Math.round(reach[i] * 100) / 100 })),
   };
+}
+
+/** How likely the fire is to reach the buildings from this start (best single building, 0..1). */
+export function bestReach(seed: S.Seed): number {
+  return Math.max(0, ...seed.buildings.filter((b) => b.kind !== 'shelter').map((b) => b.reachProbability ?? 0));
 }
 
 /** A whole random scenario from the base (pipeline) seed. */
@@ -200,7 +211,15 @@ export function makeScenario(base: S.Seed, n: number): S.Seed {
   const buildings = base.buildings.map((b) => randomBuilding(b, rng, base));
   const { people, silent } = randomPeople(base, buildings, rng);
   p.silentPersonIds = silent;
-  p.ignition = randomIgnition(p, buildings, rng);
+  // A few random upwind starts; keep the one whose fire reaches the most of the town (no fizzling demos).
+  let best = randomIgnition(p, buildings, rng);
+  let bestScore = -1;
+  for (let k = 0; k < 5; k++) {
+    const cand = k === 0 ? best : randomIgnition(p, buildings, rng);
+    const score = reachOf({ ...p, ignition: cand }, buildings, 32).reduce((sum, r, i) => sum + (buildings[i].kind === 'shelter' ? 0 : r), 0);
+    if (score > bestScore) { best = cand; bestScore = score; }
+  }
+  p.ignition = best;
   return withOutlook({ buildings, people, params: p });
 }
 

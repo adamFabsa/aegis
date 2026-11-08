@@ -291,7 +291,10 @@ export const set_ignition = db.reducer({ cellX: t.u32(), cellY: t.u32() }, (ctx,
     const prof = ctx.db.buildingProfile.buildingId.find(sb.id);
     if (prof && sb.reachProbability !== undefined) ctx.db.buildingProfile.buildingId.update({ ...prof, reachProbability: sb.reachProbability });
   }
-  log(ctx, 'Fire start picked on the map; Aegis re-ran the fire and re-ranked every building', 0);
+  const odds = Math.round(SC.bestReach(seed) * 100);
+  log(ctx, odds >= 20
+    ? `Fire start picked on the map: from here it reaches buildings in ${odds}% of simulated fires; Aegis re-ranked every building`
+    : `Fire start picked on the map: from here the fire reaches a building in only ${odds}% of simulated fires (it will likely burn out). Pick brush upwind of town for a real test.`, 0);
 });
 
 export const set_phase = db.reducer({ phase: t.string() }, (ctx, { phase }) => {
