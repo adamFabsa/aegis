@@ -15,6 +15,7 @@ import { BuildingCard } from './ui/BuildingCard';
 import { ScenarioBar } from './ui/ScenarioBar';
 import { useScenarioPick } from './ui/scenarioPick';
 import { sound } from './audio/sound';
+import { buildingAlerts } from './ui/alerts';
 
 // Live SpacetimeDB world by default; ?mock=1 runs B's offline stand-in (no server needed).
 // Chosen once per page load, so the hook order never changes.
@@ -102,6 +103,10 @@ export default function App() {
   const pick = useScenarioPick(world);
   const scenario = world.scenario;
   const ignition = useMemo(() => (scenario ? { x: scenario.ignitionX, y: scenario.ignitionY, picked: scenario.picked } : null), [scenario]);
+  // who needs someone, per building: the map's alert pills
+  const persons = world.persons;
+  const tasks = world.tasks;
+  const alerts = useMemo(() => buildingAlerts(sim, buildings, persons, tasks), [sim, buildings, persons, tasks]);
 
   // ---- sound: fire loudness follows burning buildings + fire cells; events trigger alert tones
   const [muted, setMuted] = useState(sound.muted);
@@ -180,7 +185,7 @@ export default function App() {
         onPhone={vw >= 1180 && !phoneOpen ? () => setPhoneOpen(true) : undefined}
         // the live module ticks once per second; the mock runs its own clock
         tickSeconds={MOCK ? undefined : 1}
-        plantSeed={scenario?.number || 7} ignition={ignition} onPickGround={pick.onPick}
+        plantSeed={scenario?.number || 7} ignition={ignition} onPickGround={pick.onPick} alerts={alerts}
       />
       {phoneLayout ? (
         <>

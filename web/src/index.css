@@ -753,3 +753,14 @@ h2, p { margin: 0; }
 @media (prefers-reduced-motion: reduce) { .pick-pop { animation: none; } }
 .pick-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .pick-line b { min-width: 0; }
+
+/* ------------------------------------------------------------------ map: people-alert pills beside the building markers */
+.mk-alert { pointer-events: all; cursor: pointer; transition: opacity 0.5s ease; animation: mk-alert-in 0.5s ease backwards; }
+.mk-alert.off { opacity: 0; pointer-events: none; }
+@keyframes mk-alert-in { from { opacity: 0; } }
+.mk-alert-pill { transition: fill 0.4s ease, stroke 0.2s ease; }
+.mk-alert:hover .mk-alert-pill { stroke: rgba(255, 255, 255, 0.85); }
+/* red pills ping from their dot */
+.mk-alert-ping { pointer-events: none; transform-box: fill-box; transform-origin: center; animation: mk-ping 1.6s ease-out infinite; }
+@keyframes mk-ping { from { transform: scale(1); opacity: 0.95; } to { transform: scale(2); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .mk-alert-ping { animation: none; opacity: 0; } }
