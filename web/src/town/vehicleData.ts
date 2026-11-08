@@ -2,7 +2,7 @@
 import type { CSSProperties } from 'react';
 import { projectRaw, rot } from './iso';
 import type { Building, Pack } from './types';
-import { unitRoute } from './scene';
+import { engineCurb, unitRoute } from './scene';
 
 export const VEH_BOX = { w: 80, h: 60, ax: 40, ay: 36 }; // must match VW/VH/AX/AY in blender/build_vehicles.py
 export type VehModel = 'sedanW' | 'sedanK' | 'sedanR' | 'suvS' | 'suvB' | 'pickup' | 'van' | 'engine';
@@ -50,10 +50,13 @@ export function personStyle(i: number, shirt?: string): CSSProperties {
 }
 
 
-/** Where an engine on scene stands: the end of its route, facing the way it drove in. */
-export function enginePark(b: Building, all: Building[]): { x: number; y: number; hd: Heading } {
+/**
+ * Where an engine on scene stands: the end of its route (the building's own place at the curb, in front of a face
+ * the camera sees; scene.ts engineCurb), facing the way it drove in. `clear`: no building covers it on screen.
+ */
+export function enginePark(b: Building, all: Building[]): { x: number; y: number; hd: Heading; clear: boolean } {
   const route = unitRoute(b, all);
   const [x, y] = route[route.length - 1];
-  return { x, y, hd: headingOf(route[Math.max(0, route.length - 2)], route[route.length - 1]) };
+  return { x, y, hd: headingOf(route[Math.max(0, route.length - 2)], route[route.length - 1]), clear: !engineCurb(b, all).hidden };
 }
 

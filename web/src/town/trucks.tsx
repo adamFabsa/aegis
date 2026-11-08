@@ -3,11 +3,11 @@
 // a client that connects mid-trip sees it at the right point of the route, and it eases into the curb.
 // Server ticks only re-anchor where the engine should be; between ticks it keeps driving at the speed
 // the countdown implies, and a short low-pass filter hides any correction.
-import { useEffect, useLayoutEffect, useRef } from 'react';
-import type { Building, Pack } from './types';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { Building, Pack, Phase } from './types';
 import type { Unit } from './mockWorld';
 import { project } from './iso';
-import { SPRITE, STAGING, spriteScale, unitRoute } from './scene';
+import { SPRITE, STAGING, onRoad, spriteScale, unitRoute } from './scene';
 import { enginePark, headingOf, vehLook, vehOffset, type Heading } from './vehicleData';
 import { VehicleSprite } from './vehicles';
 
@@ -17,15 +17,22 @@ const HEADINGS: Heading[] = ['e', 'w', 's', 'n'];
 const MAIN_E = 457; // eastbound lane of the main road (scene.ts LANE.mainE)
 const SMOOTH = 0.22; // seconds: how quickly the drawn engine catches up with where it should be
 const LEAD = 1.25; // ticks: how far the engine may run ahead of the last server tick (stops if ticks stop)
+const FOLLOW = 46; // map units: how close an engine follows another one in its lane (an engine is ~34 long)
+const CATCH_UP = 1.7; // after waiting behind another engine it catches up at most this much faster than it drives
+const PASS = 16; // map units: how far an engine pulls over into the other lane to get past a parked or oncoming one
+const PASS_SMOOTH = 0.3; // seconds: how quickly it changes lanes
 
 /** Bay in the staging lot for the unit with this slot (stable by unit id, so bays never reshuffle). */
 const bay = (slot: number): Pt => [STAGING[0] - 28 + slot * 28, STAGING[1] + 26];
 
-/** Out of its own bay, up to the main road, then the shared route to the curb by the building. */
+/** Out of its own bay, up to the main road, then the shared route to the building's own place at the curb. */
 function routeFor(slot: number, b: Building, all: Building[]): Pt[] {
   const [sx, sy] = bay(slot);
   return [[sx, sy], [sx, MAIN_E], ...unitRoute(b, all).slice(2)];
 }
+
+/** Engines run with lights and sirens on the way and on scene; once the fire is over they sit dark. */
+const lightsOn = (u: Unit, phase: Phase) => phase !== 'ended' && (u.status === 'enroute' || u.status === 'onscene');
 
 interface Path { pts: Pt[]; cum: number[]; total: number }
 function measure(pts: Pt[]): Path {
@@ -49,6 +56,16 @@ function along(p: Path, f: number): { x: number; y: number; leg: number } {
   return { x: last[0], y: last[1], leg: Math.max(0, p.pts.length - 2) };
 }
 
+/** Direction of travel (map unit vector) on the leg at fraction f, driving forward or backward. */
+function legDir(p: Path, f: number, forward: boolean): Pt {
+  const { leg } = along(p, f);
+  const a = p.pts[leg];
+  const b = p.pts[leg + 1] ?? a;
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  const s = forward ? 1 : -1;
+  return [((b[0] - a[0]) / len) * s, ((b[1] - a[1]) / len) * s];
+}
+
 interface Motion {
   slot: number;
   key: string;
@@ -65,11 +82,21 @@ interface Motion {
   fObs: number; tObs: number; dir: number; rate: number; lo: number; hi: number;
   returnFrom: number;
   x: number; y: number; hd: Heading; lights: boolean;
+  /** route fraction per second it drives at (kept once on scene, for catching up) */
+  drive: number;
+  /** on its way somewhere (driving, or waiting to); waiting behind another engine (set by makeWay) */
+  active: boolean; hold: boolean;
+  /** direction of travel (map unit vector), speed (map units / s), distance still to go */
+  ux: number; uy: number; speed: number; left: number;
+  /** pulled over into the other lane to get past another engine (map units, eased) */
+  ox: number; oy: number;
+  /** its place at the building is clear of every building on screen (scene.ts engineCurb) */
+  clear: boolean;
 }
 
 function newMotion(slot: number, tickSec: number): Motion {
   const [x, y] = bay(slot);
-  return { slot, key: '', status: '', ticksLeft: 0, seenAt: 0, tickSec, travel: 3, targetId: null, rotation: -1, route: null, f: 0, fObs: 0, tObs: 0, dir: 0, rate: 0, lo: 0, hi: 0, returnFrom: 1, x, y, hd: headingOf([0, 0], [0, -1]), lights: false };
+  return { slot, key: '', status: '', ticksLeft: 0, seenAt: 0, tickSec, travel: 3, targetId: null, rotation: -1, route: null, f: 0, fObs: 0, tObs: 0, dir: 0, rate: 0, lo: 0, hi: 0, returnFrom: 1, x, y, hd: headingOf([0, 0], [0, -1]), lights: false, drive: 0, active: false, hold: false, ux: 0, uy: -1, speed: 0, left: 0, ox: 0, oy: 0, clear: false };
 }
 
 /** A new row for this unit arrived: re-anchor where the engine should be. */
@@ -90,14 +117,17 @@ function observe(m: Motion, u: Unit, b: Building | undefined, all: Building[], r
   m.tObs = now;
   const T = Math.max(1, u.travelTicks);
   const away = u.status === 'enroute' || u.status === 'onscene' || u.status === 'returning';
-  if (away && b && (u.targetId !== m.targetId || rotation !== m.rotation || !m.route)) {
+  const turned = rotation !== m.rotation;
+  let rebuilt = false;
+  if (away && b && (u.targetId !== m.targetId || turned || !m.route)) {
     const fresh = u.targetId !== m.targetId && (!m.route || m.f < 0.002);
     m.route = measure(routeFor(m.slot, b, all));
+    m.clear = enginePark(b, all).clear;
     if (fresh) m.f = 0;
+    rebuilt = true;
   }
   m.targetId = away ? u.targetId : m.targetId;
   m.rotation = rotation;
-  m.lights = u.status === 'enroute' || u.status === 'onscene';
   if (u.status === 'enroute') {
     m.travel = T;
     m.fObs = (T - u.ticksLeft) / T;
@@ -126,27 +156,44 @@ function observe(m: Motion, u: Unit, b: Building | undefined, all: Building[], r
     m.route = null;
   }
   if (first && m.route) m.f = Math.min(m.hi, Math.max(m.lo, m.fObs));
+  if (m.rate > 0) m.drive = m.rate;
+  // face the way it drives (or drove in): also for a client that joins while the engine is parked, and after the
+  // view turns (headings are on-screen directions)
+  if (m.route && (rebuilt || first)) {
+    [m.ux, m.uy] = legDir(m.route, m.f, u.status !== 'returning');
+    m.hd = headingOf([0, 0], [m.ux, m.uy]);
+  } else if (!m.route && turned) {
+    m.hd = headingOf([0, 0], [0, -1]); // in its bay, nose out
+  }
 }
 
-/** Advance one frame; returns true while the engine is still moving. */
+/** Advance one frame; returns true while the engine is still moving (or waiting to). */
 function step(m: Motion, now: number, dt: number): boolean {
   if (m.route) {
     const ft = Math.min(m.hi, Math.max(m.lo, m.fObs + m.dir * m.rate * ((now - m.tObs) / 1000)));
     const prev = m.f;
-    m.f += (ft - m.f) * (1 - Math.exp(-dt / SMOOTH));
-    if (Math.abs(ft - m.f) < 2e-4) m.f = ft;
+    // ease toward where it should be, but never faster than CATCH_UP times its driving speed (after waiting
+    // behind another engine it catches up instead of jumping), and not at all while it waits
+    const cap = Math.max(m.drive, 0.02) * CATCH_UP * dt;
+    const move = Math.max(-cap, Math.min(cap, (ft - m.f) * (1 - Math.exp(-dt / SMOOTH))));
+    if (!m.hold) m.f = Math.abs(ft - m.f - move) < 2e-4 ? ft : m.f + move;
     const p = along(m.route, m.f);
     m.x = p.x;
     m.y = p.y;
-    const a = m.route.pts[p.leg];
-    const b = m.route.pts[p.leg + 1] ?? a;
-    if (m.f > prev + 1e-6) m.hd = headingOf(a, b);
-    else if (m.f < prev - 1e-6) m.hd = headingOf(b, a);
+    const fwd = m.f > prev + 1e-6;
+    if (fwd || m.f < prev - 1e-6) {
+      [m.ux, m.uy] = legDir(m.route, m.f, fwd);
+      m.hd = headingOf([0, 0], [m.ux, m.uy]);
+      m.left = (fwd ? 1 - m.f : m.f) * m.route.total;
+    }
+    m.speed = m.drive * m.route.total;
     // home: back in the bay
-    if (m.status === 'ready' && m.f <= 1e-4) { m.route = null; return false; }
+    if (m.status === 'ready' && m.f <= 1e-4) { m.route = null; m.active = false; return false; }
     // still easing, or still driving toward a bound it has not reached (paused sim: it stops at the lead)
-    return m.f !== ft || (m.dir !== 0 && ft !== (m.dir > 0 ? m.hi : m.lo));
+    m.active = m.f !== ft || (m.dir !== 0 && ft !== (m.dir > 0 ? m.hi : m.lo));
+    return m.active;
   }
+  m.active = false;
   const [bx, by] = bay(m.slot);
   const k = 1 - Math.exp(-dt / SMOOTH);
   m.x += (bx - m.x) * k;
@@ -155,9 +202,66 @@ function step(m: Motion, now: number, dt: number): boolean {
   return true;
 }
 
-function paint(m: Motion, el: SVGGElement | null | undefined) {
-  if (!el) return;
-  const [sx, sy] = project(m.x, m.y);
+/** Where o is from m: how far ahead along m's direction of travel, and how far to the side (map units). */
+function relative(m: Motion, o: Motion): { ahead: number; side: number } {
+  const rx = o.x + o.ox - m.x;
+  const ry = o.y + o.oy - m.y;
+  return { ahead: rx * m.ux + ry * m.uy, side: Math.abs(rx * m.uy - ry * m.ux) };
+}
+
+/** o is just ahead of m, in its lane. */
+function inTheWay(m: Motion, o: Motion): boolean {
+  const { ahead, side } = relative(m, o);
+  return side < 14 && ahead > 0 && ahead < FOLLOW;
+}
+
+/**
+ * Engines on a street do not drive through each other. Going the same way (or merging) one waits a length behind
+ * the other and catches up once the road is clear (of two that meet, the lower slot goes first); past an engine
+ * parked in its lane, or one coming the other way, it pulls into the other lane and back (of two oncoming engines
+ * only the faster one moves over). Returns true while any engine is still changing lanes.
+ */
+function makeWay(list: Motion[], dt: number): boolean {
+  const k = 1 - Math.exp(-dt / PASS_SMOOTH);
+  let busy = false;
+  for (const m of list) {
+    let hold = false;
+    let tx = 0;
+    let ty = 0;
+    if (m.route && m.active) {
+      for (const o of list) {
+        if (o === m || !o.route) continue;
+        const oncoming = o.ux * m.ux + o.uy * m.uy < -0.5;
+        if (o.active && !oncoming) {
+          if (inTheWay(m, o) && !(inTheWay(o, m) && m.slot < o.slot)) hold = true;
+          continue;
+        }
+        if (o.active && (o.speed > m.speed || (o.speed === m.speed && o.slot > m.slot))) continue; // that one moves over
+        const { ahead, side } = relative(m, o);
+        const closing = m.speed + (o.active ? o.speed : 0);
+        const look = 40 + closing * 0.45; // start moving over in time to finish the lane change
+        // (an engine parked beyond where this one stops is not in its way)
+        if (side > 13 || ahead < -40 || ahead > Math.min(look, m.left + 6)) continue;
+        // over to the side that is still street: the other lane
+        const lx = m.uy;
+        const ly = -m.ux;
+        const s = onRoad(m.x + lx * PASS, m.y + ly * PASS) ? 1 : onRoad(m.x - lx * PASS, m.y - ly * PASS) ? -1 : 0;
+        if (!s) continue;
+        tx = lx * PASS * s;
+        ty = ly * PASS * s;
+      }
+    }
+    m.hold = hold;
+    m.ox += (tx - m.ox) * k;
+    m.oy += (ty - m.oy) * k;
+    if (Math.abs(tx - m.ox) + Math.abs(ty - m.oy) < 0.05) { m.ox = tx; m.oy = ty; } else busy = true;
+  }
+  return busy;
+}
+
+/** Put an engine element where the engine is drawn, facing its way, lights on or off. */
+function place(el: SVGGElement, m: Motion) {
+  const [sx, sy] = project(m.x + m.ox, m.y + m.oy);
   el.setAttribute('transform', `translate(${sx.toFixed(2)} ${sy.toFixed(2)})`);
   if (el.dataset.hd !== m.hd) {
     el.dataset.hd = m.hd;
@@ -169,6 +273,19 @@ function paint(m: Motion, el: SVGGElement | null | undefined) {
   if (el.dataset.lights !== lights) el.dataset.lights = lights;
 }
 
+/**
+ * Paint the engine, and its copy above the town (OnScene): the copy fades in once the engine has pulled in at its
+ * place, which no building covers, so trees and smoke do not hide a parked engine and its hoses start on top of it.
+ */
+function paint(m: Motion, el: SVGGElement | null | undefined, top: SVGGElement | null | undefined) {
+  if (el) place(el, m);
+  if (!top) return;
+  place(top, m);
+  const parked = m.status === 'onscene' && m.clear && m.route !== null && m.f >= 1 - 1e-6 && Math.abs(m.ox) + Math.abs(m.oy) < 0.5;
+  const op = parked ? '1' : '0';
+  if (top.style.opacity !== op) top.style.opacity = op;
+}
+
 interface Props {
   units: Unit[];
   buildings: Building[];
@@ -178,24 +295,29 @@ interface Props {
   layer: 'under' | 'over';
   lite?: boolean;
   rotation?: number;
+  /** once the fire is over ('ended') the engines switch their lights off */
+  phase?: Phase;
 }
 
 /**
- * Fire units in two layers: 'under' (the engines themselves, drawn below the buildings so a building in
- * front hides them) and 'over' (hoses and mist, which must stay visible above the buildings).
+ * Fire units in two layers: 'under' (the engines themselves, driving below the buildings so a building in front
+ * hides them) and 'over' (above the town: each engine on scene, whose place no building covers (scene.ts
+ * engineCurb), so trees and smoke do not hide it either, then the hoses and mist).
  */
-export function FireUnits({ units, buildings, tickSeconds, pack, layer, lite = false, rotation = 0 }: Props) {
-  if (layer === 'over') return <Hoses units={units} buildings={buildings} lite={lite} />;
-  return <Engines units={units} buildings={buildings} tickSeconds={tickSeconds} pack={pack} rotation={rotation} />;
+export function FireUnits({ units, buildings, tickSeconds, pack, layer, lite = false, rotation = 0, phase = 'fire' }: Props) {
+  if (layer === 'over') return <OnScene units={units} buildings={buildings} pack={pack} lite={lite} />;
+  return <Engines units={units} buildings={buildings} tickSeconds={tickSeconds} pack={pack} rotation={rotation} phase={phase} />;
 }
 
-function Engines({ units, buildings, tickSeconds, pack, rotation }: { units: Unit[]; buildings: Building[]; tickSeconds: number; pack: Pack; rotation: number }) {
+function Engines({ units, buildings, tickSeconds, pack, rotation, phase }: { units: Unit[]; buildings: Building[]; tickSeconds: number; pack: Pack; rotation: number; phase: Phase }) {
   const motions = useRef(new Map<number, Motion>());
   const els = useRef(new Map<number, SVGGElement>());
   const raf = useRef(0);
   const last = useRef(0);
   const look = vehLook(pack);
   const order = [...units].sort((a, b) => a.id - b.id);
+  // the engine's copy above the town, rendered by the 'over' layer (OnScene)
+  const topOf = (id: number) => els.current.get(id)?.ownerSVGElement?.querySelector<SVGGElement>(`g[data-top="${id}"]`);
 
   const loop = useRef<(now: number) => void>(() => {});
   useLayoutEffect(() => {
@@ -203,10 +325,9 @@ function Engines({ units, buildings, tickSeconds, pack, rotation }: { units: Uni
       const dt = Math.min(0.1, Math.max(0.001, (now - (last.current || now)) / 1000));
       last.current = now;
       let busy = false;
-      for (const [id, m] of motions.current) {
-        if (step(m, now, dt)) busy = true;
-        paint(m, els.current.get(id));
-      }
+      for (const m of motions.current.values()) if (step(m, now, dt)) busy = true;
+      if (makeWay([...motions.current.values()], dt)) busy = true;
+      for (const [id, m] of motions.current) paint(m, els.current.get(id), topOf(id));
       raf.current = busy ? requestAnimationFrame((t) => loop.current(t)) : 0;
     };
   });
@@ -221,8 +342,9 @@ function Engines({ units, buildings, tickSeconds, pack, rotation }: { units: Uni
       if (!m) { m = newMotion(slot, tickSeconds); motions.current.set(u.id, m); }
       m.slot = slot;
       observe(m, u, buildings.find((x) => x.id === u.targetId), buildings, rotation, now);
+      m.lights = lightsOn(u, phase);
       if (!raf.current) step(m, now, 0.001);
-      paint(m, els.current.get(u.id));
+      paint(m, els.current.get(u.id), topOf(u.id));
     });
     for (const id of [...motions.current.keys()]) if (!seen.has(id)) motions.current.delete(id);
     if (!raf.current) { last.current = 0; raf.current = requestAnimationFrame((t) => loop.current(t)); }
@@ -256,31 +378,75 @@ function Engines({ units, buildings, tickSeconds, pack, rotation }: { units: Uni
   );
 }
 
+/** A hose line: from the parked engine's deck gun (screen sx, sy) to the roof (tx, ty). */
+interface Jet { key: string; sx: number; sy: number; tx: number; ty: number; seed: number }
+
+/** The hoses that run now: an engine on scene at a building that is burning. */
+function jets(units: Unit[], buildings: Building[]): Jet[] {
+  const out: Jet[] = [];
+  for (const u of units) {
+    if (u.status !== 'onscene') continue;
+    const b = buildings.find((x) => x.id === u.targetId);
+    if (!b || b.status !== 'burning') continue;
+    // the same place the engine drove to (scene.ts engineCurb), so the water leaves the engine itself
+    const { x, y, hd } = enginePark(b, buildings);
+    const [ex, ey] = project(x, y);
+    const [nx, ny] = vehOffset(hd, -6, 13);
+    // aim at the part of the roof nearest the engine (a long row of homes is not hosed from end to end)
+    const ax = Math.min(b.x + b.w * 0.7, Math.max(b.x + b.w * 0.3, x));
+    const ay = Math.min(b.y + b.h * 0.7, Math.max(b.y + b.h * 0.3, y));
+    const [tx, ty] = project(ax, ay, SPRITE[b.kind].roof * spriteScale(b));
+    out.push({ key: `s${u.id}-${b.id}`, sx: ex + nx, sy: ey + ny, tx, ty, seed: u.id * 2 });
+  }
+  return out;
+}
+
+/** Hoses that just stopped (the building stopped burning, or the engine left), kept for `ms` while they fade out. */
+function useStopped(live: Jet[], ms: number): Jet[] {
+  const [seen, setSeen] = useState<{ sig: string; live: Jet[]; out: Jet[] }>({ sig: '', live: [], out: [] });
+  const sig = live.map((j) => `${j.key}@${j.sx.toFixed(0)},${j.sy.toFixed(0)}`).join(' ');
+  if (sig !== seen.sig) {
+    const keys = new Set(live.map((j) => j.key));
+    const out = new Map<string, Jet>();
+    for (const j of [...seen.out, ...seen.live]) if (!keys.has(j.key)) out.set(j.key, j);
+    setSeen({ sig, live, out: [...out.values()] });
+  }
+  useEffect(() => {
+    if (!seen.out.length) return;
+    const t = setTimeout(() => setSeen((s) => ({ ...s, out: [] })), ms);
+    return () => clearTimeout(t);
+  }, [seen.out, ms]);
+  return seen.out;
+}
+
 /**
- * Water on the building only once it is actually burning. An engine sent ahead of the fire parks with its lights
- * on and the crew standing by; the hoses fade in the moment the building catches.
+ * Above the town: a copy of every engine, which Engines paints along with it and shows only while it stands at its
+ * place on scene (clear of the buildings, so trees and smoke would be the only things over it), then the water.
+ * Water on the building only while it is actually burning: an engine sent ahead of the fire parks with its lights
+ * on and the crew standing by; the hoses fade in the moment the building catches, and fade out when it stops.
  */
-function Hoses({ units, buildings, lite }: { units: Unit[]; buildings: Building[]; lite: boolean }) {
+function OnScene({ units, buildings, pack, lite }: { units: Unit[]; buildings: Building[]; pack: Pack; lite: boolean }) {
+  const live = jets(units, buildings);
+  const stopped = useStopped(live, 1000);
+  const look = vehLook(pack);
+  const draw = (j: Jet) => {
+    const cy = Math.min(j.sy, j.ty) - 40;
+    return [0, 1].map((k) => (
+      <HoseStream key={k} sx={j.sx} sy={j.sy} tx={j.tx + (k ? 16 : -12)} ty={j.ty + (k ? 4 : -2)} lift={(cy - Math.min(j.sy, j.ty)) + (k ? -6 : 0)} seed={j.seed + k} lite={lite} />
+    ));
+  };
   return (
     <g style={{ pointerEvents: 'none' }}>
-      {units.filter((u) => u.status === 'onscene').map((u) => {
-        const b = buildings.find((x) => x.id === u.targetId);
-        if (!b || b.status !== 'burning') return null;
-        const { x, y, hd } = enginePark(b, buildings);
-        const [ex, ey] = project(x, y);
-        const [nx, ny] = vehOffset(hd, -6, 13);
-        const [rx, ry] = project(b.x + b.w / 2, b.y + b.h / 2, SPRITE[b.kind].roof * spriteScale(b));
-        const sx = ex + nx;
-        const sy = ey + ny;
-        const cy = Math.min(sy, ry) - 40;
-        return (
-          <g key={`s${u.id}-${b.id}`} className="hose-in">
-            {[0, 1].map((k) => (
-              <HoseStream key={k} sx={sx} sy={sy} tx={rx + (k ? 16 : -12)} ty={ry + (k ? 4 : -2)} lift={(cy - Math.min(sy, ry)) + (k ? -6 : 0)} seed={u.id * 2 + k} lite={lite} />
-            ))}
-          </g>
-        );
-      })}
+      {[...units].sort((a, b) => a.id - b.id).map((u) => (
+        <g key={u.id} className="truck truck-top" data-top={u.id} style={{ opacity: 0, transition: 'opacity 0.45s ease' }}>
+          {HEADINGS.map((hd) => (
+            <g key={hd} className={`hd hd-${hd}`}><VehicleSprite model="engine" hd={hd} look={look} /></g>
+          ))}
+          <g className="bar"><LightBar /></g>
+        </g>
+      ))}
+      {live.map((j) => <g key={j.key} className="hose-in">{draw(j)}</g>)}
+      {stopped.map((j) => <g key={`${j.key}-off`} className="hose-off" style={{ animation: 'pack-out 0.9s ease forwards' }}>{draw(j)}</g>)}
     </g>
   );
 }
